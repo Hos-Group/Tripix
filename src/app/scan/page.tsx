@@ -485,30 +485,66 @@ export default function ScanPage() {
 
         const docId = insertedDoc?.id
 
-        // Save expense if amount exists (linked to document via notes)
+        // ── Save expense(s) linked to document ──────────────────────────────
         const amt = dt === 'flight' ? flight.totalAmount : dt === 'hotel' ? hotel.amount : generic.amount
         const cur = dt === 'flight' ? flight.totalCurrency : dt === 'hotel' ? hotel.currency : generic.currency
-        if (amt && parseFloat(amt) > 0) {
-          const expCat = dt === 'flight' ? 'flight' : dt === 'hotel' ? 'hotel' : dt === 'ferry' ? 'ferry' : dt === 'activity' ? 'activity' : 'other'
-          const firstLeg = flight.legs[0]
-          const lastLeg = flight.legs[flight.legs.length - 1]
-          const expDate = dt === 'flight' ? (firstLeg?.departureDate || '') : dt === 'hotel' ? hotel.checkIn : generic.validFrom
-          const expTitle = dt === 'flight'
-            ? `${firstLeg?.departureCity || ''} → ${lastLeg?.arrivalCity || ''}`
-            : dt === 'hotel' ? hotel.hotelName : generic.docName
+
+        if (dt === 'flight') {
+          // Multi-leg flights: one expense per leg so every segment appears on
+          // its own departure date in the timeline.
+          // Only the FIRST leg carries the total amount; the rest are ₪0
+          // (the seats were all purchased together — no double-counting).
+          for (let li = 0; li < flight.legs.length; li++) {
+            const leg = flight.legs[li]
+            const isFirst = li === 0
+            const legDate = leg.departureDate || new Date().toISOString().split('T')[0]
+            const legTitle =
+              (leg.departureCity && leg.arrivalCity)
+                ? `${leg.departureCity} → ${leg.arrivalCity}`
+                : (leg.departureAirport && leg.arrivalAirport)
+                  ? `${leg.departureAirport} → ${leg.arrivalAirport}`
+                  : `טיסה ${li + 1}`
+            const legAmt    = isFirst && amt && parseFloat(amt) > 0 ? parseFloat(amt) : 0
+            const legAmtIls = legAmt > 0 ? await convertToILS(legAmt, cur, legDate) : 0
+            const legNotes  = [
+              docId              ? `doc:${docId}`           : null,
+              leg.flightNumber   ? leg.flightNumber          : null,
+              leg.airline        ? leg.airline               : null,
+              leg.isConnection   ? 'קונקשיין'               : null,
+              !isFirst           ? 'כלול במחיר הכרטיס'      : null,
+            ].filter(Boolean).join(' · ') || null
+
+            await supabase.from('expenses').insert({
+              trip_id:      tripId,
+              user_id:      user?.id,
+              title:        legTitle,
+              category:     'flight',
+              amount:       legAmt,
+              currency:     cur,
+              amount_ils:   legAmtIls,
+              expense_date: legDate,
+              source:       'document',
+              notes:        legNotes,
+            })
+          }
+        } else if (amt && parseFloat(amt) > 0) {
+          // Hotels, ferries, activities, generic — one expense
+          const expCat   = dt === 'hotel' ? 'hotel' : dt === 'ferry' ? 'ferry' : dt === 'activity' ? 'activity' : 'other'
+          const expDate  = dt === 'hotel' ? hotel.checkIn : generic.validFrom
+          const expTitle = dt === 'hotel' ? hotel.hotelName : generic.docName
           const finalDate = expDate || new Date().toISOString().split('T')[0]
           const amountIls = await convertToILS(parseFloat(amt), cur, finalDate)
           await supabase.from('expenses').insert({
-            trip_id: tripId,
-            user_id: user?.id,
-            title: expTitle,
-            category: expCat,
-            amount: parseFloat(amt),
-            currency: cur,
-            amount_ils: amountIls,
+            trip_id:      tripId,
+            user_id:      user?.id,
+            title:        expTitle,
+            category:     expCat,
+            amount:       parseFloat(amt),
+            currency:     cur,
+            amount_ils:   amountIls,
             expense_date: finalDate,
-            source: 'document',
-            notes: docId ? `doc:${docId}` : null,
+            source:       'document',
+            notes:        docId ? `doc:${docId}` : null,
           })
         }
       }
@@ -791,6 +827,17 @@ export default function ScanPage() {
               </select>
             </div>
 
+            {/* Timeline info: one expense per leg */}
+            {flight.legs.length > 1 && (
+              <div className="bg-blue-50 rounded-xl px-3 py-2.5 flex items-start gap-2">
+                <span className="text-blue-500 text-sm flex-shrink-0">📅</span>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  <strong>{flight.legs.length} רגלי טיסה</strong> יווצרו בציר הזמן — כל רגל בתאריך ההמראה שלו.
+                  הסכום הכולל יוצמד לרגל הראשון; שאר הרגלים יסומנו כ&quot;כלול במחיר הכרטיס&quot;.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button onClick={handleConfirm} className="flex-1 bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform">המשך לאישור</button>
               <button onClick={resetState} className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">ביטול</button>
@@ -919,7 +966,11 @@ export default function ScanPage() {
               <Check className="w-8 h-8 text-green-500" />
             </div>
             <p className="font-bold text-lg mb-1">נשמר בהצלחה!</p>
-            <p className="text-sm text-gray-400 mb-4">המסמך והנתונים נשמרו במערכת</p>
+            <p className="text-sm text-gray-400 mb-4">
+              {detectedDocType === 'flight' && flight.legs.length > 1
+                ? `${flight.legs.length} רגלי טיסה נוספו לציר הזמן בתאריכים הנכונים`
+                : 'המסמך והנתונים נשמרו במערכת'}
+            </p>
             <div className="flex flex-col gap-3">
               {savedFileUrl && (
                 <button onClick={() => setShowViewer(true)}
