@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrip } from '@/contexts/TripContext'
-import { searchDestinations } from '@/lib/destinations'
+import { searchDestinations, getDestinationCities } from '@/lib/destinations'
 
 const TRIP_TYPES = [
   {
@@ -66,7 +66,8 @@ export default function NewTripPage() {
 
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState<TripTypeItem | null>(null)
-  const [destination, setDestination] = useState('')
+  const [destination, setDestination] = useState('')   // country key e.g. "Thailand"
+  const [selectedCity, setSelectedCity] = useState('')   // city name in Hebrew
   const [destSearch, setDestSearch] = useState('')
   const [showDestList, setShowDestList] = useState(false)
   const [name, setName] = useState('')
@@ -94,13 +95,17 @@ export default function NewTripPage() {
       return
     }
 
-    const tripName = name.trim() || `טיול ל${destination}`
+    // Combine city + country for display, e.g. "בנגקוק, תאילנד"
+    const destDisplay = selectedCity
+      ? `${selectedCity}, ${filteredDests.find(d => d.name === destination)?.nameHe || destination}`
+      : (filteredDests.find(d => d.name === destination)?.nameHe || destination)
+    const tripName = name.trim() || `טיול ל${selectedCity || filteredDests.find(d => d.name === destination)?.nameHe || destination}`
 
     setSaving(true)
     try {
       const insertData: Record<string, unknown> = {
         name: tripName,
-        destination,
+        destination: destDisplay,
         start_date: startDate,
         end_date: endDate,
         budget_ils: budget ? parseFloat(budget) : null,
@@ -240,39 +245,41 @@ export default function NewTripPage() {
               >
                 <h3 className="font-bold text-base">✈️ לאן טסים?</h3>
                 <p className="text-xs text-gray-400 -mt-1">בחרו את מדינת היעד</p>
+
+                {/* Country search */}
                 <div className="relative">
                   <input
                     type="text"
                     value={
                       destination
-                        ? filteredDests.find(d => d.name === destination)?.nameHe
-                          ? `${filteredDests.find(d => d.name === destination)!.nameHe} (${destination})`
-                          : destination
+                        ? filteredDests.find(d => d.name === destination)?.nameHe || destination
                         : destSearch
                     }
                     onChange={(e) => {
                       setDestSearch(e.target.value)
                       setDestination('')
+                      setSelectedCity('')
                       setShowDestList(true)
                     }}
                     onFocus={() => setShowDestList(true)}
-                    placeholder="חפש יעד (עברית או אנגלית)..."
+                    placeholder="חפש מדינה (עברית או אנגלית)..."
                     className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
                   />
                   {showDestList && !destination && (
-                    <div className="absolute top-full left-0 right-0 bg-white rounded-xl shadow-lg border mt-1 max-h-52 overflow-y-auto z-20">
+                    <div className="absolute top-full left-0 right-0 bg-white rounded-xl shadow-lg border mt-1 max-h-48 overflow-y-auto z-20">
                       {filteredDests.slice(0, 20).map(d => (
                         <button
                           key={d.id}
                           onClick={() => {
                             setDestination(d.name)
+                            setSelectedCity('')
                             setDestSearch('')
                             setShowDestList(false)
                           }}
                           className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center"
                         >
                           <span className="text-gray-400 text-xs">{d.currency}</span>
-                          <span>{d.nameHe} ({d.name})</span>
+                          <span>{d.nameHe}</span>
                         </button>
                       ))}
                       {filteredDests.length === 0 && (
@@ -282,9 +289,38 @@ export default function NewTripPage() {
                   )}
                 </div>
 
+                {/* City chips — shown after country is selected */}
+                {destination && getDestinationCities(destination).length > 0 && (
+                  <AnimatePresence>
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-2"
+                    >
+                      <p className="text-xs text-gray-500 font-medium">🏙️ בחרו עיר (אופציונלי)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {getDestinationCities(destination).map(city => (
+                          <button
+                            key={city}
+                            onClick={() => setSelectedCity(prev => prev === city ? '' : city)}
+                            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
+                              selectedCity === city
+                                ? 'bg-primary text-white border-primary shadow-sm'
+                                : 'bg-gray-50 text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {city}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                )}
+
                 <button
                   onClick={() => {
-                    if (!destination) { toast.error('נא לבחור יעד'); return }
+                    if (!destination) { toast.error('נא לבחור מדינה'); return }
                     setStep(3)
                   }}
                   className="w-full bg-primary text-white rounded-xl py-3 font-bold active:scale-95 transition-transform"
