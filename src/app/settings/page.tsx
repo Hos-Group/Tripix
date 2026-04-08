@@ -46,6 +46,13 @@ export default function SettingsPage() {
   const [defaultCurrency, setDefaultCurrency] = useState('ILS')
   const [inboxKey, setInboxKey] = useState<string | null>(null)
   const [inboxCopied, setInboxCopied] = useState(false)
+  const [primaryEmail, setPrimaryEmail] = useState<string>('')
+  interface EmailAlias { id: string; email: string; label: string; verified: boolean }
+  const [aliases, setAliases] = useState<EmailAlias[]>([])
+  const [newAliasEmail, setNewAliasEmail] = useState('')
+  const [newAliasLabel, setNewAliasLabel] = useState('personal')
+  const [addingAlias, setAddingAlias] = useState(false)
+  const [showAddAlias, setShowAddAlias] = useState(false)
 
   useEffect(() => {
     const fetchTravelers = async () => {
@@ -62,6 +69,7 @@ export default function SettingsPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
+        setPrimaryEmail(user.email || '')
         const { data } = await supabase
           .from('profiles')
           .select('inbox_key')
@@ -72,8 +80,22 @@ export default function SettingsPage() {
         console.error('Failed to load inbox key')
       }
     }
+    const fetchAliases = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        const res = await fetch('/api/email-aliases', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        if (res.ok) {
+          const json = await res.json()
+          setAliases(json.aliases || [])
+        }
+      } catch { /* silent */ }
+    }
     fetchTravelers()
     fetchInboxKey()
+    fetchAliases()
     // Load saved currency preference
     const saved = localStorage.getItem('tripix_default_currency')
     if (saved) setDefaultCurrency(saved)
@@ -86,6 +108,51 @@ export default function SettingsPage() {
     await navigator.clipboard.writeText(inboxEmail)
     setInboxCopied(true)
     setTimeout(() => setInboxCopied(false), 2500)
+  }
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token || ''
+  }
+
+  const handleAddAlias = async () => {
+    if (!newAliasEmail) return
+    setAddingAlias(true)
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/email-aliases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: newAliasEmail, label: newAliasLabel }),
+      })
+      const json = await res.json()
+      if (!res.ok) { toast.error(json.error); return }
+      toast.success(json.message || 'נשלח מייל אישור')
+      setNewAliasEmail('')
+      setShowAddAlias(false)
+      const r2 = await fetch('/api/email-aliases', { headers: { Authorization: `Bearer ${token}` } })
+      if (r2.ok) setAliases((await r2.json()).aliases || [])
+    } catch { toast.error('שגיאה') } finally { setAddingAlias(false) }
+  }
+
+  const handleRemoveAlias = async (id: string, email: string) => {
+    if (!confirm(`הסר את ${email}?`)) return
+    const token = await getToken()
+    const res = await fetch('/api/email-aliases', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id }),
+    })
+    if (res.ok) {
+      setAliases(prev => prev.filter(a => a.id !== id))
+      toast.success('הוסר')
+    }
+  }
+
+  const LABEL_MAP: Record<string, string> = {
+    personal: '🏠 פרטי',
+    work:     '💼 עסקי',
+    other:    '📌 אחר',
   }
 
   const handleSaveTravelers = async () => {
@@ -287,6 +354,100 @@ export default function SettingsPage() {
               <p className="text-[11px] text-gray-400 mt-3">
                 כל מייל אישור הזמנה עם סכום ויעד — גם אם הפלטפורמה לא ברשימה
               </p>
+            </div>
+
+            {/* ── Connected email addresses ── */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-sm">📧 מיילים מקושרים</p>
+                <button
+                  onClick={() => setShowAddAlias(v => !v)}
+                  className="text-xs text-primary font-semibold bg-primary/10 px-3 py-1.5 rounded-xl active:scale-95"
+                >
+                  + הוסף מייל
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                כל מייל שישלח מכתובות אלה — יזוהה ויתווסף לטיול הנכון אוטומטית
+              </p>
+
+              {/* Primary email (always shown, always verified) */}
+              <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate" dir="ltr">{primaryEmail}</p>
+                  <p className="text-[11px] text-gray-400">מייל ראשי</p>
+                </div>
+                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold flex-shrink-0">
+                  ✓ ראשי
+                </span>
+              </div>
+
+              {/* Aliases */}
+              {aliases.map(alias => (
+                <div key={alias.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate" dir="ltr">{alias.email}</p>
+                    <p className="text-[11px] text-gray-400">{LABEL_MAP[alias.label] || alias.label}</p>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                    alias.verified
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {alias.verified ? '✓ מאושר' : '⏳ ממתין'}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveAlias(alias.id, alias.email)}
+                    className="text-red-400 active:scale-90 text-xs px-1"
+                  >✕</button>
+                </div>
+              ))}
+
+              {aliases.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-2">
+                  אין מיילים מקושרים עדיין
+                </p>
+              )}
+
+              {/* Add alias form */}
+              {showAddAlias && (
+                <div className="border border-dashed border-primary/30 rounded-xl p-4 space-y-3 bg-primary/5">
+                  <p className="text-xs font-bold text-primary">הוספת מייל חדש</p>
+                  <input
+                    type="email"
+                    value={newAliasEmail}
+                    onChange={e => setNewAliasEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    dir="ltr"
+                    className="w-full bg-white rounded-xl px-4 py-3 text-sm outline-none border border-gray-200 focus:ring-2 focus:ring-primary/20 text-left"
+                  />
+                  <div className="flex gap-2">
+                    {(['personal', 'work', 'other'] as const).map(l => (
+                      <button
+                        key={l}
+                        onClick={() => setNewAliasLabel(l)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                          newAliasLabel === l
+                            ? 'bg-primary text-white'
+                            : 'bg-white text-gray-500 border border-gray-200'
+                        }`}
+                      >
+                        {LABEL_MAP[l]}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleAddAlias}
+                    disabled={addingAlias || !newAliasEmail}
+                    className="w-full bg-primary text-white rounded-xl py-3 text-sm font-bold active:scale-95 disabled:opacity-50"
+                  >
+                    {addingAlias ? 'שולח אישור...' : 'שלח מייל אישור'}
+                  </button>
+                  <p className="text-[11px] text-gray-400 text-center">
+                    ישלח מייל לכתובת החדשה לצורך אישור
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Note about matching */}

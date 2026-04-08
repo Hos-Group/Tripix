@@ -132,28 +132,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cannot parse email payload' }, { status: 400 })
   }
 
-  // ── Extract inbox_key from recipient address ──────────────────────────────
-  // Format: {inbox_key}@in.tripix.app
-  const inboxKey = email.to.split('@')[0]?.toLowerCase()
-  if (!inboxKey) {
-    return NextResponse.json({ error: 'No inbox key' }, { status: 400 })
-  }
-
   const supabase = adminClient()
 
-  // ── Find user by inbox_key ────────────────────────────────────────────────
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('inbox_key', inboxKey)
-    .single()
+  // ── Routing strategy: 3 ways to identify the user ────────────────────────
+  //
+  //  1. inbox_key in TO address  → {key}@in.tripix.app   (primary)
+  //  2. verified email alias     → user forwarded from their personal/work email
+  //  3. primary auth email match → user forwarded directly from their login email
+  //
+  let userId: string | null = null
+  let routeMethod = 'unknown'
 
-  if (!profile) {
-    console.warn('[email-ingest] Unknown inbox_key:', inboxKey)
+  // Strategy 1: inbox_key in TO address
+  const inboxKey = email.to.split('@')[0]?.toLowerCase()
+  if (inboxKey) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('inbox_key', inboxKey)
+      .single()
+    if (profile) { userId = profile.id as string; routeMethod = 'inbox_key' }
+  }
+
+  // Strategy 2: sender email is a verified alias
+  if (!userId && email.from) {
+    const senderEmail = email.from.match(/<(.+?)>/)
+      ? email.from.match(/<(.+?)>/)![1].toLowerCase()
+      : email.from.toLowerCase()
+
+    const { data: alias } = await supabase
+      .from('user_email_aliases')
+      .select('user_id')
+      .eq('email', senderEmail)
+      .eq('verified', true)
+      .single()
+    if (alias) { userId = alias.user_id as string; routeMethod = 'email_alias' }
+  }
+
+  // Strategy 3: sender email matches a primary auth account (via profiles)
+  if (!userId && email.from) {
+    const senderEmail = email.from.match(/<(.+?)>/)
+      ? email.from.match(/<(.+?)>/)![1].toLowerCase()
+      : email.from.toLowerCase()
+
+    // List users and find by email (admin API v2 uses listUsers with filter)
+    const { data: userList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const match = userList?.users?.find(
+      u => u.email?.toLowerCase() === senderEmail
+    )
+    if (match) { userId = match.id; routeMethod = 'primary_email' }
+  }
+
+  if (!userId) {
+    console.warn('[email-ingest] Could not identify user from:', email.to, email.from)
     return NextResponse.json({ error: 'Unknown recipient' }, { status: 404 })
   }
 
-  const userId = profile.id as string
+  console.log(`[email-ingest] Routed via ${routeMethod} → user ${userId}`)
 
   // ── Parse email with Claude ───────────────────────────────────────────────
   const emailContent = email.html || email.text || ''
