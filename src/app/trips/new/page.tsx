@@ -68,6 +68,7 @@ export default function NewTripPage() {
   const [selectedType, setSelectedType] = useState<TripTypeItem | null>(null)
   const [destination, setDestination] = useState('')   // country key e.g. "Thailand"
   const [selectedCity, setSelectedCity] = useState('')   // city name in Hebrew
+  const [customCityInput, setCustomCityInput] = useState('') // manual city input
   const [destSearch, setDestSearch] = useState('')
   const [showDestList, setShowDestList] = useState(false)
   const [name, setName] = useState('')
@@ -259,6 +260,7 @@ export default function NewTripPage() {
                       setDestSearch(e.target.value)
                       setDestination('')
                       setSelectedCity('')
+                      setCustomCityInput('')
                       setShowDestList(true)
                     }}
                     onFocus={() => setShowDestList(true)}
@@ -273,6 +275,7 @@ export default function NewTripPage() {
                           onClick={() => {
                             setDestination(d.name)
                             setSelectedCity('')
+                            setCustomCityInput('')
                             setDestSearch('')
                             setShowDestList(false)
                           }}
@@ -289,8 +292,8 @@ export default function NewTripPage() {
                   )}
                 </div>
 
-                {/* City chips — shown after country is selected */}
-                {destination && getDestinationCities(destination).length > 0 && (
+                {/* City chips + manual input — shown after country is selected */}
+                {destination && (
                   <AnimatePresence>
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
@@ -299,21 +302,41 @@ export default function NewTripPage() {
                       className="space-y-2"
                     >
                       <p className="text-xs text-gray-500 font-medium">🏙️ בחרו עיר (אופציונלי)</p>
-                      <div className="flex flex-wrap gap-2">
-                        {getDestinationCities(destination).map(city => (
-                          <button
-                            key={city}
-                            onClick={() => setSelectedCity(prev => prev === city ? '' : city)}
-                            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
-                              selectedCity === city
-                                ? 'bg-primary text-white border-primary shadow-sm'
-                                : 'bg-gray-50 text-gray-600 border-gray-200'
-                            }`}
-                          >
-                            {city}
-                          </button>
-                        ))}
-                      </div>
+
+                      {/* Known cities chips */}
+                      {getDestinationCities(destination).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {getDestinationCities(destination).map(city => (
+                            <button
+                              key={city}
+                              onClick={() => {
+                                const toggled = selectedCity === city && !customCityInput ? '' : city
+                                setSelectedCity(toggled)
+                                setCustomCityInput('')
+                              }}
+                              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
+                                selectedCity === city && !customCityInput
+                                  ? 'bg-primary text-white border-primary shadow-sm'
+                                  : 'bg-gray-50 text-gray-600 border-gray-200'
+                              }`}
+                            >
+                              {city}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Manual city input */}
+                      <input
+                        type="text"
+                        value={customCityInput}
+                        onChange={(e) => {
+                          setCustomCityInput(e.target.value)
+                          setSelectedCity(e.target.value)
+                        }}
+                        placeholder="לא מצאתם? הזינו עיר ידנית..."
+                        className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                      />
                     </motion.div>
                   </AnimatePresence>
                 )}
