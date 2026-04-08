@@ -8,7 +8,6 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, getDaysRemaining, getTripDays } from '@/lib/utils'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/types'
-import HamburgerMenu from '@/components/layout/HamburgerMenu'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -147,10 +146,7 @@ export default function DashboardPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <HamburgerMenu />
-        <div className="text-center flex-1">
-          <h1 className="text-xl font-bold">Tripix</h1>
-        </div>
+        <h1 className="text-xl font-bold">Tripix</h1>
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
           {(['ILS', 'THB', 'USD'] as Currency[]).map(c => (
             <button key={c} onClick={() => setDisplayCurrency(c)}

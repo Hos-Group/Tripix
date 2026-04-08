@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
 import BottomNav from '@/components/layout/BottomNav'
+import GlobalHeader from '@/components/layout/GlobalHeader'
 import Providers from '@/components/Providers'
 import './globals.css'
 
@@ -36,7 +37,8 @@ export default function RootLayout({
       </head>
       <body className="bg-gray-50 text-gray-900 antialiased">
         <Providers>
-        <main className="min-h-screen max-w-lg mx-auto px-4 pt-4 pb-24">
+        <GlobalHeader />
+        <main className="min-h-screen max-w-lg mx-auto px-4 pt-16 pb-24">
           {children}
         </main>
         <BottomNav />

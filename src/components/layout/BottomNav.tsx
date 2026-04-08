@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Receipt, ScanLine, FolderOpen, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTrip } from '@/contexts/TripContext'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'ראשי', icon: LayoutDashboard },
@@ -17,8 +18,13 @@ const HIDDEN_PATHS = ['/onboarding', '/auth/login', '/auth/signup']
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const { trips, loading } = useTrip()
 
+  // Hide on auth/onboarding pages
   if (HIDDEN_PATHS.includes(pathname)) return null
+
+  // Hide until trips are loaded, and hide if no trips exist yet
+  if (loading || trips.length === 0) return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-50"
