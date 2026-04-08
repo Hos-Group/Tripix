@@ -28,6 +28,13 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const refreshTrips = useCallback(async () => {
+    if (!user) {
+      setTrips([])
+      setCurrentTripId(null)
+      setLoading(false)
+      return
+    }
+
     const { data } = await supabase
       .from('trips')
       .select('*')
@@ -44,9 +51,10 @@ export function TripProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(false)
-  }, [currentTripId])
+  }, [currentTripId, user])
 
-  useEffect(() => { refreshTrips() }, [refreshTrips])
+  // Re-fetch trips whenever user changes (login/logout)
+  useEffect(() => { refreshTrips() }, [user, refreshTrips])
 
   useEffect(() => {
     if (currentTripId) localStorage.setItem('tripix_current_trip', currentTripId)

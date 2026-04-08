@@ -10,6 +10,7 @@ import DocumentViewer from '@/components/DocumentViewer'
 import { loadTravelers, getTravelerName, type Traveler } from '@/lib/travelers'
 import { convertToILS } from '@/lib/rates'
 import { useTrip } from '@/contexts/TripContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 type ScanMode = 'choose' | 'receipt' | 'document' | 'passport'
 type ScanStep = 'choose' | 'loading' | 'review' | 'confirm' | 'done'
@@ -80,6 +81,7 @@ interface GenericDocData {
 
 export default function ScanPage() {
   const { currentTrip } = useTrip()
+  const { user } = useAuth()
   const [mode, setMode] = useState<ScanMode>('choose')
   const [step, setStep] = useState<ScanStep>('choose')
   const [extractedData, setExtractedData] = useState<Record<string, unknown> | null>(null)
@@ -376,6 +378,7 @@ export default function ScanPage() {
         const receiptAmountIls = await convertToILS(parseFloat(editAmount), editCurrency, editDate)
         const { error } = await supabase.from('expenses').insert({
           trip_id: tripId,
+          user_id: user?.id,
           title: editTitle.trim(),
           category: editCategory,
           amount: parseFloat(editAmount),
@@ -426,6 +429,7 @@ export default function ScanPage() {
         // Build document record based on type
         let docRecord: Record<string, unknown> = {
           trip_id: tripId,
+          user_id: user?.id,
           doc_type: dt,
           file_url: fileUrl,
           file_type: file?.type,
@@ -496,6 +500,7 @@ export default function ScanPage() {
           const amountIls = await convertToILS(parseFloat(amt), cur, finalDate)
           await supabase.from('expenses').insert({
             trip_id: tripId,
+            user_id: user?.id,
             title: expTitle,
             category: expCat,
             amount: parseFloat(amt),

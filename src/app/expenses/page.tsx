@@ -10,11 +10,13 @@ import { Expense, Category, Currency, CATEGORY_META, CURRENCIES, CURRENCY_SYMBOL
 import { format } from 'date-fns'
 import { convertToILS } from '@/lib/rates'
 import { useTrip } from '@/contexts/TripContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 const CATEGORIES: Category[] = ['food', 'taxi', 'activity', 'shopping', 'hotel', 'flight', 'ferry', 'other']
 
 export default function ExpensesPage() {
   const { currentTrip } = useTrip()
+  const { user } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -69,6 +71,7 @@ export default function ExpensesPage() {
     const amountIls = await convertToILS(parseFloat(amount), currency, expenseDate)
     const { error } = await supabase.from('expenses').insert({
       trip_id: currentTrip.id,
+      user_id: user?.id,
       title: title.trim(),
       category,
       amount: parseFloat(amount),

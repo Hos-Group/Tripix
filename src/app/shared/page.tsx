@@ -7,9 +7,11 @@ import { Plus, Users, ChevronLeft, Plane, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Trip, TRIP_TYPE_META, TripType } from '@/types'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function SharedTripsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [trips, setTrips] = useState<(Trip & { trip_type?: TripType; memberCount?: number })[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -201,6 +203,7 @@ function CreateSharedTrip({ onClose, onCreated }: { onClose: () => void; onCreat
         end_date: endDate,
         trip_type: tripType,
         travelers: [],
+        user_id: user?.id,
       }).select().single()
 
       if (error) throw error
