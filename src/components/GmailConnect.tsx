@@ -7,11 +7,12 @@
  * Supports multiple Gmail accounts per user:
  *   - Shows all connected accounts in a list
  *   - Each account has an individual disconnect button
- *   - "Add another Gmail account" button at the bottom
+ *   - "Add another Gmail account" panel with email hint input:
+ *       user types their email → system pre-selects it in Google's account chooser
  *   - Single "Scan all accounts" button when at least one is connected
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 
 interface GmailConnection {
@@ -44,13 +45,19 @@ function GoogleLogo({ className }: { className?: string }) {
 }
 
 export default function GmailConnect({ userId }: GmailConnectProps) {
-  const [loading,       setLoading]       = useState(true)
-  const [connections,   setConnections]   = useState<GmailConnection[]>([])
-  const [scanning,      setScanning]      = useState(false)
-  const [disconnecting, setDisconnecting] = useState<string | null>(null) // connId being disconnected
-  const [lastScan,      setLastScan]      = useState<ScanResult | null>(null)
-  const [lastScanTime,  setLastScanTime]  = useState<string | null>(null)
-  const [scanError,     setScanError]     = useState<string | null>(null)
+  const [loading,        setLoading]        = useState(true)
+  const [connections,    setConnections]    = useState<GmailConnection[]>([])
+  const [scanning,       setScanning]       = useState(false)
+  const [disconnecting,  setDisconnecting]  = useState<string | null>(null)
+  const [lastScan,       setLastScan]       = useState<ScanResult | null>(null)
+  const [lastScanTime,   setLastScanTime]   = useState<string | null>(null)
+  const [scanError,      setScanError]      = useState<string | null>(null)
+
+  // ── "Add account" panel state ──────────────────────────────────────────────
+  const [showAddPanel,   setShowAddPanel]   = useState(false)
+  const [hintEmail,      setHintEmail]      = useState('')
+  const [hintError,      setHintError]      = useState('')
+  const hintInputRef = useRef<HTMLInputElement>(null)
 
   // ── Load all connections ───────────────────────────────────────────────────
   const loadConnections = useCallback(async () => {
@@ -60,7 +67,6 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
         .select('id, gmail_address')
         .eq('user_id', userId)
         .order('gmail_address')
-
       if (error) throw error
       setConnections((data as GmailConnection[]) || [])
     } catch (err) {
@@ -72,12 +78,30 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
 
   useEffect(() => { loadConnections() }, [loadConnections])
 
-  // ── Add Gmail — redirect to OAuth flow ────────────────────────────────────
-  const handleAddAccount = () => {
-    window.location.href = '/api/auth/google'
+  // Focus email input when panel opens
+  useEffect(() => {
+    if (showAddPanel) setTimeout(() => hintInputRef.current?.focus(), 50)
+  }, [showAddPanel])
+
+  // ── Redirect to Google OAuth (with optional email hint) ───────────────────
+  const startOAuth = (hint?: string) => {
+    const url = hint
+      ? `/api/auth/google?hint=${encodeURIComponent(hint)}`
+      : '/api/auth/google'
+    window.location.href = url
   }
 
-  // ── Scan all accounts now ─────────────────────────────────────────────────
+  // ── Handle "Connect" click in the add-account panel ──────────────────────
+  const handlePanelConnect = () => {
+    const email = hintEmail.trim()
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setHintError('כתובת מייל לא תקינה')
+      return
+    }
+    startOAuth(email || undefined)
+  }
+
+  // ── Scan all accounts ─────────────────────────────────────────────────────
   const handleScan = async () => {
     setScanning(true)
     setScanError(null)
@@ -91,9 +115,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
         headers: { Authorization: `Bearer ${token}` },
       })
       const json = await res.json() as ScanResult & { error?: string }
-
       if (!res.ok) { setScanError(json.error || 'שגיאה בסריקה'); return }
-
       setLastScan(json)
       setLastScanTime(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
     } catch {
@@ -105,8 +127,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
 
   // ── Disconnect one account ────────────────────────────────────────────────
   const handleDisconnect = async (conn: GmailConnection) => {
-    const label = conn.gmail_address
-    if (!confirm(`לנתק את ${label} מ-Tripix?`)) return
+    if (!confirm(`לנתק את ${conn.gmail_address} מ-Tripix?`)) return
     setDisconnecting(conn.id)
     try {
       const { error } = await supabase
@@ -167,15 +188,55 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
             ))}
           </div>
 
-          {/* Add another account */}
-          <button
-            onClick={handleAddAccount}
-            disabled={scanning}
-            className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm text-gray-600 font-medium active:scale-95 transition-all hover:bg-gray-50 disabled:opacity-50"
-          >
-            <GoogleLogo className="w-4 h-4 flex-shrink-0" />
-            הוסף מייל נוסף
-          </button>
+          {/* Add another account — inline panel */}
+          {showAddPanel ? (
+            <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-700">
+                הוסף מייל נוסף לסריקה
+              </p>
+              <p className="text-[11px] text-gray-500">
+                הכנס את כתובת המייל שאחריו יש אישורי הזמנה (Gmail בלבד).
+                המערכת תפתח את חלון ההרשאה של גוגל עם החשבון הזה.
+              </p>
+              <input
+                ref={hintInputRef}
+                type="email"
+                dir="ltr"
+                value={hintEmail}
+                onChange={e => { setHintEmail(e.target.value); setHintError('') }}
+                onKeyDown={e => e.key === 'Enter' && handlePanelConnect()}
+                placeholder="personal@gmail.com"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-left outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              {hintError && (
+                <p className="text-xs text-red-500">{hintError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handlePanelConnect}
+                  className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl py-2.5 text-sm font-semibold text-gray-700 active:scale-95 transition-all hover:bg-gray-50 shadow-sm"
+                >
+                  <GoogleLogo className="w-4 h-4 flex-shrink-0" />
+                  {hintEmail.trim() ? 'חבר חשבון זה' : 'בחר חשבון'}
+                </button>
+                <button
+                  onClick={() => { setShowAddPanel(false); setHintEmail(''); setHintError('') }}
+                  className="px-4 py-2.5 rounded-xl text-sm text-gray-400 active:scale-95"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddPanel(true)}
+              disabled={scanning}
+              className="w-full flex items-center justify-center gap-2 bg-white border border-dashed border-gray-300 rounded-xl py-2.5 px-4 text-sm text-gray-500 font-medium active:scale-95 transition-all hover:bg-gray-50 disabled:opacity-50"
+            >
+              <GoogleLogo className="w-4 h-4 flex-shrink-0" />
+              + הוסף מייל נוסף לסריקה
+            </button>
+          )}
 
           {/* Last scan stats */}
           {lastScan && (
@@ -220,7 +281,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
           </p>
         </>
       ) : (
-        /* ── Not connected state ── */
+        /* ── Not connected — show add-account panel immediately ── */
         <>
           <p className="text-xs text-gray-500 leading-relaxed">
             חבר את Gmail ואנחנו נסרוק אוטומטית אישורי הזמנות ונוסיף אותם לטיול הנכון.
@@ -228,12 +289,31 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
             <span className="text-gray-400">אפשר לחבר מספר חשבונות מייל.</span>
           </p>
 
+          {/* Email hint input */}
+          <div className="space-y-2">
+            <label className="text-[11px] text-gray-500 block">
+              כתובת Gmail לחיבור (אופציונלי — מאפשר לגוגל לבחור את החשבון הנכון)
+            </label>
+            <input
+              type="email"
+              dir="ltr"
+              value={hintEmail}
+              onChange={e => { setHintEmail(e.target.value); setHintError('') }}
+              onKeyDown={e => e.key === 'Enter' && handlePanelConnect()}
+              placeholder="your@gmail.com"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-left outline-none focus:ring-2 focus:ring-blue-300"
+            />
+            {hintError && <p className="text-xs text-red-500">{hintError}</p>}
+          </div>
+
           <button
-            onClick={handleAddAccount}
+            onClick={handlePanelConnect}
             className="w-full bg-white border border-gray-200 rounded-xl py-3 px-4 flex items-center justify-center gap-3 shadow-sm active:scale-95 transition-all hover:bg-gray-50"
           >
             <GoogleLogo className="w-5 h-5 flex-shrink-0" />
-            <span className="text-sm font-semibold text-gray-700">התחבר עם Gmail</span>
+            <span className="text-sm font-semibold text-gray-700">
+              {hintEmail.trim() ? `חבר את ${hintEmail.trim()}` : 'התחבר עם Gmail'}
+            </span>
           </button>
 
           <p className="text-[11px] text-gray-400 text-center">
