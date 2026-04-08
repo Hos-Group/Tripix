@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrip } from '@/contexts/TripContext'
 import { searchDestinations, getDestinationCities } from '@/lib/destinations'
+import DateRangePicker from '@/components/DateRangePicker'
 
 const TRIP_TYPES = [
   {
@@ -75,6 +76,7 @@ export default function NewTripPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [budget, setBudget] = useState('')
+  const [currency, setCurrency] = useState('ILS')
   const [travelers, setTravelers] = useState([{ id: 'traveler_1', name: '' }])
   const [saving, setSaving] = useState(false)
 
@@ -104,6 +106,9 @@ export default function NewTripPage() {
 
     setSaving(true)
     try {
+      // Save preferred currency to localStorage for app-wide use
+      localStorage.setItem('tripix_currency', currency)
+
       const insertData: Record<string, unknown> = {
         name: tripName,
         destination: destDisplay,
@@ -429,51 +434,61 @@ export default function NewTripPage() {
               <div className="text-center">
                 <div className="text-4xl mb-2">📅</div>
                 <h2 className="text-xl font-bold">מתי הטיול?</h2>
-                <p className="text-sm text-gray-500 mt-1">בחר תאריכי יציאה וחזרה</p>
+                <p className="text-sm text-gray-500 mt-1">לחצו על תאריך היציאה ואחר כך על החזרה</p>
               </div>
 
-              <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="text-xs text-gray-500 font-medium">✈️ יציאה</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none mt-1"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-xs text-gray-500 font-medium">🏠 חזרה</label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none mt-1"
-                    />
-                  </div>
-                </div>
+              {/* Visual date range picker */}
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartChange={setStartDate}
+                onEndChange={setEndDate}
+              />
 
+              {/* Optional fields */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
                 <div>
                   <label className="text-xs text-gray-500 font-medium">שם הטיול (אופציונלי)</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder={`ברירת מחדל: "טיול ל${destination || 'יעד'}"`}
+                    placeholder={`ברירת מחדל: "טיול ל${selectedCity || destination || 'יעד'}"`}
                     className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none mt-1 focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
 
+                {/* Budget + currency selector */}
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">תקציב בשקלים (אופציונלי)</label>
-                  <input
-                    type="number"
-                    value={budget}
-                    onChange={(e) => setBudget(e.target.value)}
-                    placeholder="לדוגמא: 15000"
-                    className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none mt-1"
-                  />
+                  <label className="text-xs text-gray-500 font-medium">
+                    תקציב (אופציונלי) — באיזה מטבע תנהל את הטיול?
+                  </label>
+                  <div className="flex gap-2 mt-1">
+                    <input
+                      type="number"
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                      placeholder="סכום"
+                      className="flex-1 bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="bg-gray-50 rounded-xl px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 font-medium text-gray-700"
+                    >
+                      <option value="ILS">₪ שקל</option>
+                      <option value="USD">$ דולר</option>
+                      <option value="EUR">€ אירו</option>
+                      <option value="GBP">£ פאונד</option>
+                      <option value="THB">฿ באט</option>
+                      <option value="JPY">¥ ין</option>
+                      <option value="AED">د.إ דירהם</option>
+                      <option value="TRY">₺ לירה</option>
+                    </select>
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    המטבע שתבחרו יוצג בכל רחבי המערכת
+                  </p>
                 </div>
               </div>
 
