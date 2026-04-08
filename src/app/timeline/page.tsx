@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronDown, ChevronLeft, Trash2, Pencil, X, Check,
   TrendingUp, Calendar, Wallet, LayoutList, BarChart2,
-  Plane, Hotel, Car, Briefcase, MapPin, Clock, Users,
+  Plane, Hotel, Car, Briefcase, MapPin, Clock, Users, Paperclip,
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -15,6 +15,7 @@ import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/t
 import { useTrip } from '@/contexts/TripContext'
 import { eachDayOfInterval, parseISO, format, isToday, differenceInDays } from 'date-fns'
 import CurrencySelector from '@/components/CurrencySelector'
+import DocumentViewer  from '@/components/DocumentViewer'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface DayData {
@@ -32,18 +33,34 @@ type ViewMode   = 'timeline' | 'summary'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function buildDays(startDate: string, endDate: string, expenses: Expense[]): DayData[] {
-  const start = parseISO(startDate)
-  const end   = parseISO(endDate)
+  const tripStart = parseISO(startDate)
+  const tripEnd   = parseISO(endDate)
+
+  // Extend range to cover any expense dates that fall outside the trip window
+  // (e.g. a return flight whose date == trip end, or expenses entered before departure)
+  const expDates = expenses
+    .map(e => parseISO(e.expense_date))
+    .filter(d => !isNaN(d.getTime()))
+
+  const start = expDates.length > 0
+    ? new Date(Math.min(tripStart.getTime(), ...expDates.map(d => d.getTime())))
+    : tripStart
+  const end   = expDates.length > 0
+    ? new Date(Math.max(tripEnd.getTime(),   ...expDates.map(d => d.getTime())))
+    : tripEnd
+
   const days  = eachDayOfInterval({ start, end })
   const today = new Date()
 
-  return days.map((day, idx) => {
+  return days.map((day) => {
     const dateStr  = format(day, 'yyyy-MM-dd')
     const dayExps  = expenses.filter(e => e.expense_date === dateStr)
     const totalIls = dayExps.reduce((s, e) => s + (e.amount_ils || 0), 0)
+    // Day number relative to trip start (day before trip = -1, etc.)
+    const dayNumber = differenceInDays(day, tripStart) + 1
     return {
       date:      dateStr,
-      dayNumber: idx + 1,
+      dayNumber,
       isToday:   isToday(day),
       isPast:    day < today && !isToday(day),
       isFuture:  day > today,
@@ -169,6 +186,14 @@ function buildSummary(expenses: Expense[], tripStart: string, tripEnd: string): 
   }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+/** Extracts a document UUID from an expense's notes field (pattern: "doc:UUID") */
+function extractDocId(notes: string | null | undefined): string | null {
+  if (!notes) return null
+  const match = notes.match(/doc:([0-9a-f-]{36})/i)
+  return match ? match[1] : null
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function TimelinePage() {
   const { currentTrip } = useTrip()
@@ -182,6 +207,10 @@ export default function TimelinePage() {
   const [editTitle,   setEditTitle]   = useState('')
   const [deletingId,  setDeletingId]  = useState<string | null>(null)
   const [currency,    setCurrency]    = useState<Currency>('ILS')
+
+  // ── Document viewer state ────────────────────────────────────────────────
+  const [viewerDoc,    setViewerDoc]    = useState<{ url: string; title: string; docType: string } | null>(null)
+  const [loadingDocId, setLoadingDocId] = useState<string | null>(null)
 
   // ── Fetch expenses ─────────────────────────────────────────────────────────
   const fetchExpenses = useCallback(async () => {
@@ -258,6 +287,32 @@ export default function TimelinePage() {
     setExpenses(prev => prev.filter(e => e.id !== id))
     setDeletingId(null)
     toast.success('נמחק')
+  }
+
+  // ── Open document from expense ────────────────────────────────────────────
+  const handleOpenDoc = async (exp: Expense) => {
+    const docId = extractDocId(exp.notes)
+    if (!docId) return
+
+    setLoadingDocId(exp.id)
+    const { data, error } = await supabase
+      .from('documents')
+      .select('file_url, name, doc_type')
+      .eq('id', docId)
+      .single()
+
+    setLoadingDocId(null)
+
+    if (error || !data?.file_url) {
+      toast.error('לא נמצא המסמך')
+      return
+    }
+
+    setViewerDoc({
+      url:     data.file_url,
+      title:   data.name  || exp.title,
+      docType: data.doc_type || exp.category,
+    })
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -678,13 +733,21 @@ export default function TimelinePage() {
                       `}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
-                          day.isToday ? 'bg-primary text-white' :
-                          day.isPast  ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
-                        }`}>
-                          <span className="text-[10px] font-normal leading-none opacity-70">יום</span>
-                          <span className="text-sm font-bold leading-tight">{day.dayNumber}</span>
-                        </div>
+                        {/* Day badge — shows "before trip" / "after trip" for out-of-range days */}
+                        {day.dayNumber < 1 ? (
+                          <div className="w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center bg-gray-100 text-gray-400">
+                            <span className="text-[9px] leading-none">לפני</span>
+                            <span className="text-[9px] leading-none">הטיול</span>
+                          </div>
+                        ) : (
+                          <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
+                            day.isToday ? 'bg-primary text-white' :
+                            day.isPast  ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
+                          }`}>
+                            <span className="text-[10px] font-normal leading-none opacity-70">יום</span>
+                            <span className="text-sm font-bold leading-tight">{day.dayNumber}</span>
+                          </div>
+                        )}
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
@@ -801,6 +864,19 @@ export default function TimelinePage() {
                                     </div>
                                   ) : (
                                     <div className="flex gap-1 flex-shrink-0">
+                                      {/* Document icon — only shown when expense has a linked doc */}
+                                      {extractDocId(exp.notes) && (
+                                        <button
+                                          onClick={() => handleOpenDoc(exp)}
+                                          disabled={loadingDocId === exp.id}
+                                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-400 active:scale-90 hover:bg-indigo-100 hover:text-indigo-600 transition-colors disabled:opacity-30"
+                                          title="צפה במסמך">
+                                          {loadingDocId === exp.id
+                                            ? <span className="text-[9px] animate-spin">⏳</span>
+                                            : <Paperclip className="w-3 h-3" />
+                                          }
+                                        </button>
+                                      )}
                                       <button
                                         onClick={() => { setEditingId(exp.id); setEditTitle(exp.title) }}
                                         className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-blue-50 hover:text-blue-500 transition-colors">
@@ -839,6 +915,16 @@ export default function TimelinePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Document Viewer ──────────────────────────────────────────────── */}
+      {viewerDoc && (
+        <DocumentViewer
+          url={viewerDoc.url}
+          title={viewerDoc.title}
+          docType={viewerDoc.docType}
+          onClose={() => setViewerDoc(null)}
+        />
+      )}
     </div>
   )
 }

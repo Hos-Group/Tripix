@@ -84,11 +84,12 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   }, [showAddPanel])
 
   // ── Redirect to Google OAuth (with optional email hint) ───────────────────
+  // _top breaks out of any iframe/preview sandbox so Google OAuth isn't blocked
   const startOAuth = (hint?: string) => {
     const url = hint
       ? `/api/auth/google?hint=${encodeURIComponent(hint)}`
       : '/api/auth/google'
-    window.location.href = url
+    window.open(url, '_top')
   }
 
   // ── Handle "Connect" click in the add-account panel ──────────────────────
@@ -217,7 +218,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
                   className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 rounded-xl py-2.5 text-sm font-semibold text-gray-700 active:scale-95 transition-all hover:bg-gray-50 shadow-sm"
                 >
                   <GoogleLogo className="w-4 h-4 flex-shrink-0" />
-                  {hintEmail.trim() ? 'חבר חשבון זה' : 'בחר חשבון'}
+                  {hintEmail.trim() ? 'אשר וחבר חשבון זה' : 'בחר חשבון Google'}
                 </button>
                 <button
                   onClick={() => { setShowAddPanel(false); setHintEmail(''); setHintError('') }}
@@ -312,7 +313,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
           >
             <GoogleLogo className="w-5 h-5 flex-shrink-0" />
             <span className="text-sm font-semibold text-gray-700">
-              {hintEmail.trim() ? `חבר את ${hintEmail.trim()}` : 'התחבר עם Gmail'}
+              {hintEmail.trim() ? `סנכרן את ${hintEmail.trim()}` : 'סנכרן Gmail עם Tripix'}
             </span>
           </button>
 
