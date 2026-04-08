@@ -29,7 +29,7 @@ export default function SignupPage() {
       if (data?.session) {
         // Session created immediately (no email confirmation required)
         toast.success('נרשמת בהצלחה!')
-        router.push('/trips/new')
+        router.push('/onboarding')
       } else {
         // Email confirmation required
         toast.success('נשלח אימייל אישור — בדוק את תיבת הדואר ואז התחבר')

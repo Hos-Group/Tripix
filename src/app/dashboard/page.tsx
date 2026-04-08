@@ -2,17 +2,19 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { Plane, TrendingUp, CalendarDays, Wallet } from 'lucide-react'
+import { Plane, TrendingUp, CalendarDays, Wallet, Plus } from 'lucide-react'
 import { motion } from 'framer-motion'
-import toast from 'react-hot-toast'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, getDaysRemaining, getTripDays } from '@/lib/utils'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/types'
 import HamburgerMenu from '@/components/layout/HamburgerMenu'
 import { useTrip } from '@/contexts/TripContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function DashboardPage() {
-  const { currentTrip } = useTrip()
+  const { currentTrip, trips, loading: tripsLoading } = useTrip()
+  const { displayName } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('ILS')
@@ -80,10 +82,63 @@ export default function DashboardPage() {
 
   const lastFive = expenses.slice(0, 5)
 
-  if (loading) {
+  if (loading || tripsLoading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  // No trips at all — show welcome / empty state
+  if (!tripsLoading && trips.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[75vh] px-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-sm"
+        >
+          {/* Greeting */}
+          <div className="w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <Plane className="w-12 h-12 text-primary" />
+          </div>
+          {displayName && (
+            <p className="text-gray-400 text-sm mb-1">שלום {displayName} 👋</p>
+          )}
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">מוכן לטיול הראשון?</h2>
+          <p className="text-gray-500 text-sm leading-relaxed mb-8">
+            צור טיול ראשון כדי להתחיל לעקוב אחר ההוצאות, המסמכים ולוח הזמנים שלך
+          </p>
+
+          {/* CTA */}
+          <Link href="/trips/new"
+            className="w-full bg-primary text-white rounded-2xl py-4 font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md">
+            <Plus className="w-5 h-5" />
+            צור טיול ראשון
+          </Link>
+
+          {/* Feature hints */}
+          <div className="grid grid-cols-3 gap-3 mt-8">
+            {[
+              { emoji: '💰', label: 'מעקב הוצאות' },
+              { emoji: '📸', label: 'סריקת קבלות' },
+              { emoji: '🧳', label: 'רשימת אריזה' },
+            ].map((f, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + i * 0.1 }}
+                className="bg-white rounded-2xl p-3 shadow-sm text-center"
+              >
+                <div className="text-2xl mb-1">{f.emoji}</div>
+                <p className="text-[11px] text-gray-500 font-medium">{f.label}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     )
   }
