@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { signUp } from '@/lib/auth'
+import { signUp, signOut } from '@/lib/auth'
 
 export default function SignupPage() {
   const [name, setName] = useState('')
@@ -21,9 +21,20 @@ export default function SignupPage() {
 
     setLoading(true)
     try {
-      await signUp(email, password, name)
-      toast.success('נרשמת בהצלחה!')
-      router.push('/trips/new')
+      // Sign out any existing session before creating a new account
+      await signOut().catch(() => {})
+
+      const data = await signUp(email, password, name)
+
+      if (data?.session) {
+        // Session created immediately (no email confirmation required)
+        toast.success('נרשמת בהצלחה!')
+        router.push('/trips/new')
+      } else {
+        // Email confirmation required
+        toast.success('נשלח אימייל אישור — בדוק את תיבת הדואר ואז התחבר')
+        router.push('/auth/login')
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה בהרשמה')
     }
