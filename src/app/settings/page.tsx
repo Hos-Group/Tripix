@@ -41,6 +41,192 @@ interface Traveler {
   name: string
 }
 
+// ── Currency settings sub-page with live rates ────────────────────────────────
+interface CurrencyRow { code: string; name: string; symbol: string; flag: string }
+
+interface RateData {
+  code:    string
+  rateFromIls: number  // how many of this currency = 1 ILS
+  rateToIls:   number  // how many ILS = 1 unit of this currency
+}
+
+function CurrencySettingsPage({
+  defaultCurrency,
+  onChangeCurrency,
+  currencies,
+}: {
+  defaultCurrency: string
+  onChangeCurrency: (code: string) => void
+  currencies: CurrencyRow[]
+}) {
+  const [rates,      setRates]      = useState<RateData[]>([])
+  const [ratesLoading, setRatesLoading] = useState(false)
+  const [ratesUpdated, setRatesUpdated] = useState<string | null>(null)
+  const [baseCurrency, setBaseCurrency] = useState('ILS')
+
+  const fetchRates = async () => {
+    setRatesLoading(true)
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      // Use frankfurter.app — free, no key needed
+      // Get all rates FROM ILS in one call
+      const res = await fetch(`https://api.frankfurter.app/${today}?from=ILS&to=USD,EUR,GBP,THB,JPY,AUD,CAD,CHF,TRY,INR`)
+      if (res.ok) {
+        const data = await res.json()
+        const fetched: RateData[] = Object.entries(data.rates || {}).map(([code, rateFromIls]) => ({
+          code,
+          rateFromIls: Number(rateFromIls),
+          rateToIls:   1 / Number(rateFromIls),
+        }))
+        setRates(fetched)
+        setRatesUpdated(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
+      }
+    } catch { /* silent */ } finally {
+      setRatesLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchRates() }, [])
+
+  // Build display: how much of `baseCurrency` you get for 1 ILS, or vice-versa
+  const getDisplayRate = (r: RateData) => {
+    if (baseCurrency === 'ILS') {
+      // 1 ILS = X foreign
+      return { label: `1 ₪ = ${r.rateFromIls.toFixed(r.rateFromIls < 0.01 ? 4 : r.rateFromIls < 1 ? 3 : 2)} ${r.code}` }
+    } else if (baseCurrency === r.code) {
+      return { label: `1 ${r.code} = ${r.rateToIls.toFixed(2)} ₪` }
+    }
+    // Cross rate: find both from ILS
+    const targetRate = rates.find(x => x.code === baseCurrency)
+    if (!targetRate) return { label: '—' }
+    const cross = r.rateFromIls / targetRate.rateFromIls
+    return { label: `1 ${baseCurrency} = ${cross.toFixed(2)} ${r.code}` }
+  }
+
+  const RATE_NAMES: Record<string, string> = {
+    USD: '🇺🇸 דולר אמריקאי', EUR: '🇪🇺 יורו', GBP: '🇬🇧 לירה שטרלינג',
+    THB: '🇹🇭 בהט תאילנדי',   JPY: '🇯🇵 ין יפני',   AUD: '🇦🇺 דולר אוסטרלי',
+    CAD: '🇨🇦 דולר קנדי',     CHF: '🇨🇭 פרנק שווייצרי', TRY: '🇹🇷 לירה טורקית',
+    INR: '🇮🇳 רופי הודי',
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5" dir="rtl">
+      <h1 className="text-xl font-bold">מטבע ומחירים</h1>
+
+      {/* ── Default currency picker ──────────────────────────────────────── */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-gray-500 px-1">מטבע תצוגה ברירת מחדל</p>
+        {currencies.map(c => (
+          <button key={c.code}
+            onClick={() => onChangeCurrency(c.code)}
+            className={`w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all ${
+              defaultCurrency === c.code ? 'ring-2 ring-primary' : ''
+            }`}>
+            <span className="text-2xl">{c.flag}</span>
+            <div className="flex-1 text-right">
+              <p className="text-sm font-medium">{c.name}</p>
+              <p className="text-xs text-gray-400">{c.code} · {c.symbol}</p>
+            </div>
+            {defaultCurrency === c.code && (
+              <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Live exchange rates ──────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-semibold text-gray-500">שערי חליפין בזמן אמת</p>
+          <div className="flex items-center gap-2">
+            {ratesUpdated && (
+              <span className="text-[10px] text-gray-400">עודכן: {ratesUpdated}</span>
+            )}
+            <button
+              onClick={fetchRates}
+              disabled={ratesLoading}
+              className="text-[11px] text-primary font-semibold bg-primary/10 px-2.5 py-1 rounded-lg active:scale-95 disabled:opacity-50"
+            >
+              {ratesLoading ? '...' : '🔄 עדכן'}
+            </button>
+          </div>
+        </div>
+
+        {/* Base currency selector */}
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          {['ILS', 'USD', 'EUR', 'GBP', 'THB'].map(b => (
+            <button key={b}
+              onClick={() => setBaseCurrency(b)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                baseCurrency === b ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-500 shadow-sm'
+              }`}>
+              {b}
+            </button>
+          ))}
+        </div>
+
+        <p className="text-[11px] text-gray-400 px-1">
+          מציג שערים יחסית ל-{baseCurrency === 'ILS' ? 'שקל ישראלי' : baseCurrency}
+        </p>
+
+        {ratesLoading ? (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-xs text-gray-400 mt-2">טוען שערים...</p>
+          </div>
+        ) : rates.length > 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            {rates
+              .filter(r => baseCurrency === 'ILS' || r.code !== baseCurrency)
+              .map((r, i, arr) => {
+                const display = getDisplayRate(r)
+                const isPositive = true // rates are always positive
+                return (
+                  <div key={r.code}
+                    className={`flex items-center gap-3 px-4 py-3 ${i < arr.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                    <span className="text-xl flex-shrink-0">{RATE_NAMES[r.code]?.split(' ')[0] || '💱'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800">
+                        {RATE_NAMES[r.code]?.slice(3) || r.code}
+                      </p>
+                      <p className="text-[11px] text-gray-500" dir="ltr">{display.label}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {baseCurrency === 'ILS' ? (
+                        <p className="text-sm font-bold text-gray-800">
+                          {r.rateFromIls.toFixed(r.rateFromIls < 0.01 ? 4 : r.rateFromIls < 1 ? 3 : 2)}
+                        </p>
+                      ) : (
+                        <p className="text-sm font-bold text-gray-800">
+                          {getDisplayRate(r).label.split('= ')[1]?.split(' ')[0] || '—'}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-400">{r.code}</p>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
+            <p className="text-sm text-gray-400">לא ניתן לטעון שערים — בדוק חיבור לאינטרנט</p>
+            <button onClick={fetchRates} className="text-primary text-sm font-medium mt-2 active:scale-95">נסה שוב</button>
+          </div>
+        )}
+
+        <p className="text-[10px] text-gray-400 text-center">
+          מקור: Frankfurter / ECB · שערים לצורך מידע בלבד
+        </p>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function SettingsPage() {
   const [page, setPage] = useState<SettingsPage>('main')
   const [travelers, setTravelers] = useState<Traveler[]>([])
@@ -494,34 +680,15 @@ export default function SettingsPage() {
         )}
 
         {page === 'currency' && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-            <h1 className="text-xl font-bold">מטבע ברירת מחדל</h1>
-            <p className="text-xs text-gray-500">בחר את המטבע שבו תראה את כל ההוצאות והסכומים</p>
-
-            <div className="space-y-2">
-              {CURRENCIES.map(c => (
-                <button key={c.code} onClick={() => {
-                  setDefaultCurrency(c.code)
-                  localStorage.setItem('tripix_default_currency', c.code)
-                  toast.success(`מטבע ברירת מחדל: ${c.name}`)
-                }}
-                  className={`w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all ${
-                    defaultCurrency === c.code ? 'ring-2 ring-primary' : ''
-                  }`}>
-                  <span className="text-2xl">{c.flag}</span>
-                  <div className="flex-1 text-right">
-                    <p className="text-sm font-medium">{c.name}</p>
-                    <p className="text-xs text-gray-400">{c.code} · {c.symbol}</p>
-                  </div>
-                  {defaultCurrency === c.code && (
-                    <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </motion.div>
+          <CurrencySettingsPage
+            defaultCurrency={defaultCurrency}
+            onChangeCurrency={(code) => {
+              setDefaultCurrency(code)
+              localStorage.setItem('tripix_default_currency', code)
+              toast.success(`מטבע ברירת מחדל: ${code}`)
+            }}
+            currencies={CURRENCIES}
+          />
         )}
 
         {page === 'about' && (

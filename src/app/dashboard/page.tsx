@@ -11,6 +11,7 @@ import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/t
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
 import GmailScanButton from '@/components/GmailScanButton'
+import CurrencySelector from '@/components/CurrencySelector'
 
 export default function DashboardPage() {
   const { currentTrip, trips, loading: tripsLoading } = useTrip()
@@ -148,14 +149,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Tripix</h1>
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-          {(['ILS', 'THB', 'USD'] as Currency[]).map(c => (
-            <button key={c} onClick={() => setDisplayCurrency(c)}
-              className={`px-3 py-1 text-xs rounded-lg font-medium transition-all active:scale-95 ${displayCurrency === c ? 'bg-white shadow text-primary' : 'text-gray-500'}`}>
-              {CURRENCY_SYMBOL[c]}
-            </button>
-          ))}
-        </div>
+        <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
       </div>
 
       {/* Total Card */}

@@ -14,6 +14,7 @@ import { formatMoney, formatDate } from '@/lib/utils'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/types'
 import { useTrip } from '@/contexts/TripContext'
 import { eachDayOfInterval, parseISO, format, isToday, differenceInDays } from 'date-fns'
+import CurrencySelector from '@/components/CurrencySelector'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface DayData {
@@ -314,17 +315,7 @@ export default function TimelinePage() {
             </button>
           </div>
 
-          {/* Currency selector (timeline mode only) */}
-          {viewMode === 'timeline' && (
-            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-              {(['ILS', 'USD', 'THB'] as Currency[]).map(c => (
-                <button key={c} onClick={() => setCurrency(c)}
-                  className={`px-2.5 py-1 text-[11px] rounded-lg font-medium transition-all ${currency === c ? 'bg-white shadow text-primary' : 'text-gray-500'}`}>
-                  {CURRENCY_SYMBOL[c]}
-                </button>
-              ))}
-            </div>
-          )}
+          <CurrencySelector value={currency} onChange={setCurrency} size="sm" />
         </div>
       </div>
 
