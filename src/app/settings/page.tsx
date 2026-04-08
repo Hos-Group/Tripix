@@ -1,20 +1,36 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Lock, Bell, Shield, Info, LogOut, ChevronLeft, Save, Users } from 'lucide-react'
+import { User, Lock, Bell, Shield, Info, LogOut, ChevronLeft, Save, Users, Coins } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { invalidateTravelersCache } from '@/lib/travelers'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
-type SettingsPage = 'main' | 'account' | 'password' | 'notifications' | 'security' | 'about'
+type SettingsPage = 'main' | 'account' | 'password' | 'notifications' | 'security' | 'about' | 'currency'
 
 const MENU_ITEMS = [
   { id: 'account' as const, label: 'פרטי חשבון', icon: User, color: 'text-blue-500', bg: 'bg-blue-50' },
+  { id: 'currency' as const, label: 'מטבע ברירת מחדל', icon: Coins, color: 'text-yellow-500', bg: 'bg-yellow-50' },
   { id: 'password' as const, label: 'שינוי סיסמא', icon: Lock, color: 'text-orange-500', bg: 'bg-orange-50' },
   { id: 'notifications' as const, label: 'התראות', icon: Bell, color: 'text-purple-500', bg: 'bg-purple-50' },
   { id: 'security' as const, label: 'אבטחה ופרטיות', icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
   { id: 'about' as const, label: 'אודות', icon: Info, color: 'text-gray-500', bg: 'bg-gray-50' },
+]
+
+const CURRENCIES = [
+  { code: 'ILS', name: 'שקל ישראלי', symbol: '₪', flag: '🇮🇱' },
+  { code: 'USD', name: 'דולר אמריקאי', symbol: '$', flag: '🇺🇸' },
+  { code: 'EUR', name: 'יורו', symbol: '€', flag: '🇪🇺' },
+  { code: 'GBP', name: 'לירה שטרלינג', symbol: '£', flag: '🇬🇧' },
+  { code: 'THB', name: 'בהט תאילנדי', symbol: '฿', flag: '🇹🇭' },
+  { code: 'JPY', name: 'ין יפני', symbol: '¥', flag: '🇯🇵' },
+  { code: 'AUD', name: 'דולר אוסטרלי', symbol: 'A$', flag: '🇦🇺' },
+  { code: 'CAD', name: 'דולר קנדי', symbol: 'C$', flag: '🇨🇦' },
+  { code: 'CHF', name: 'פרנק שווייצרי', symbol: 'CHF', flag: '🇨🇭' },
+  { code: 'TRY', name: 'לירה טורקית', symbol: '₺', flag: '🇹🇷' },
+  { code: 'INR', name: 'רופי הודי', symbol: '₹', flag: '🇮🇳' },
+  { code: 'BRL', name: 'ריאל ברזילאי', symbol: 'R$', flag: '🇧🇷' },
 ]
 
 interface Traveler {
@@ -26,6 +42,7 @@ export default function SettingsPage() {
   const [page, setPage] = useState<SettingsPage>('main')
   const [travelers, setTravelers] = useState<Traveler[]>([])
   const [savingTravelers, setSavingTravelers] = useState(false)
+  const [defaultCurrency, setDefaultCurrency] = useState('ILS')
 
   useEffect(() => {
     const fetchTravelers = async () => {
@@ -39,6 +56,9 @@ export default function SettingsPage() {
       }
     }
     fetchTravelers()
+    // Load saved currency preference
+    const saved = localStorage.getItem('tripix_default_currency')
+    if (saved) setDefaultCurrency(saved)
   }, [])
 
   const handleSaveTravelers = async () => {
@@ -141,6 +161,37 @@ export default function SettingsPage() {
             <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
               <Shield className="w-10 h-10 text-green-300 mx-auto mb-3" />
               <p className="text-sm text-gray-500">יהיה זמין בקרוב</p>
+            </div>
+          </motion.div>
+        )}
+
+        {page === 'currency' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+            <h1 className="text-xl font-bold">מטבע ברירת מחדל</h1>
+            <p className="text-xs text-gray-500">בחר את המטבע שבו תראה את כל ההוצאות והסכומים</p>
+
+            <div className="space-y-2">
+              {CURRENCIES.map(c => (
+                <button key={c.code} onClick={() => {
+                  setDefaultCurrency(c.code)
+                  localStorage.setItem('tripix_default_currency', c.code)
+                  toast.success(`מטבע ברירת מחדל: ${c.name}`)
+                }}
+                  className={`w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all ${
+                    defaultCurrency === c.code ? 'ring-2 ring-primary' : ''
+                  }`}>
+                  <span className="text-2xl">{c.flag}</span>
+                  <div className="flex-1 text-right">
+                    <p className="text-sm font-medium">{c.name}</p>
+                    <p className="text-xs text-gray-400">{c.code} · {c.symbol}</p>
+                  </div>
+                  {defaultCurrency === c.code && (
+                    <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                  )}
+                </button>
+              ))}
             </div>
           </motion.div>
         )}
