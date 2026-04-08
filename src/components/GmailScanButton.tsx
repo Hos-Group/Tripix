@@ -19,6 +19,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 
+// Throttle auto-scan: run at most once every 4 hours per browser session
+const AUTO_SCAN_KEY = 'tripix_gmail_last_auto_scan'
+const AUTO_SCAN_INTERVAL_MS = 4 * 60 * 60 * 1000
+
 interface ScanResult {
   scanned:          number
   parsed:           number
@@ -44,9 +48,10 @@ export default function GmailScanButton({ onScanComplete }: GmailScanButtonProps
   const [stepIdx,    setStepIdx]    = useState(0)
   const [result,     setResult]     = useState<ScanResult | null>(null)
   const [error,      setError]      = useState<string | null>(null)
-  const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const stepTimer  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const autoFired  = useRef(false)
 
-  // Check Gmail connection
+  // Check Gmail connection, then auto-scan if enough time has passed
   const checkGmail = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setHasGmail(false); return }
@@ -82,6 +87,38 @@ export default function GmailScanButton({ onScanComplete }: GmailScanButtonProps
   }
 
   useEffect(() => () => stopStepAnimation(), [])
+
+  // ── Silent background auto-scan ────────────────────────────────────────────
+  // Fires once per render when Gmail is connected and at least 4 h have passed
+  // since the last auto-scan (stored in localStorage). No UI loading state.
+  useEffect(() => {
+    if (!hasGmail || autoFired.current) return
+    autoFired.current = true
+
+    const last = Number(localStorage.getItem(AUTO_SCAN_KEY) || 0)
+    if (Date.now() - last < AUTO_SCAN_INTERVAL_MS) return // too soon
+
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (!token) return
+        localStorage.setItem(AUTO_SCAN_KEY, String(Date.now()))
+        const res = await fetch('/api/gmail/scan', {
+          method:  'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const json = await res.json() as ScanResult
+        if (json.created > 0) {
+          setResult(json)
+          onScanComplete?.(json.created)
+        }
+      } catch {
+        // silent — don't surface auto-scan errors to the user
+      }
+    })()
+  }, [hasGmail, onScanComplete])
 
   const handleScan = async () => {
     if (scanning) return
