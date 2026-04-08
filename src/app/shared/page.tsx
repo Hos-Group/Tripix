@@ -179,6 +179,7 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
 }
 
 function CreateSharedTrip({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const { user } = useAuth()
   const [name, setName] = useState('')
   const [tripType, setTripType] = useState<TripType>('friends')
   const [destination, setDestination] = useState('')
