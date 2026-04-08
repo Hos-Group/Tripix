@@ -44,6 +44,20 @@ function GoogleLogo({ className }: { className?: string }) {
   )
 }
 
+/** Detect if running inside an iframe (Claude Preview, WebView, etc.) */
+function isInIframe(): boolean {
+  try { return window.self !== window.top } catch { return true }
+}
+
+/** Build the full absolute OAuth URL so it can be opened externally */
+function buildOAuthUrl(hint?: string): string {
+  const base = typeof window !== 'undefined' ? window.location.origin : ''
+  const path = hint
+    ? `/api/auth/google?hint=${encodeURIComponent(hint)}`
+    : '/api/auth/google'
+  return base + path
+}
+
 export default function GmailConnect({ userId }: GmailConnectProps) {
   const [loading,        setLoading]        = useState(true)
   const [connections,    setConnections]    = useState<GmailConnection[]>([])
@@ -84,12 +98,14 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   }, [showAddPanel])
 
   // ── Redirect to Google OAuth (with optional email hint) ───────────────────
-  // _top breaks out of any iframe/preview sandbox so Google OAuth isn't blocked
   const startOAuth = (hint?: string) => {
-    const url = hint
-      ? `/api/auth/google?hint=${encodeURIComponent(hint)}`
-      : '/api/auth/google'
-    window.open(url, '_top')
+    const url = buildOAuthUrl(hint)
+    if (isInIframe()) {
+      // Cannot do OAuth inside an iframe — open in the real browser instead
+      window.open(url, '_blank', 'noopener')
+    } else {
+      window.location.href = url
+    }
   }
 
   // ── Handle "Connect" click in the add-account panel ──────────────────────
@@ -157,9 +173,29 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   }
 
   const hasConnections = connections.length > 0
+  const inIframe = typeof window !== 'undefined' && isInIframe()
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4" dir="rtl">
+
+      {/* ── Iframe/Preview warning ── */}
+      {inIframe && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <p className="text-xs font-bold text-amber-800">🔒 חיבור Gmail דורש דפדפן אמיתי</p>
+          <p className="text-[11px] text-amber-700 leading-relaxed">
+            OAuth של Google לא עובד בתוך iframe או תצוגת Preview.
+            לחץ על הכפתור כדי לפתוח את האפליקציה בדפדפן ולחבר את המייל.
+          </p>
+          <a
+            href={`${typeof window !== 'undefined' ? window.location.origin : ''}/settings`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full bg-amber-600 text-white rounded-xl py-2.5 text-sm font-semibold active:scale-95 transition-all"
+          >
+            🌐 פתח בדפדפן וחבר Gmail
+          </a>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-2">
         <span className="text-xl">📧</span>
