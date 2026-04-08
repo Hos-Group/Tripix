@@ -234,3 +234,86 @@ function decodeBase64Url(encoded: string): string {
   const padded   = standard + '=='.slice((standard.length % 4) || 4)
   return Buffer.from(padded, 'base64').toString('utf-8')
 }
+
+// ── PDF Attachment helpers ────────────────────────────────────────────────────
+
+export interface EmailAttachment {
+  filename:     string
+  mimeType:     string
+  attachmentId: string
+  size:         number
+}
+
+/** Recursively walk a payload tree and collect all PDF parts */
+function collectPdfParts(payload: GmailMessagePayload): EmailAttachment[] {
+  const results: EmailAttachment[] = []
+
+  const isPdf =
+    payload.mimeType === 'application/pdf' ||
+    (payload.filename?.toLowerCase().endsWith('.pdf') ?? false)
+
+  if (isPdf && payload.body?.attachmentId) {
+    results.push({
+      filename:     payload.filename || 'attachment.pdf',
+      mimeType:     payload.mimeType || 'application/pdf',
+      attachmentId: payload.body.attachmentId,
+      size:         payload.body.size || 0,
+    })
+  }
+
+  for (const part of payload.parts || []) {
+    results.push(...collectPdfParts(part))
+  }
+
+  return results
+}
+
+/**
+ * List PDF attachments on a Gmail message.
+ * Fetches the full message and walks the MIME tree.
+ */
+export async function getEmailAttachments(
+  accessToken: string,
+  messageId:   string,
+): Promise<EmailAttachment[]> {
+  const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`[gmailClient] getEmailAttachments failed (${res.status}): ${err}`)
+  }
+
+  const msg = await res.json() as GmailMessageResource
+  if (!msg.payload) return []
+
+  return collectPdfParts(msg.payload)
+}
+
+/**
+ * Download a specific Gmail attachment and return standard base64.
+ * Gmail returns URL-safe base64; this converts it to standard base64
+ * so it can be used directly with Claude's document API.
+ */
+export async function downloadAttachment(
+  accessToken:  string,
+  messageId:    string,
+  attachmentId: string,
+): Promise<string> {
+  const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentId}`
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`[gmailClient] downloadAttachment failed (${res.status}): ${err}`)
+  }
+
+  const data = await res.json() as { data: string; size: number }
+
+  // Convert URL-safe base64 → standard base64
+  return data.data.replace(/-/g, '+').replace(/_/g, '/')
+}

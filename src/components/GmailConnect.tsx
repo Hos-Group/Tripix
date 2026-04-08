@@ -18,9 +18,11 @@ interface GmailConnection {
 }
 
 interface ScanResult {
-  scanned: number
-  parsed:  number
-  created: number
+  scanned:          number
+  parsed:           number
+  created:          number
+  scannedWithPDF?:  number
+  scannedEmailOnly?: number
 }
 
 interface GmailConnectProps {
@@ -33,6 +35,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   const [scanning,     setScanning]     = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [lastScan,     setLastScan]     = useState<ScanResult | null>(null)
+  const [lastScanTime, setLastScanTime] = useState<string | null>(null)
   const [scanError,    setScanError]    = useState<string | null>(null)
 
   // ── Load connection status ─────────────────────────────────────────────────
@@ -83,6 +86,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
       }
 
       setLastScan(json)
+      setLastScanTime(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
     } catch (err) {
       console.error('[GmailConnect] scan error:', err)
       setScanError('שגיאת רשת — נסה שוב')
@@ -143,9 +147,18 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
 
           {/* Last scan stats */}
           {lastScan && (
-            <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700 space-y-0.5">
-              <p className="font-semibold">תוצאות הסריקה האחרונה:</p>
-              <p>סרקנו {lastScan.scanned} מיילים · ניתחנו {lastScan.parsed} · נוצרו {lastScan.created} הוצאות</p>
+            <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700 space-y-1">
+              <p className="font-semibold">
+                תוצאות הסריקה האחרונה
+                {lastScanTime && <span className="font-normal text-blue-500"> · {lastScanTime}</span>}
+              </p>
+              <p>
+                סרקנו {lastScan.scanned} מיילים
+                {lastScan.scannedWithPDF !== undefined && (
+                  <> · {lastScan.scannedWithPDF} עם PDF · {lastScan.scannedEmailOnly ?? 0} ללא PDF</>
+                )}
+                {' '}· יצרנו {lastScan.created} הוצאות
+              </p>
             </div>
           )}
 
