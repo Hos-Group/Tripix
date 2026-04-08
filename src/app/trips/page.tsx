@@ -58,6 +58,15 @@ export default function TripsPage() {
     return types[notes] || null
   }
 
+  const TRIP_GRADIENTS = [
+    'from-[#185FA5] to-[#378ADD]',
+    'from-purple-500 to-indigo-500',
+    'from-teal-500 to-cyan-400',
+    'from-orange-400 to-rose-400',
+    'from-green-500 to-emerald-400',
+    'from-amber-400 to-orange-500',
+  ]
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -105,34 +114,38 @@ export default function TripsPage() {
             const travelers = (trip.travelers as { id: string; name: string }[]) || []
             const typeLabel = getTripTypeLabel(trip.notes)
 
+            const gradient = TRIP_GRADIENTS[i % TRIP_GRADIENTS.length]
+
             return (
               <motion.div key={trip.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className={`bg-white rounded-2xl shadow-sm overflow-hidden ${isActive ? 'ring-2 ring-primary' : ''}`}>
+                className={`bg-white rounded-2xl shadow-md overflow-hidden ${isActive ? 'ring-2 ring-primary ring-offset-1' : ''}`}>
 
-                {/* Main row — tap to select trip */}
+                {/* Gradient header */}
                 <button
                   onClick={() => { setCurrentTripId(trip.id); router.push('/dashboard') }}
-                  className="w-full p-4 text-right active:scale-[0.99] transition-all">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-primary' : 'bg-gray-100'}`}>
-                      <Plane className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                  className={`w-full bg-gradient-to-br ${gradient} p-4 text-right active:scale-[0.99] transition-all relative overflow-hidden`}>
+                  <div className="absolute -top-4 -left-4 w-20 h-20 rounded-full bg-white/10 pointer-events-none" />
+                  <div className="relative flex items-center justify-between">
+                    <div className="flex items-center gap-1 bg-white/20 rounded-full px-2 py-0.5">
+                      {isActive && <Check className="w-3 h-3 text-white" />}
+                      <span className="text-[10px] text-white font-medium">{isActive ? 'פעיל' : `${days} ימים`}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-sm truncate">{trip.name}</p>
-                        {isActive && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-gray-500">{trip.destination}</span>
-                        {typeLabel && <span className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full">{typeLabel}</span>}
-                      </div>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        {formatDate(trip.start_date)} — {formatDate(trip.end_date)} · {days} ימים
-                      </p>
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                      <Plane className="w-5 h-5 text-white" />
                     </div>
+                  </div>
+                  <div className="relative mt-2 text-right">
+                    <p className="font-bold text-white text-base truncate">{trip.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-white/80">{trip.destination}</span>
+                      {typeLabel && <span className="text-[10px] bg-white/20 text-white px-1.5 py-0.5 rounded-full">{typeLabel}</span>}
+                    </div>
+                    <p className="text-[11px] text-white/70 mt-1">
+                      {formatDate(trip.start_date)} — {formatDate(trip.end_date)}
+                    </p>
                   </div>
                 </button>
 

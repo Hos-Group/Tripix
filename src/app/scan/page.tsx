@@ -616,16 +616,34 @@ export default function ScanPage() {
       <AnimatePresence mode="wait">
         {/* Choose */}
         {step === 'choose' && (
-          <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-            <p className="text-sm text-gray-500">בחרו מה לסרוק — Claude ינתח הכל אוטומטית</p>
+          <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+            <p className="text-sm text-gray-500 text-center">בחרו מה לסרוק — Claude ינתח הכל אוטומטית</p>
 
+            {/* Primary camera button — large and prominent */}
+            <button onClick={() => { setMode('receipt'); cameraRef.current?.click() }}
+              className="w-full relative overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600 rounded-3xl p-6 shadow-lg active:scale-95 transition-transform text-white">
+              {/* Pulsing ring animation */}
+              <span className="absolute inset-0 flex items-center justify-center">
+                <span className="w-24 h-24 rounded-full bg-white/10 animate-ping" />
+              </span>
+              <div className="relative flex flex-col items-center gap-3">
+                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center">
+                  <Camera className="w-10 h-10 text-white" />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-lg">צלם קבלה</p>
+                  <p className="text-sm text-white/80">מצלמה אחורית → חילוץ אוטומטי עם AI</p>
+                </div>
+              </div>
+            </button>
+
+            {/* Secondary options */}
             {[
-              { m: 'receipt' as ScanMode, icon: Camera, color: 'orange', title: 'צלם קבלה', sub: 'מצלמה אחורית → חילוץ אוטומטי', useCamera: true },
               { m: 'document' as ScanMode, icon: Upload, color: 'blue', title: 'העלה מסמך הזמנה', sub: 'טיסה / מלון / מעבורת / פעילות', useCamera: false },
               { m: 'passport' as ScanMode, icon: FileText, color: 'green', title: 'סרוק דרכון', sub: 'חילוץ פרטי דרכון אוטומטי', useCamera: false },
             ].map(({ m, icon: Icon, color, title, sub, useCamera }) => (
               <button key={m} onClick={() => { setMode(m); (useCamera ? cameraRef : fileRef).current?.click() }}
-                className="w-full bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4 active:scale-95 transition-transform">
+                className="w-full bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4 active:scale-95 transition-transform border border-gray-50">
                 <div className={`w-12 h-12 bg-${color}-50 rounded-xl flex items-center justify-center`}>
                   <Icon className={`w-6 h-6 text-${color}-500`} />
                 </div>

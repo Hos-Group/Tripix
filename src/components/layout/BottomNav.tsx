@@ -8,10 +8,10 @@ import { useTrip } from '@/contexts/TripContext'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'ראשי', icon: LayoutDashboard },
-  { href: '/expenses', label: 'הוצאות', icon: Receipt },
-  { href: '/scan', label: 'סרוק', icon: ScanLine, isFab: true },
-  { href: '/documents', label: 'מסמכים', icon: FolderOpen },
-  { href: '/timeline', label: 'ציר זמן', icon: CalendarDays },
+  { href: '/expenses', label: 'הוצאות', icon: Receipt, tour: 'expenses-nav' },
+  { href: '/scan', label: 'סרוק', icon: ScanLine, isFab: true, tour: 'scan-btn' },
+  { href: '/documents', label: 'מסמכים', icon: FolderOpen, tour: 'docs-nav' },
+  { href: '/timeline', label: 'ציר זמן', icon: CalendarDays, tour: 'timeline-nav' },
 ]
 
 const HIDDEN_PATHS = ['/onboarding', '/auth/login', '/auth/signup']
@@ -37,6 +37,7 @@ export default function BottomNav() {
           if (item.isFab) {
             return (
               <Link key={item.href} href={item.href}
+                data-tour={item.tour}
                 className="flex flex-col items-center -mt-6">
                 <div className={cn(
                   'w-14 h-14 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform',
@@ -51,6 +52,7 @@ export default function BottomNav() {
 
           return (
             <Link key={item.href} href={item.href}
+              data-tour={item.tour}
               className={cn(
                 'flex flex-col items-center gap-0.5 active:scale-95 transition-transform px-3 py-1',
                 isActive ? 'text-primary' : 'text-gray-400'

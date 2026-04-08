@@ -154,14 +154,25 @@ export default function DashboardPage() {
 
       {/* Total Card */}
       <motion.div
+        data-tour="dashboard-card"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-primary to-primary-dark rounded-3xl p-6 text-white shadow-lg">
-        <p className="text-sm opacity-80 mb-1">סה&quot;כ הוצאות</p>
-        <p className="text-4xl font-bold">{convert(totalIls)}</p>
-        <div className="flex items-center gap-1 mt-2 text-sm opacity-70">
-          <Plane className="w-4 h-4" />
-          <span>{tripName} · {totalTripDays} ימים</span>
+        className="bg-gradient-to-br from-[#185FA5] to-[#378ADD] rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+        {/* Decorative circle */}
+        <div className="absolute -top-8 -left-8 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
+        <div className="absolute -bottom-6 -right-4 w-28 h-28 rounded-full bg-white/5 pointer-events-none" />
+
+        <div className="relative">
+          <div className="flex items-center gap-2 mb-3">
+            <Plane className="w-4 h-4 opacity-70" />
+            <span className="text-sm opacity-80 truncate">{tripName} · {tripDestination}</span>
+          </div>
+          <p className="text-xs opacity-60 mb-1">סה&quot;כ הוצאות</p>
+          <p className="text-4xl font-bold tracking-tight">{convert(totalIls)}</p>
+          <div className="flex items-center justify-between mt-3">
+            <div className="text-xs opacity-60">{totalTripDays} ימים · {daysRemaining} נותרו</div>
+            <div className="text-xs bg-white/20 rounded-full px-2 py-0.5">{displayCurrency}</div>
+          </div>
         </div>
       </motion.div>
 
@@ -171,28 +182,28 @@ export default function DashboardPage() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { icon: Wallet, label: 'סה"כ', value: convert(totalIls), color: 'text-primary' },
-          { icon: TrendingUp, label: 'ממוצע יומי', value: convert(avgDaily), color: 'text-green-600' },
-          { icon: CalendarDays, label: 'היום', value: convert(todayTotal), color: 'text-orange-500' },
-          { icon: Plane, label: 'מספר ימי נסיעה', value: `${totalTripDays}`, color: 'text-purple-500' },
+          { icon: Wallet, label: 'סה"כ', value: convert(totalIls), color: 'text-primary', bg: 'bg-primary/8' },
+          { icon: TrendingUp, label: 'ממוצע יומי', value: convert(avgDaily), color: 'text-green-600', bg: 'bg-green-50' },
+          { icon: CalendarDays, label: 'היום', value: convert(todayTotal), color: 'text-orange-500', bg: 'bg-orange-50' },
+          { icon: Plane, label: 'ימי טיול', value: `${totalTripDays}`, color: 'text-purple-500', bg: 'bg-purple-50' },
         ].map((stat, i) => (
           <motion.div key={i}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
+            className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
+            <div className={`w-8 h-8 rounded-xl ${stat.bg} flex items-center justify-center mb-2`}>
               <stat.icon className={`w-4 h-4 ${stat.color}`} />
-              <span className="text-xs text-gray-500">{stat.label}</span>
             </div>
             <p className="text-lg font-bold">{stat.value}</p>
+            <span className="text-xs text-gray-400">{stat.label}</span>
           </motion.div>
         ))}
       </div>
 
       {/* Pie Chart */}
       {categoryData.length > 0 && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
           <h3 className="text-sm font-bold mb-3">חלוקה לפי קטגוריה</h3>
           <div className="flex items-center">
             <ResponsiveContainer width="50%" height={160}>
@@ -209,9 +220,9 @@ export default function DashboardPage() {
             <div className="flex-1 space-y-2 pr-2">
               {categoryData.map((cat, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                  <span className="flex-1 text-gray-600">{cat.name}</span>
-                  <span className="font-medium">{formatMoney(cat.value)}</span>
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                  <span className="flex-1 text-gray-600 truncate">{cat.name}</span>
+                  <span className="font-semibold text-gray-800">{formatMoney(cat.value)}</span>
                 </div>
               ))}
             </div>

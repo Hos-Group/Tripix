@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import BottomNav from '@/components/layout/BottomNav'
 import GlobalHeader from '@/components/layout/GlobalHeader'
 import Providers from '@/components/Providers'
+import TourGuideWrapper from '@/components/TourGuideWrapper'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -42,6 +43,7 @@ export default function RootLayout({
           {children}
         </main>
         <BottomNav />
+        <TourGuideWrapper />
         <Toaster
           position="top-center"
           toastOptions={{
