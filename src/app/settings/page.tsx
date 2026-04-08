@@ -1,17 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { User, Lock, Bell, Shield, Info, LogOut, ChevronLeft, Save, Users, Coins } from 'lucide-react'
+import { User, Lock, Bell, Shield, Info, LogOut, ChevronLeft, Save, Users, Coins, Mail, Copy, CheckCheck } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { invalidateTravelersCache } from '@/lib/travelers'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
-type SettingsPage = 'main' | 'account' | 'password' | 'notifications' | 'security' | 'about' | 'currency'
+type SettingsPage = 'main' | 'account' | 'password' | 'notifications' | 'security' | 'about' | 'currency' | 'email_inbox'
 
 const MENU_ITEMS = [
   { id: 'account' as const, label: 'פרטי חשבון', icon: User, color: 'text-blue-500', bg: 'bg-blue-50' },
   { id: 'currency' as const, label: 'מטבע ברירת מחדל', icon: Coins, color: 'text-yellow-500', bg: 'bg-yellow-50' },
+  { id: 'email_inbox' as const, label: 'חיבור מייל חכם', icon: Mail, color: 'text-emerald-500', bg: 'bg-emerald-50', badge: 'חדש' },
   { id: 'password' as const, label: 'שינוי סיסמא', icon: Lock, color: 'text-orange-500', bg: 'bg-orange-50' },
   { id: 'notifications' as const, label: 'התראות', icon: Bell, color: 'text-purple-500', bg: 'bg-purple-50' },
   { id: 'security' as const, label: 'אבטחה ופרטיות', icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
@@ -43,6 +44,8 @@ export default function SettingsPage() {
   const [travelers, setTravelers] = useState<Traveler[]>([])
   const [savingTravelers, setSavingTravelers] = useState(false)
   const [defaultCurrency, setDefaultCurrency] = useState('ILS')
+  const [inboxKey, setInboxKey] = useState<string | null>(null)
+  const [inboxCopied, setInboxCopied] = useState(false)
 
   useEffect(() => {
     const fetchTravelers = async () => {
@@ -55,11 +58,35 @@ export default function SettingsPage() {
         console.error('Failed to load travelers')
       }
     }
+    const fetchInboxKey = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        const { data } = await supabase
+          .from('profiles')
+          .select('inbox_key')
+          .eq('id', user.id)
+          .single()
+        if (data?.inbox_key) setInboxKey(data.inbox_key)
+      } catch {
+        console.error('Failed to load inbox key')
+      }
+    }
     fetchTravelers()
+    fetchInboxKey()
     // Load saved currency preference
     const saved = localStorage.getItem('tripix_default_currency')
     if (saved) setDefaultCurrency(saved)
   }, [])
+
+  const inboxEmail = inboxKey ? `${inboxKey}@in.tripix.app` : null
+
+  const copyInboxEmail = async () => {
+    if (!inboxEmail) return
+    await navigator.clipboard.writeText(inboxEmail)
+    setInboxCopied(true)
+    setTimeout(() => setInboxCopied(false), 2500)
+  }
 
   const handleSaveTravelers = async () => {
     setSavingTravelers(true)
@@ -165,6 +192,115 @@ export default function SettingsPage() {
           </motion.div>
         )}
 
+        {page === 'email_inbox' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+            <div>
+              <h1 className="text-xl font-bold">📬 חיבור מייל חכם</h1>
+              <p className="text-xs text-gray-500 mt-1">
+                קבל אישורי הזמנה ישירות לטיול — אוטומטי לחלוטין
+              </p>
+            </div>
+
+            {/* Unique inbox email card */}
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Mail className="w-5 h-5" />
+                <span className="font-bold text-sm">כתובת המייל האישית שלך</span>
+              </div>
+              {inboxEmail ? (
+                <>
+                  <div className="bg-white/20 rounded-xl px-4 py-3 font-mono text-sm break-all mt-2 mb-3" dir="ltr">
+                    {inboxEmail}
+                  </div>
+                  <button
+                    onClick={copyInboxEmail}
+                    className="flex items-center gap-2 bg-white/25 hover:bg-white/35 active:scale-95 transition-all rounded-xl px-4 py-2 text-sm font-medium w-full justify-center"
+                  >
+                    {inboxCopied
+                      ? <><CheckCheck className="w-4 h-4" /> הועתק!</>
+                      : <><Copy className="w-4 h-4" /> העתק כתובת</>
+                    }
+                  </button>
+                </>
+              ) : (
+                <p className="text-white/70 text-sm mt-2">טוען...</p>
+              )}
+            </div>
+
+            {/* How to use */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+              <p className="font-bold text-sm">איך זה עובד? 🤔</p>
+
+              <div className="space-y-3">
+                {[
+                  {
+                    step: '1',
+                    title: 'העתק את הכתובת',
+                    desc: 'העתק את כתובת המייל האישית שלמעלה',
+                    icon: '📋',
+                  },
+                  {
+                    step: '2',
+                    title: 'הוסף ל-BCC',
+                    desc: 'כשאתה מזמין מלון, טיסה, שכירות רכב — הוסף את הכתובת לשדה BCC לפני שאתה שולח',
+                    icon: '✉️',
+                  },
+                  {
+                    step: '3',
+                    title: 'Tripix יעשה את השאר',
+                    desc: 'המערכת תנתח את המייל, תזהה את הטיול הרלוונטי ותוסיף את ההוצאה אוטומטית',
+                    icon: '🤖',
+                  },
+                  {
+                    step: '4',
+                    title: 'בדוק ואשר',
+                    desc: 'תקבל עדכון בטיול שלך — אם ההשמה לא נכונה אפשר לשנות בקלות',
+                    icon: '✅',
+                  },
+                ].map(item => (
+                  <div key={item.step} className="flex gap-3 items-start">
+                    <span className="text-xl flex-shrink-0">{item.icon}</span>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{item.title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Supported platforms */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <p className="font-bold text-sm mb-3">פלטפורמות נתמכות 🌐</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  'Booking.com', 'Airbnb', 'Expedia', 'Hotels.com',
+                  'אל-על', 'Ryanair', 'EasyJet', 'Wizzair',
+                  'Rentalcars', 'Avis', 'Hertz', 'GetYourGuide',
+                  'Viator', 'eDreams', 'Trip.com',
+                ].map(p => (
+                  <span key={p} className="bg-gray-50 text-gray-600 text-xs px-3 py-1 rounded-full border border-gray-200">
+                    {p}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-3">
+                כל מייל אישור הזמנה עם סכום ויעד — גם אם הפלטפורמה לא ברשימה
+              </p>
+            </div>
+
+            {/* Note about matching */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <p className="text-xs text-amber-800 font-medium">💡 איך הטיול נזוהה?</p>
+              <p className="text-xs text-amber-700 mt-1">
+                המערכת משווה את עיר היעד ואת התאריכים שבמייל לטיולים שיצרת.
+                אם הזמנת מלון בברצלונה — Tripix ידע לשייך אותו לטיול ברצלונה שלך.
+                אם אין טיול תואם — ההוצאה תמתין לשיוך ידני.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         {page === 'currency' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
             <h1 className="text-xl font-bold">מטבע ברירת מחדל</h1>
@@ -222,6 +358,11 @@ export default function SettingsPage() {
               <item.icon className={`w-5 h-5 ${item.color}`} />
             </div>
             <span className="flex-1 text-sm font-medium text-right">{item.label}</span>
+            {'badge' in item && item.badge && (
+              <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                {item.badge}
+              </span>
+            )}
             <ChevronLeft className="w-4 h-4 text-gray-300" />
           </button>
         ))}
