@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
         refresh_token: tokens.refresh_token || null,
         token_expiry:  expiryDate,
       },
-      { onConflict: 'user_id' },
+      { onConflict: 'user_id,gmail_address' },
     )
 
   if (dbError) {
