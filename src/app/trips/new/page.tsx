@@ -239,6 +239,7 @@ export default function NewTripPage() {
                 className="bg-white rounded-2xl p-5 shadow-sm space-y-3"
               >
                 <h3 className="font-bold text-base">✈️ לאן טסים?</h3>
+                <p className="text-xs text-gray-400 -mt-1">בחרו את מדינת היעד</p>
                 <div className="relative">
                   <input
                     type="text"
