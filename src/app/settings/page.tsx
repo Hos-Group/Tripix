@@ -6,13 +6,15 @@ import { motion } from 'framer-motion'
 import { invalidateTravelersCache } from '@/lib/travelers'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
+import GmailConnect from '@/components/GmailConnect'
 
-type SettingsPage = 'main' | 'account' | 'password' | 'notifications' | 'security' | 'about' | 'currency' | 'email_inbox'
+type SettingsPage = 'main' | 'account' | 'password' | 'notifications' | 'security' | 'about' | 'currency' | 'email_inbox' | 'gmail'
 
 const MENU_ITEMS = [
   { id: 'account' as const, label: 'פרטי חשבון', icon: User, color: 'text-blue-500', bg: 'bg-blue-50' },
   { id: 'currency' as const, label: 'מטבע ברירת מחדל', icon: Coins, color: 'text-yellow-500', bg: 'bg-yellow-50' },
   { id: 'email_inbox' as const, label: 'חיבור מייל חכם', icon: Mail, color: 'text-emerald-500', bg: 'bg-emerald-50', badge: 'חדש' },
+  { id: 'gmail' as const, label: 'סנכרון Gmail', icon: Mail, color: 'text-red-500', bg: 'bg-red-50', badge: 'חדש' },
   { id: 'password' as const, label: 'שינוי סיסמא', icon: Lock, color: 'text-orange-500', bg: 'bg-orange-50' },
   { id: 'notifications' as const, label: 'התראות', icon: Bell, color: 'text-purple-500', bg: 'bg-purple-50' },
   { id: 'security' as const, label: 'אבטחה ופרטיות', icon: Shield, color: 'text-green-500', bg: 'bg-green-50' },
@@ -53,6 +55,7 @@ export default function SettingsPage() {
   const [newAliasLabel, setNewAliasLabel] = useState('personal')
   const [addingAlias, setAddingAlias] = useState(false)
   const [showAddAlias, setShowAddAlias] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchTravelers = async () => {
@@ -69,6 +72,7 @@ export default function SettingsPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
+        setCurrentUserId(user.id)
         setPrimaryEmail(user.email || '')
         const { data } = await supabase
           .from('profiles')
@@ -457,6 +461,33 @@ export default function SettingsPage() {
                 המערכת משווה את עיר היעד ואת התאריכים שבמייל לטיולים שיצרת.
                 אם הזמנת מלון בברצלונה — Tripix ידע לשייך אותו לטיול ברצלונה שלך.
                 אם אין טיול תואם — ההוצאה תמתין לשיוך ידני.
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {page === 'gmail' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+            <div>
+              <h1 className="text-xl font-bold">סנכרון Gmail</h1>
+              <p className="text-xs text-gray-500 mt-1">
+                חבר את Gmail לסריקה אוטומטית של אישורי הזמנות
+              </p>
+            </div>
+
+            {currentUserId ? (
+              <GmailConnect userId={currentUserId} />
+            ) : (
+              <div className="bg-white rounded-2xl p-5 shadow-sm text-center text-sm text-gray-400">
+                טוען...
+              </div>
+            )}
+
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+              <p className="text-xs text-blue-800 font-medium">🔐 פרטיות ואבטחה</p>
+              <p className="text-xs text-blue-700 mt-1">
+                Tripix מבקש גישת קריאה בלבד. אנחנו לא שולחים, מוחקים או משנים מיילים.
+                הגישה ניתנת לביטול בכל עת מהגדרות חשבון Google שלך.
               </p>
             </div>
           </motion.div>
