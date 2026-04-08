@@ -28,20 +28,53 @@ function adminClient() {
   )
 }
 
-// ── Verify Resend webhook signature ──────────────────────────────────────────
-function verifySignature(body: string, signature: string | null): boolean {
+// ── Verify Resend/Svix webhook signature ─────────────────────────────────────
+// Resend uses Svix for webhook delivery.
+// Signature header: "svix-signature" = "v1,<base64_hmac_sha256>"
+// Secret format: "whsec_<base64>" — must be decoded before use
+function verifySignature(
+  body: string,
+  req: NextRequest,
+): boolean {
   const secret = process.env.EMAIL_WEBHOOK_SECRET
-  if (!secret) return true  // if no secret configured, skip verification
+  if (!secret) return true   // skip verification if not configured
 
-  if (!signature) return false
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex')
-  return crypto.timingSafeEqual(
-    Buffer.from(expected, 'hex'),
-    Buffer.from(signature.replace('sha256=', ''), 'hex'),
-  )
+  const msgId        = req.headers.get('svix-id')
+  const msgTimestamp = req.headers.get('svix-timestamp')
+  const msgSignature = req.headers.get('svix-signature')
+
+  // Fallback: old-style x-resend-signature (HMAC-SHA256 hex)
+  const legacySig = req.headers.get('x-resend-signature')
+  if (!msgSignature && legacySig) {
+    const expected = crypto.createHmac('sha256', secret).update(body).digest('hex')
+    try {
+      return crypto.timingSafeEqual(
+        Buffer.from(expected, 'hex'),
+        Buffer.from(legacySig.replace('sha256=', ''), 'hex'),
+      )
+    } catch { return false }
+  }
+
+  if (!msgId || !msgTimestamp || !msgSignature) return false
+
+  // Svix verification: sign "{msgId}.{msgTimestamp}.{body}"
+  try {
+    // Decode whsec_ secret
+    const secretBytes = Buffer.from(
+      secret.startsWith('whsec_') ? secret.slice(6) : secret,
+      'base64',
+    )
+    const toSign  = `${msgId}.${msgTimestamp}.${body}`
+    const hmac    = crypto.createHmac('sha256', secretBytes).update(toSign).digest('base64')
+    const sigs    = msgSignature.split(' ')    // may have multiple "v1,<sig>"
+    return sigs.some(s => {
+      const parts = s.split(',')
+      if (parts[0] !== 'v1') return false
+      try {
+        return crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(parts[1]))
+      } catch { return false }
+    })
+  } catch { return false }
 }
 
 // ── Normalize inbound email payload ─────────────────────────────────────────
@@ -111,12 +144,9 @@ function normalizePayload(body: Record<string, unknown>): NormalizedEmail | null
 // ── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
-  const sig     = req.headers.get('x-resend-signature') ||
-                  req.headers.get('x-postmark-signature') ||
-                  req.headers.get('x-mailgun-signature')
 
-  // Signature check
-  if (!verifySignature(rawBody, sig)) {
+  // Signature check (supports Svix/Resend + legacy HMAC formats)
+  if (!verifySignature(rawBody, req)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
