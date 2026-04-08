@@ -92,16 +92,21 @@ export async function refreshAccessToken(refreshToken: string): Promise<string> 
  * @param accessToken  Valid Gmail access token
  * @param daysBack     How many days back to search (default 30)
  * @param maxResults   Max number of messages to return (default 50)
+ * @param extraQuery   Optional extra Gmail search terms appended to the base query
+ *                     e.g. "(bangkok OR thailand)" to narrow to a destination
  */
 export async function searchBookingEmails(
   accessToken: string,
   daysBack     = 30,
   maxResults   = 50,
+  extraQuery   = '',
 ): Promise<GmailMessage[]> {
-  const query = [
-    'subject:(booking confirmation OR reservation OR hotel OR flight OR order confirmation)',
+  const queryParts = [
+    'subject:(booking confirmation OR reservation OR hotel OR flight OR order confirmation OR הזמנה OR אישור)',
     `newer_than:${daysBack}d`,
-  ].join(' ')
+  ]
+  if (extraQuery.trim()) queryParts.push(extraQuery.trim())
+  const query = queryParts.join(' ')
 
   const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages')
   listUrl.searchParams.set('q', query)

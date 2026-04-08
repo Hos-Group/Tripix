@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { useTrip } from '@/contexts/TripContext'
 import { supabase } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
+import TripGmailImport from '@/components/TripGmailImport'
 
 export default function TripsPage() {
   const { trips, currentTrip, setCurrentTripId, refreshTrips, loading } = useTrip()
@@ -203,6 +204,9 @@ export default function TripsPage() {
                             סוג: {typeLabel}
                           </div>
                         )}
+
+                        {/* Gmail retroactive import */}
+                        <TripGmailImport tripId={trip.id} tripName={trip.name} />
                       </div>
                     </motion.div>
                   )}
