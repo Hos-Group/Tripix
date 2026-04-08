@@ -10,6 +10,7 @@ import { formatMoney, getDaysRemaining, getTripDays } from '@/lib/utils'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/types'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
+import GmailScanButton from '@/components/GmailScanButton'
 
 export default function DashboardPage() {
   const { currentTrip, trips, loading: tripsLoading } = useTrip()
@@ -169,6 +170,9 @@ export default function DashboardPage() {
           <span>{tripName} · {totalTripDays} ימים</span>
         </div>
       </motion.div>
+
+      {/* Gmail Scan — instant import button */}
+      <GmailScanButton onScanComplete={(created) => { if (created > 0) fetchExpenses() }} />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
