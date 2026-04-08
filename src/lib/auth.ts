@@ -4,19 +4,9 @@ export async function signUp(email: string, password: string, displayName: strin
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: displayName } },
+    options: { data: { full_name: displayName } },
   })
   if (error) throw error
-
-  // Create profile
-  if (data.user) {
-    await supabase.from('user_profiles').upsert({
-      id: data.user.id,
-      email,
-      display_name: displayName,
-    })
-  }
-
   return data
 }
 

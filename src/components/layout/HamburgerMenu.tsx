@@ -5,10 +5,12 @@ import Link from 'next/link'
 import { Menu, X, User, AlertTriangle, Wallet, Luggage, ArrowLeftRight, Settings, LogOut, Cloud, Plane, Users, Sparkles, Map, Camera, Globe, PlusCircle, FolderOpen } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTrip } from '@/contexts/TripContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function HamburgerMenu() {
   const [open, setOpen] = useState(false)
   const { currentTrip } = useTrip()
+  const { displayName, signOut, isAdmin } = useAuth()
 
   // Primary actions — always visible at top
   const primaryItems = [
@@ -120,7 +122,7 @@ export default function HamburgerMenu() {
                     <Settings className="w-4.5 h-4.5 text-gray-400" />
                     <span className="text-sm text-gray-500">הגדרות</span>
                   </Link>
-                  <button className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-50 active:scale-[0.98] transition-all w-full">
+                  <button onClick={() => { setOpen(false); signOut() }} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-red-50 active:scale-[0.98] transition-all w-full">
                     <LogOut className="w-4.5 h-4.5 text-red-400" />
                     <span className="text-sm text-red-500">התנתקות</span>
                   </button>
