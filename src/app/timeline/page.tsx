@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronDown, ChevronLeft, Trash2, Pencil, X, Check,
@@ -19,15 +19,16 @@ import DocumentViewer  from '@/components/DocumentViewer'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-/** אירוע שנגזר ממסמך (מלון/שירות) ומוצג בציר הזמן */
+/** אירוע שנגזר ממסמך (טיסה/מלון/רכב/שירות) ומוצג בציר הזמן */
 interface DocEvent {
-  type:     'hotel_checkin' | 'hotel_stay' | 'hotel_checkout' | 'service'
+  type:     'flight' | 'car_pickup' | 'car_dropoff' | 'hotel_checkin' | 'hotel_stay' | 'hotel_checkout' | 'service'
   title:    string
   subtitle?: string
   icon:     string
   color:    string
   bgColor:  string
   docId:    string
+  time?:    string
 }
 
 interface DayData {
@@ -46,7 +47,7 @@ type ViewMode   = 'timeline' | 'summary'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** מחזיר icon ו-service_type לפי סוג שירות */
+/** מחזיר icon לפי סוג שירות */
 function serviceIcon(serviceType: string): string {
   switch (serviceType) {
     case 'airport_transfer': return '🚐'
@@ -57,6 +58,14 @@ function serviceIcon(serviceType: string): string {
     case 'activity':         return '🎯'
     default:                 return '✨'
   }
+}
+
+/** Sort helper — events with time come first, then by time string */
+function sortByTime(a: DocEvent, b: DocEvent): number {
+  if (a.time && b.time) return a.time.localeCompare(b.time)
+  if (a.time && !b.time) return -1
+  if (!a.time && b.time) return 1
+  return 0
 }
 
 function buildDays(
@@ -96,41 +105,146 @@ function buildDays(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ext = doc.extracted_data as any
 
+      // ── Flight events ───────────────────────────────────────────────────
+      if (doc.doc_type === 'flight') {
+        const flightNum = ext?.flight_number || ''
+        const depCity   = ext?.departure_city || ext?.dep_city || ''
+        const arrCity   = ext?.arrival_city   || ext?.arr_city || ''
+        const depTime   = ext?.departure_time || ext?.dep_time || ''
+        const arrTime   = ext?.arrival_time   || ext?.arr_time || ''
+        const depDate   = ext?.departure_date || ext?.dep_date as string | undefined
+        const airline   = ext?.airline        || ''
+
+        if (depDate === dateStr) {
+          const timeLabel = depTime && arrTime ? `${depTime} → ${arrTime}` : depTime
+          const subtitleParts = [
+            flightNum || airline,
+            timeLabel,
+          ].filter(Boolean)
+          docEvents.push({
+            type:     'flight',
+            title:    depCity && arrCity ? `${depCity} → ${arrCity}` : doc.name,
+            subtitle: subtitleParts.join(' · ') || undefined,
+            icon:     '✈️',
+            color:    '#2563eb',
+            bgColor:  '#eff6ff',
+            docId:    doc.id,
+            time:     depTime || undefined,
+          })
+        }
+
+        // Handle connections/segments
+        const stops = ext?.stops || ext?.segments
+        if (Array.isArray(stops)) {
+          for (const seg of stops) {
+            const segDepDate = seg?.departure_date || seg?.dep_date as string | undefined
+            if (segDepDate === dateStr) {
+              const segDepCity  = seg?.departure_city || seg?.dep_city || ''
+              const segArrCity  = seg?.arrival_city   || seg?.arr_city || ''
+              const segDepTime  = seg?.departure_time || seg?.dep_time || ''
+              const segArrTime  = seg?.arrival_time   || seg?.arr_time || ''
+              const segFlight   = seg?.flight_number  || ''
+              const segTimeLabel = segDepTime && segArrTime ? `${segDepTime} → ${segArrTime}` : segDepTime
+              docEvents.push({
+                type:     'flight',
+                title:    segDepCity && segArrCity ? `${segDepCity} → ${segArrCity}` : (segFlight || 'קונקשיין'),
+                subtitle: [segFlight, segTimeLabel].filter(Boolean).join(' · ') || undefined,
+                icon:     '🔄',
+                color:    '#2563eb',
+                bgColor:  '#eff6ff',
+                docId:    doc.id,
+                time:     segDepTime || undefined,
+              })
+            }
+          }
+        }
+      }
+
+      // ── Car rental events (detected via extracted_data fields) ─────────
+      // car_rental is not a DocType — detect via extracted_data presence
+      const hasCarRentalData = ext?.pickup_date || ext?.dropoff_date || ext?.rental_company || ext?.car_type
+      if (hasCarRentalData) {
+        const company     = ext?.company         || ext?.rental_company  || ''
+        const carType     = ext?.car_type        || ext?.vehicle         || ''
+        const pickupLoc   = ext?.pickup_location  || ''
+        const dropoffLoc  = ext?.dropoff_location || ''
+        const pickupDate  = ext?.pickup_date  as string | undefined
+        const dropoffDate = ext?.dropoff_date as string | undefined
+        const pickupTime  = ext?.pickup_time  || ''
+
+        if (pickupDate === dateStr) {
+          docEvents.push({
+            type:     'car_pickup',
+            title:    `איסוף רכב${company ? ` — ${company}` : ''}`,
+            subtitle: [carType, pickupLoc, pickupTime].filter(Boolean).join(' · ') || undefined,
+            icon:     '🚗',
+            color:    '#d97706',
+            bgColor:  '#fffbeb',
+            docId:    doc.id,
+            time:     pickupTime || undefined,
+          })
+        }
+
+        if (dropoffDate === dateStr) {
+          docEvents.push({
+            type:     'car_dropoff',
+            title:    `החזרת רכב${company ? ` — ${company}` : ''}`,
+            subtitle: [carType, dropoffLoc].filter(Boolean).join(' · ') || undefined,
+            icon:     '🏁',
+            color:    '#d97706',
+            bgColor:  '#fffbeb',
+            docId:    doc.id,
+            time:     '',
+          })
+        }
+      }
+
       // ── Hotel events ───────────────────────────────────────────────────────
       if (doc.doc_type === 'hotel') {
-        const hotelName  = ext?.hotel_name || doc.name
-        const checkIn    = ext?.check_in  as string | undefined
-        const checkOut   = ext?.check_out as string | undefined
+        const hotelName   = ext?.hotel_name  || doc.name
+        const checkIn     = ext?.check_in    as string | undefined
+        const checkOut    = ext?.check_out   as string | undefined
+        const checkInTime  = ext?.check_in_time  as string | undefined
+        const checkOutTime = ext?.check_out_time as string | undefined
+        const roomType    = ext?.room_type   as string | undefined
         const totalNights = checkIn && checkOut
           ? differenceInDays(parseISO(checkOut), parseISO(checkIn))
           : 0
 
         if (checkIn === dateStr) {
+          const parts = [
+            roomType,
+            totalNights ? `${totalNights} לילות` : undefined,
+          ].filter(Boolean)
           docEvents.push({
             type:     'hotel_checkin',
             title:    `צ׳ק אין — ${hotelName}`,
-            subtitle: ext?.room_type || undefined,
+            subtitle: parts.length ? parts.join(' · ') : undefined,
             icon:     '🏨',
             color:    '#16a34a',
             bgColor:  '#f0fdf4',
             docId:    doc.id,
+            time:     checkInTime,
           })
         } else if (checkOut === dateStr) {
           docEvents.push({
             type:     'hotel_checkout',
             title:    `צ׳ק אאוט — ${hotelName}`,
-            subtitle: undefined,
-            icon:     '🏁',
+            subtitle: checkOutTime ? `עד שעה ${checkOutTime}` : undefined,
+            icon:     '🚪',
             color:    '#dc2626',
             bgColor:  '#fef2f2',
             docId:    doc.id,
+            time:     checkOutTime,
           })
         } else if (checkIn && checkOut && dateStr > checkIn && dateStr < checkOut) {
-          const nightNum = differenceInDays(parseISO(dateStr), parseISO(checkIn))
+          const nightNum    = differenceInDays(parseISO(dateStr), parseISO(checkIn))
+          const NIGHT_NAMES = ['', 'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שביעי', 'שמיני', 'תשיעי', 'עשירי']
+          const nightLabel  = nightNum <= 10 ? `לילה ${NIGHT_NAMES[nightNum]}` : `לילה ${nightNum}`
           docEvents.push({
             type:     'hotel_stay',
             title:    hotelName,
-            subtitle: `לילה ${nightNum} מתוך ${totalNights}`,
+            subtitle: `${nightLabel} מתוך ${totalNights}${roomType ? ` · ${roomType}` : ''}`,
             icon:     '🌙',
             color:    '#16a34a',
             bgColor:  '#f0fdf4',
@@ -150,16 +264,20 @@ function buildDays(
             docEvents.push({
               type:     'service',
               title:    svc.name,
-              subtitle: svc.description || svc.time || undefined,
+              subtitle: svc.time ? `${svc.time}${svc.description ? ` · ${svc.description}` : ''}` : svc.description || undefined,
               icon:     serviceIcon(svc.service_type),
               color:    '#7c3aed',
               bgColor:  '#f5f3ff',
               docId:    doc.id,
+              time:     svc.time || undefined,
             })
           }
         }
       }
     }
+
+    // Sort by time
+    docEvents.sort(sortByTime)
 
     return {
       date:      dateStr,
@@ -244,7 +362,6 @@ function buildSummary(expenses: Expense[], tripStart: string, tripEnd: string): 
     .sort((a, b) => a.expense_date.localeCompare(b.expense_date))
 
   const hotels: HotelStay[] = hotelExps.map((e, i) => {
-    // Try to infer check-out from the next hotel check-in or trip end
     const nextDate = hotelExps[i + 1]?.expense_date || tripEnd
     const nights = differenceInDays(parseISO(nextDate), parseISO(e.expense_date))
     return {
@@ -298,6 +415,14 @@ function extractDocId(notes: string | null | undefined): string | null {
   return match ? match[1] : null
 }
 
+// ── Hebrew weekday names ───────────────────────────────────────────────────────
+const HEB_WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+
+function hebrewWeekday(dateStr: string): string {
+  const d = parseISO(dateStr)
+  return HEB_WEEKDAYS[d.getDay()]
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function TimelinePage() {
   const { currentTrip } = useTrip()
@@ -305,7 +430,6 @@ export default function TimelinePage() {
   const [expenses,    setExpenses]    = useState<Expense[]>([])
   const [documents,   setDocuments]   = useState<TripDoc[]>([])
   const [loading,     setLoading]     = useState(true)
-  const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [filterCat,   setFilterCat]   = useState<FilterCat>('all')
   const [viewMode,    setViewMode]    = useState<ViewMode>('timeline')
   const [editingId,   setEditingId]   = useState<string | null>(null)
@@ -313,9 +437,15 @@ export default function TimelinePage() {
   const [deletingId,  setDeletingId]  = useState<string | null>(null)
   const [currency,    setCurrency]    = useState<Currency>('ILS')
 
+  // Per-day expense expansion state
+  const [expandedExpDay, setExpandedExpDay] = useState<string | null>(null)
+
   // ── Document viewer state ────────────────────────────────────────────────
   const [viewerDoc,    setViewerDoc]    = useState<{ url: string; title: string; docType: string } | null>(null)
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null)
+
+  // ── Auto-scroll to today ────────────────────────────────────────────────
+  const todayRef = useRef<HTMLDivElement | null>(null)
 
   // ── Fetch expenses + documents ─────────────────────────────────────────────
   const fetchExpenses = useCallback(async () => {
@@ -331,6 +461,15 @@ export default function TimelinePage() {
   }, [currentTrip])
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
+
+  // Auto-scroll to today after load
+  useEffect(() => {
+    if (!loading && todayRef.current) {
+      setTimeout(() => {
+        todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 300)
+    }
+  }, [loading])
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const days = useMemo(() => {
@@ -348,15 +487,9 @@ export default function TimelinePage() {
     }))
   }, [days, filterCat])
 
-  const maxDayTotal = useMemo(
-    () => Math.max(...filteredDays.map(d => d.totalIls), 1),
-    [filteredDays],
-  )
-
   const totalIls      = expenses.reduce((s, e) => s + (e.amount_ils || 0), 0)
   const daysWithSpend = days.filter(d => d.totalIls > 0).length
   const avgPerDay     = daysWithSpend > 0 ? totalIls / daysWithSpend : 0
-  const highestDay    = days.reduce((m, d) => d.totalIls > m.totalIls ? d : m, days[0] || { totalIls: 0, date: '' })
 
   const usedCategories = useMemo(() => {
     const cats = new Set(expenses.map(e => e.category))
@@ -491,6 +624,12 @@ export default function TimelinePage() {
             exit={{ opacity: 0, y: -8 }}
             className="space-y-4">
 
+            {/* ── Trip header ───────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="text-base font-bold mb-0.5">סיכום נסיעה</h2>
+              <p className="text-xs text-gray-400">{currentTrip.destination} · {formatDate(currentTrip.start_date)} — {formatDate(currentTrip.end_date)}</p>
+            </div>
+
             {/* ── Trip stats strip ──────────────────────────────────────── */}
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -545,7 +684,7 @@ export default function TimelinePage() {
               </div>
             )}
 
-            {/* ── Flights breakdown ─────────────────────────────────────── */}
+            {/* ── Flights breakdown — table style ───────────────────────── */}
             {summary.flights.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
@@ -589,7 +728,7 @@ export default function TimelinePage() {
               </div>
             )}
 
-            {/* ── Hotels breakdown ──────────────────────────────────────── */}
+            {/* ── Hotels breakdown — timeline style ─────────────────────── */}
             {summary.hotels.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
@@ -679,38 +818,35 @@ export default function TimelinePage() {
               </div>
             )}
 
-            {/* ── Trip schedule (timeline summary) ─────────────────────── */}
+            {/* ── Trip schedule (all doc events chronologically) ────────── */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <Clock className="w-4 h-4 text-gray-500" />
-                <h3 className="text-sm font-bold">לוח זמנים קצר</h3>
+                <h3 className="text-sm font-bold">לוח נסיעה מהיר</h3>
               </div>
               <div className="space-y-1">
                 {days
-                  .filter(d => d.expenses.length > 0)
+                  .filter(d => d.docEvents.length > 0)
                   .map(d => (
-                    <div key={d.date} className={`flex items-center gap-3 rounded-xl px-3 py-2 ${d.isToday ? 'bg-primary/5 ring-1 ring-primary/20' : ''}`}>
-                      <div className={`w-8 h-8 rounded-lg flex flex-col items-center justify-center flex-shrink-0 text-center ${d.isToday ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        <span className="text-[10px] leading-none">יום</span>
-                        <span className="text-xs font-bold">{d.dayNumber}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-500">{formatDate(d.date)}</p>
-                        <div className="flex flex-wrap gap-1 mt-0.5">
-                          {d.expenses.slice(0, 4).map(e => (
-                            <span key={e.id} className="text-[10px] px-1.5 py-0.5 rounded-full"
-                              style={{ backgroundColor: CATEGORY_META[e.category as Category]?.color + '20', color: CATEGORY_META[e.category as Category]?.color }}>
-                              {CATEGORY_META[e.category as Category]?.icon} {e.title.length > 20 ? e.title.slice(0, 20) + '…' : e.title}
-                            </span>
-                          ))}
-                          {d.expenses.length > 4 && (
-                            <span className="text-[10px] text-gray-400">+{d.expenses.length - 4}</span>
-                          )}
+                    <div key={d.date}>
+                      <p className="text-[10px] font-semibold text-gray-400 px-1 pt-2 pb-0.5">
+                        יום {d.dayNumber} · {formatDate(d.date)}
+                      </p>
+                      {d.docEvents.map((ev, i) => (
+                        <div key={i} className={`flex items-center gap-2 rounded-xl px-3 py-2 ${d.isToday ? 'bg-primary/5' : 'bg-gray-50'}`}>
+                          <span className="text-sm">{ev.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{ev.title}</p>
+                            {ev.subtitle && <p className="text-[10px] text-gray-400">{ev.subtitle}</p>}
+                          </div>
+                          {ev.time && <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">{ev.time}</span>}
                         </div>
-                      </div>
-                      <span className="text-xs font-bold text-gray-600 flex-shrink-0">{formatMoney(d.totalIls)}</span>
+                      ))}
                     </div>
                   ))}
+                {days.every(d => d.docEvents.length === 0) && (
+                  <p className="text-xs text-gray-400 text-center py-2">אין אירועים ממסמכים</p>
+                )}
               </div>
             </div>
 
@@ -817,256 +953,269 @@ export default function TimelinePage() {
               </div>
             )}
 
-            {/* Day list */}
-            <div className="space-y-2">
+            {/* ── Day cards ────────────────────────────────────────────── */}
+            <div className="space-y-3">
               {filteredDays.map((day) => {
-                const isExpanded  = expandedDay === day.date
-                const progress    = maxDayTotal > 0 ? day.totalIls / maxDayTotal : 0
-                const isHighest   = day.date === highestDay.date && day.totalIls > 0 && filterCat === 'all'
-                const cats        = Array.from(new Set(day.expenses.map(e => e.category))) as Category[]
-                const hasContent  = day.expenses.length > 0 || day.docEvents.length > 0
+                const hasDocEvents = day.docEvents.length > 0
+                const hasExpenses  = day.expenses.length > 0
+                const hasContent   = hasDocEvents || hasExpenses
+                const isExpExpanded = expandedExpDay === day.date
 
-                return (
-                  <motion.div key={day.date}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}>
-
-                    <button
-                      onClick={() => hasContent && setExpandedDay(isExpanded ? null : day.date)}
-                      className={`w-full bg-white rounded-2xl px-3 py-2.5 shadow-sm text-right transition-all
-                        ${day.isToday ? 'ring-2 ring-primary ring-offset-1' : ''}
-                        ${hasContent ? 'active:scale-[0.99]' : 'cursor-default'}
-                        ${day.isFuture && !hasContent ? 'opacity-40' : ''}
-                      `}
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* Day badge — shows "before trip" / "after trip" for out-of-range days */}
-                        {day.dayNumber < 1 ? (
-                          <div className="w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center bg-gray-100 text-gray-400">
-                            <span className="text-[9px] leading-none">לפני</span>
-                            <span className="text-[9px] leading-none">הטיול</span>
-                          </div>
+                // Empty days — very compact
+                if (!hasContent) {
+                  return (
+                    <div
+                      key={day.date}
+                      ref={day.isToday ? todayRef : undefined}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
+                        day.isToday
+                          ? 'bg-primary/5 ring-1 ring-primary/20'
+                          : day.isFuture ? 'opacity-30' : 'opacity-50'
+                      }`}>
+                      <div className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
+                        day.isToday ? 'bg-primary text-white' :
+                        day.isPast  ? 'bg-gray-300 text-white' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        {day.dayNumber >= 1 ? (
+                          <>
+                            <span className="text-[9px] leading-none opacity-70">יום</span>
+                            <span className="text-xs font-bold">{day.dayNumber}</span>
+                          </>
                         ) : (
-                          <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
-                            day.isToday ? 'bg-primary text-white' :
-                            day.isPast  ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
-                          }`}>
-                            <span className="text-[10px] font-normal leading-none opacity-70">יום</span>
-                            <span className="text-sm font-bold leading-tight">{day.dayNumber}</span>
-                          </div>
-                        )}
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-gray-500">{formatDate(day.date)}</span>
-                              {day.isToday && (
-                                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">היום</span>
-                              )}
-                              {isHighest && (
-                                <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full font-medium">🏆 הגבוה</span>
-                              )}
-                            </div>
-                            <span className="text-xs font-bold text-gray-800">
-                              {day.totalIls > 0 ? convert(day.totalIls) : ''}
-                            </span>
-                          </div>
-
-                          {day.totalIls > 0 && (
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-1.5">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${progress * 100}%` }}
-                                transition={{ duration: 0.5, ease: 'easeOut' }}
-                                className={`h-full rounded-full ${
-                                  isHighest ? 'bg-amber-400' :
-                                  day.isToday ? 'bg-primary' : 'bg-gray-400'
-                                }`}
-                              />
-                            </div>
-                          )}
-
-                          {/* doc events badges (check-in / checkout / services) */}
-                          {day.docEvents.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-1">
-                              {day.docEvents.slice(0, 3).map((ev, i) => (
-                                <span key={i}
-                                  className="text-[11px] flex items-center gap-0.5 px-1.5 py-0.5 rounded-full font-medium"
-                                  style={{ backgroundColor: ev.bgColor, color: ev.color }}>
-                                  {ev.icon} {ev.type === 'hotel_stay' ? ev.subtitle : ev.title.length > 20 ? ev.title.slice(0, 20) + '…' : ev.title}
-                                </span>
-                              ))}
-                              {day.docEvents.length > 3 && (
-                                <span className="text-[10px] text-gray-400">+{day.docEvents.length - 3}</span>
-                              )}
-                            </div>
-                          )}
-
-                          {cats.length > 0 ? (
-                            <div className="flex items-center gap-1">
-                              {cats.map(cat => (
-                                <span key={cat}
-                                  className="text-[11px] flex items-center gap-0.5 px-1.5 py-0.5 rounded-full font-medium"
-                                  style={{ backgroundColor: CATEGORY_META[cat].color + '20', color: CATEGORY_META[cat].color }}>
-                                  {CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}
-                                </span>
-                              ))}
-                              <span className="text-[10px] text-gray-400 mr-auto">{day.expenses.length} פריטים</span>
-                            </div>
-                          ) : day.docEvents.length === 0 ? (
-                            <p className="text-[11px] text-gray-300">אין הוצאות</p>
-                          ) : null}
-                        </div>
-
-                        {hasContent && (
-                          <ChevronDown className={`w-4 h-4 text-gray-300 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <span className="text-[9px] leading-none">—</span>
                         )}
                       </div>
-                    </button>
+                      <span className="text-xs text-gray-400">
+                        {hebrewWeekday(day.date)}, {format(parseISO(day.date), 'dd.MM')}
+                      </span>
+                      {day.isToday && (
+                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">היום</span>
+                      )}
+                    </div>
+                  )
+                }
 
-                    {/* Expanded content: doc events + expenses */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden">
-                          <div className="pt-1.5 pr-4 pl-1 space-y-1.5">
+                // Day with content — full card
+                return (
+                  <motion.div
+                    key={day.date}
+                    ref={day.isToday ? todayRef : undefined}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`bg-white rounded-2xl shadow-sm overflow-hidden ${
+                      day.isToday ? 'ring-2 ring-primary ring-offset-1' : ''
+                    }`}>
 
-                            {/* ── Document events (hotel / services) ──────────── */}
-                            {day.docEvents.map((ev, i) => (
-                              <div key={`ev-${i}`}
-                                className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm border"
-                                style={{ backgroundColor: ev.bgColor, borderColor: ev.color + '30' }}>
-                                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                                  style={{ backgroundColor: ev.color + '20' }}>
+                    {/* Day header */}
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-50">
+                      <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
+                        day.isToday ? 'bg-primary text-white' :
+                        day.isPast  ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {day.dayNumber >= 1 ? (
+                          <>
+                            <span className="text-[10px] font-normal leading-none opacity-70">יום</span>
+                            <span className="text-sm font-bold leading-tight">{day.dayNumber}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-[9px] leading-none">לפני</span>
+                            <span className="text-[9px] leading-none">הטיול</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-800">
+                            {hebrewWeekday(day.date)}, {format(parseISO(day.date), 'dd.MM')}
+                          </span>
+                          {day.isToday && (
+                            <span className="text-[10px] bg-primary text-white px-1.5 py-0.5 rounded-full font-medium">היום</span>
+                          )}
+                        </div>
+                        {hasDocEvents && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {day.docEvents.map(ev => ev.icon).slice(0, 4).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Doc events — always visible */}
+                    {hasDocEvents && (
+                      <div className="px-4 py-3 space-y-0">
+                        {day.docEvents.map((ev, i) => {
+                          const isLast = i === day.docEvents.length - 1 && !hasExpenses
+                          return (
+                            <div key={`ev-${i}`} className="flex gap-3 items-start">
+                              <div className="flex flex-col items-center">
+                                <div
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0"
+                                  style={{ backgroundColor: ev.bgColor }}>
                                   {ev.icon}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold truncate" style={{ color: ev.color }}>{ev.title}</p>
-                                  {ev.subtitle && (
-                                    <p className="text-[10px] text-gray-500">{ev.subtitle}</p>
-                                  )}
-                                </div>
-                                {/* paperclip to open the source document */}
-                                <button
-                                  onClick={async () => {
-                                    const { data } = await supabase
-                                      .from('documents')
-                                      .select('file_url, name, doc_type')
-                                      .eq('id', ev.docId)
-                                      .single()
-                                    if (data?.file_url) setViewerDoc({ url: data.file_url, title: data.name, docType: data.doc_type })
-                                  }}
-                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/60 active:scale-90 flex-shrink-0"
-                                  title="צפה במסמך">
-                                  <Paperclip className="w-3 h-3" style={{ color: ev.color }} />
-                                </button>
+                                {!isLast && <div className="w-0.5 h-3 bg-gray-100 mt-1" />}
                               </div>
-                            ))}
-
-                            {/* ── Expense rows ────────────────────────────────── */}
-                            {day.expenses.map(exp => {
-                              const meta      = CATEGORY_META[exp.category as Category]
-                              const isEditing  = editingId === exp.id
-                              const isDeleting = deletingId === exp.id
-
-                              return (
-                                <div key={exp.id}
-                                  className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 shadow-sm border border-gray-50">
-                                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                                    style={{ backgroundColor: meta.color + '20' }}>
-                                    {meta.icon}
-                                  </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    {isEditing ? (
-                                      <input
-                                        autoFocus
-                                        value={editTitle}
-                                        onChange={e => setEditTitle(e.target.value)}
-                                        onKeyDown={e => {
-                                          if (e.key === 'Enter') handleRename(exp)
-                                          if (e.key === 'Escape') setEditingId(null)
-                                        }}
-                                        className="w-full text-xs border-b border-primary outline-none bg-transparent pb-0.5"
-                                        dir="rtl"
-                                      />
-                                    ) : (
-                                      <p className="text-xs font-medium truncate">{exp.title}</p>
-                                    )}
-                                    <p className="text-[10px] text-gray-400">{meta.label}</p>
-                                  </div>
-
-                                  <div className="text-left flex-shrink-0">
-                                    <p className="text-xs font-bold">{convert(exp.amount_ils)}</p>
-                                    {exp.currency !== 'ILS' && (
-                                      <p className="text-[10px] text-gray-400">
-                                        {CURRENCY_SYMBOL[exp.currency]}{exp.amount}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {isEditing ? (
-                                    <div className="flex gap-1 flex-shrink-0">
-                                      <button onClick={() => handleRename(exp)}
-                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 active:scale-90">
-                                        <Check className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button onClick={() => setEditingId(null)}
-                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 active:scale-90">
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex gap-1 flex-shrink-0">
-                                      {/* Document icon — only shown when expense has a linked doc */}
-                                      {extractDocId(exp.notes) && (
-                                        <button
-                                          onClick={() => handleOpenDoc(exp)}
-                                          disabled={loadingDocId === exp.id}
-                                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-400 active:scale-90 hover:bg-indigo-100 hover:text-indigo-600 transition-colors disabled:opacity-30"
-                                          title="צפה במסמך">
-                                          {loadingDocId === exp.id
-                                            ? <span className="text-[9px] animate-spin">⏳</span>
-                                            : <Paperclip className="w-3 h-3" />
-                                          }
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => { setEditingId(exp.id); setEditTitle(exp.title) }}
-                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-blue-50 hover:text-blue-500 transition-colors">
-                                        <Pencil className="w-3 h-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(exp.id)}
-                                        disabled={isDeleting}
-                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-30">
-                                        {isDeleting
-                                          ? <span className="text-[9px] animate-spin">⏳</span>
-                                          : <Trash2 className="w-3 h-3" />
-                                        }
-                                      </button>
-                                    </div>
+                              <div className="flex-1 pb-3 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {ev.time && (
+                                    <span className="text-[10px] font-bold tabular-nums" style={{ color: ev.color }}>
+                                      {ev.time}
+                                    </span>
                                   )}
+                                  <p className="text-sm font-semibold text-gray-800">{ev.title}</p>
                                 </div>
-                              )
-                            })}
+                                {ev.subtitle && (
+                                  <p className="text-xs text-gray-500 mt-0.5">{ev.subtitle}</p>
+                                )}
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  const { data } = await supabase
+                                    .from('documents')
+                                    .select('file_url, name, doc_type')
+                                    .eq('id', ev.docId)
+                                    .single()
+                                  if (data?.file_url) setViewerDoc({ url: data.file_url, title: data.name, docType: data.doc_type })
+                                }}
+                                className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 mt-1 active:scale-90"
+                                title="צפה במסמך">
+                                <Paperclip className="w-3 h-3 text-gray-300" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Expenses summary pill */}
+                    {hasExpenses && (
+                      <div className="px-4 pb-3">
+                        <button
+                          onClick={() => setExpandedExpDay(isExpExpanded ? null : day.date)}
+                          className="w-full flex items-center gap-2 bg-gray-50 hover:bg-gray-100 active:scale-[0.98] transition-all rounded-xl px-3 py-2">
+                          <div className="flex items-center gap-0.5">
+                            {Array.from(new Set(day.expenses.map(e => e.category))).slice(0, 4).map(cat => (
+                              <span key={cat} className="text-xs">{CATEGORY_META[cat as Category]?.icon}</span>
+                            ))}
                           </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                          <span className="text-xs font-semibold text-gray-700 flex-1 text-right">
+                            {convert(day.totalIls)}
+                          </span>
+                          <span className="text-[10px] text-gray-400">{day.expenses.length} פריטים</span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${isExpExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {/* Expanded expense list */}
+                        <AnimatePresence>
+                          {isExpExpanded && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden">
+                              <div className="pt-2 space-y-1.5">
+                                {day.expenses.map(exp => {
+                                  const meta      = CATEGORY_META[exp.category as Category]
+                                  const isEditing  = editingId === exp.id
+                                  const isDeleting = deletingId === exp.id
+
+                                  return (
+                                    <div key={exp.id}
+                                      className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 shadow-sm border border-gray-50">
+                                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                                        style={{ backgroundColor: meta.color + '20' }}>
+                                        {meta.icon}
+                                      </div>
+
+                                      <div className="flex-1 min-w-0">
+                                        {isEditing ? (
+                                          <input
+                                            autoFocus
+                                            value={editTitle}
+                                            onChange={e => setEditTitle(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') handleRename(exp)
+                                              if (e.key === 'Escape') setEditingId(null)
+                                            }}
+                                            className="w-full text-xs border-b border-primary outline-none bg-transparent pb-0.5"
+                                            dir="rtl"
+                                          />
+                                        ) : (
+                                          <p className="text-xs font-medium truncate">{exp.title}</p>
+                                        )}
+                                        <p className="text-[10px] text-gray-400">{meta.label}</p>
+                                      </div>
+
+                                      <div className="text-left flex-shrink-0">
+                                        <p className="text-xs font-bold">{convert(exp.amount_ils)}</p>
+                                        {exp.currency !== 'ILS' && (
+                                          <p className="text-[10px] text-gray-400">
+                                            {CURRENCY_SYMBOL[exp.currency]}{exp.amount}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {isEditing ? (
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          <button onClick={() => handleRename(exp)}
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 active:scale-90">
+                                            <Check className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button onClick={() => setEditingId(null)}
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 active:scale-90">
+                                            <X className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          {extractDocId(exp.notes) && (
+                                            <button
+                                              onClick={() => handleOpenDoc(exp)}
+                                              disabled={loadingDocId === exp.id}
+                                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-400 active:scale-90 hover:bg-indigo-100 hover:text-indigo-600 transition-colors disabled:opacity-30"
+                                              title="צפה במסמך">
+                                              {loadingDocId === exp.id
+                                                ? <span className="text-[9px] animate-spin">⏳</span>
+                                                : <Paperclip className="w-3 h-3" />
+                                              }
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => { setEditingId(exp.id); setEditTitle(exp.title) }}
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-blue-50 hover:text-blue-500 transition-colors">
+                                            <Pencil className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDelete(exp.id)}
+                                            disabled={isDeleting}
+                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-30">
+                                            {isDeleting
+                                              ? <span className="text-[9px] animate-spin">⏳</span>
+                                              : <Trash2 className="w-3 h-3" />
+                                            }
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
                   </motion.div>
                 )
               })}
             </div>
 
-            {expenses.length === 0 && (
+            {expenses.length === 0 && days.every(d => d.docEvents.length === 0) && (
               <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
                 <div className="text-4xl mb-3">✈️</div>
                 <p className="font-bold mb-1">אין הוצאות עדיין</p>
-                <p className="text-sm text-gray-400">הוצאות שתוסיף יופיעו כאן לפי ימי הטיול</p>
+                <p className="text-sm text-gray-400">הוצאות ומסמכים שתוסיף יופיעו כאן לפי ימי הטיול</p>
               </div>
             )}
           </motion.div>
