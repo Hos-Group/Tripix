@@ -30,7 +30,11 @@ export default function DocumentsPage() {
   // ── Gmail sync state ────────────────────────────────────────────────────
   const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string }[] | null>(null)
   const [gmailScanning,    setGmailScanning]    = useState(false)
-  const [gmailResult,      setGmailResult]      = useState<{ scanned: number; created: number } | null>(null)
+  const [gmailResult,      setGmailResult]      = useState<{
+    scanned: number
+    created: number
+    createdDocs?: Array<{ id: string; name: string; doc_type: string }>
+  } | null>(null)
   const [gmailError,       setGmailError]       = useState<string | null>(null)
   const [filterType, setFilterType] = useState<DocType | null>(null)
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
@@ -109,8 +113,14 @@ export default function DocumentsPage() {
       }
 
       if (!res.ok) { setGmailError((json.error as string) || 'שגיאה בסריקה'); return }
-      setGmailResult({ scanned: json.scanned as number, created: json.created as number })
-      fetchDocuments() // always refresh — new documents may have been added
+
+      const createdDocs = (json.createdDocs as Array<{ id: string; name: string; doc_type: string }>) || []
+      setGmailResult({
+        scanned:     json.scanned as number,
+        created:     json.created as number,
+        createdDocs,
+      })
+      await fetchDocuments() // refresh to show new documents
     } catch (err) {
       console.error('[gmail scan] network error:', err)
       setGmailError('שגיאת רשת — בדוק חיבור לאינטרנט ונסה שוב')
@@ -271,10 +281,30 @@ export default function DocumentsPage() {
             </Link>
           </div>
           {gmailResult && (
-            <div className="bg-white/70 rounded-xl px-3 py-2 text-xs text-emerald-700">
-              {gmailResult.created > 0
-                ? `✅ נוצרו ${gmailResult.created} מסמכים חדשים מתוך ${gmailResult.scanned} מיילים`
-                : `סרקנו ${gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים`}
+            <div className="bg-white/70 rounded-xl px-3 py-2 text-xs space-y-1.5">
+              {gmailResult.created > 0 ? (
+                <>
+                  <p className="text-emerald-700 font-semibold">
+                    ✅ נוצרו {gmailResult.created} מסמכים חדשים מתוך {gmailResult.scanned} מיילים
+                  </p>
+                  {gmailResult.createdDocs && gmailResult.createdDocs.length > 0 && (
+                    <ul className="space-y-1 mt-1">
+                      {gmailResult.createdDocs.map(doc => (
+                        <li key={doc.id} className="flex items-center gap-1.5 text-gray-700">
+                          <span className="text-base leading-none">
+                            {DOC_TYPE_META[doc.doc_type as DocType]?.icon ?? '📄'}
+                          </span>
+                          <span className="truncate">{doc.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <p className="text-gray-500">
+                  סרקנו {gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים
+                </p>
+              )}
             </div>
           )}
           {gmailError && (

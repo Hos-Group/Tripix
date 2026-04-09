@@ -38,11 +38,18 @@ export interface ScanStats {
   scannedEmailOnly: number
 }
 
+export interface CreatedDoc {
+  id:       string
+  name:     string
+  doc_type: string
+}
+
 export interface TripScanStats extends ScanStats {
   tripId:       string
   tripName:     string
   destination:  string
   daysSearched: number
+  createdDocs:  CreatedDoc[]   // list of every document actually saved
 }
 
 interface GmailConnection {
@@ -320,6 +327,7 @@ export async function scanTripGmail(
   const stats: TripScanStats = {
     tripId: t.id, tripName: t.name, destination: t.destination, daysSearched,
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
+    createdDocs: [],
   }
 
   const categoryMap: Record<string, string> = {
@@ -401,10 +409,20 @@ export async function scanTripGmail(
             .select('id')
             .single()
 
-          if (docError) console.error('[gmailScanner/trip] Document insert error:', docError)
+          if (docError) {
+            console.error('[gmailScanner/trip] Document insert error:', docError)
+          } else if (docRecord) {
+            // ── Document saved ✅ — record it and increment counter ──────────
+            stats.createdDocs.push({
+              id:       docRecord.id,
+              name:     bookingTitle || msg.subject.slice(0, 60),
+              doc_type: docTypeMap[parsedBooking.booking_type] || 'other',
+            })
+            stats.created++
+          }
 
-          // ── Create an Expense record ──────────────────────────────────────
-          const { data: expense, error: expenseError } = await supabase
+          // ── Create an Expense record (best-effort — never blocks) ─────────
+          const { error: expenseError } = await supabase
             .from('expenses')
             .insert({
               trip_id:      tripId,
@@ -418,9 +436,6 @@ export async function scanTripGmail(
               source:       'document',
               is_paid:      true,
             })
-            .select('id')
-            .single()
-
           if (expenseError) console.error('[gmailScanner/trip] Expense insert error:', expenseError)
 
           // ── Save to email_ingests for audit trail ─────────────────────────
@@ -434,11 +449,9 @@ export async function scanTripGmail(
             trip_id:      tripId,
             match_score:  100,
             match_reason: 'ייבוא ידני לטיול',
-            status:       expense ? 'processed' : 'matched',
+            status:       docRecord ? 'processed' : 'matched',
             source:       'gmail_trip_import',
           })
-
-          if (docRecord || expense) stats.created++
         } catch (err) {
           console.error(`[gmailScanner/trip] DB write error for ${msg.id}:`, err)
         }
