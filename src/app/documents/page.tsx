@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw, Mail, Settings, ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -36,6 +36,8 @@ export default function DocumentsPage() {
     createdDocs?: Array<{ id: string; name: string; doc_type: string }>
   } | null>(null)
   const [gmailError,       setGmailError]       = useState<string | null>(null)
+  const [newDocIds,        setNewDocIds]         = useState<Set<string>>(new Set())
+  const newDocsRef = useRef<HTMLDivElement>(null)
   const [filterType, setFilterType] = useState<DocType | null>(null)
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'grid'>('list')
@@ -120,7 +122,25 @@ export default function DocumentsPage() {
         created:     json.created as number,
         createdDocs,
       })
+
+      if (createdDocs.length > 0) {
+        // Clear any active filters so new documents are always visible
+        setFilterType(null)
+        setFilterTraveler(null)
+        // Mark new doc IDs for highlighting
+        setNewDocIds(new Set(createdDocs.map(d => d.id)))
+        // Clear highlight after 8 seconds
+        setTimeout(() => setNewDocIds(new Set()), 8000)
+      }
+
       await fetchDocuments() // refresh to show new documents
+
+      // Scroll to new documents section after render
+      if (createdDocs.length > 0) {
+        setTimeout(() => {
+          newDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 300)
+      }
     } catch (err) {
       console.error('[gmail scan] network error:', err)
       setGmailError('שגיאת רשת — בדוק חיבור לאינטרנט ונסה שוב')
@@ -417,6 +437,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* Documents grouped by type */}
+      <div ref={newDocsRef} />
       {Object.keys(grouped).length === 0 ? (
         <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
           <div className="text-3xl mb-2">📁</div>
@@ -520,16 +541,25 @@ export default function DocumentsPage() {
               {/* List view (default) */}
               {viewMode === 'list' && docs.map(doc => (
                 <motion.div key={doc.id}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                  initial={{ opacity: 0, y: newDocIds.has(doc.id) ? -8 : 0 }}
+                  animate={{ opacity: 1, y: 0 }}
                   onClick={() => { if (doc.file_url) setViewerUrl(doc.file_url) }}
-                  className={`bg-white rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-transform ${doc.file_url ? 'cursor-pointer' : ''}`}>
+                  className={`rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all ${doc.file_url ? 'cursor-pointer' : ''} ${
+                    newDocIds.has(doc.id)
+                      ? 'bg-emerald-50 border-2 border-emerald-300 ring-2 ring-emerald-100'
+                      : 'bg-white'
+                  }`}>
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-lg flex-shrink-0">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${newDocIds.has(doc.id) ? 'bg-emerald-100' : 'bg-gray-50'}`}>
                       {meta.icon}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">{doc.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold truncate">{doc.name}</p>
+                        {newDocIds.has(doc.id) && (
+                          <span className="flex-shrink-0 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {getTravelerName(travelers, doc.traveler_id)}
                       </p>

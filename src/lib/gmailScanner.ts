@@ -331,12 +331,12 @@ export async function scanTripGmail(
   }
 
   const categoryMap: Record<string, string> = {
-    hotel: 'hotel', flight: 'flight', car_rental: 'taxi',
+    hotel: 'hotel', flight: 'flight', car_rental: 'taxi', taxi: 'taxi',
     activity: 'activity', tour: 'activity', insurance: 'other', other: 'other',
   }
 
   const docTypeMap: Record<string, string> = {
-    hotel: 'hotel', flight: 'flight', car_rental: 'other',
+    hotel: 'hotel', flight: 'flight', car_rental: 'other', taxi: 'other',
     activity: 'activity', tour: 'activity', insurance: 'insurance', other: 'other',
   }
 
