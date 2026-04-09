@@ -155,25 +155,29 @@ async function processMessages(
             : null) ||
           parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
 
-        const { data: expense } = await supabase
+        const { data: expense, error: expenseError } = await supabase
           .from('expenses')
           .insert({
-            trip_id:         matchedTripId,
-            user_id:         userId,
-            title:           expenseTitle,
-            amount:          parsedBooking.amount || 0,
-            currency:        parsedBooking.currency || 'ILS',
-            category:        categoryMap[parsedBooking.booking_type] || 'other',
-            date:
+            trip_id:      matchedTripId,
+            title:        expenseTitle,
+            amount:       parsedBooking.amount || 0,
+            currency:     parsedBooking.currency || 'ILS',
+            amount_ils:   parsedBooking.amount || 0,
+            category:     categoryMap[parsedBooking.booking_type] || 'other',
+            expense_date:
               parsedBooking.check_in ||
               parsedBooking.departure_date ||
               new Date().toISOString().split('T')[0],
-            notes: `מספר אישור: ${parsedBooking.confirmation_number}\nיובא אוטומטית מ-Gmail: ${msg.from}`,
+            notes:   `מספר אישור: ${parsedBooking.confirmation_number}\nיובא אוטומטית מ-Gmail: ${msg.from}`,
             source,
-            email_ingest_id: ingestRecord.id,
+            is_paid: true,
           })
           .select('id')
           .single()
+
+        if (expenseError) {
+          console.error('[gmailScanner] Expense insert error:', expenseError)
+        }
 
         if (expense) {
           await supabase.from('email_ingests')
@@ -381,17 +385,25 @@ export async function scanTripGmail(
                 ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
               parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
 
-            const { data: expense } = await supabase.from('expenses').insert({
-              trip_id: tripId, user_id: userId, title: expenseTitle,
-              amount: parsedBooking.amount || 0, currency: parsedBooking.currency || 'ILS',
-              amount_ils: parsedBooking.amount || 0,
-              category: categoryMap[parsedBooking.booking_type] || 'other',
+            const { data: expense, error: expenseError } = await supabase.from('expenses').insert({
+              trip_id:      tripId,
+              title:        expenseTitle,
+              amount:       parsedBooking.amount || 0,
+              currency:     parsedBooking.currency || 'ILS',
+              amount_ils:   parsedBooking.amount || 0,
+              category:     categoryMap[parsedBooking.booking_type] || 'other',
               expense_date: parsedBooking.check_in || parsedBooking.departure_date || t.start_date,
-              notes: `מספר אישור: ${parsedBooking.confirmation_number}\nייובא מ-Gmail: ${msg.from}`,
-              source: 'document', is_paid: true,
+              notes:        `מספר אישור: ${parsedBooking.confirmation_number}\nייובא מ-Gmail: ${msg.from}`,
+              source:       'document',
+              is_paid:      true,
             }).select('id').single()
 
+            if (expenseError) {
+              console.error('[gmailScanner/trip] Expense insert error:', expenseError)
+            }
+
             if (expense) {
+              // Best-effort: link email_ingest → expense (column may not exist on all deployments)
               await supabase.from('email_ingests')
                 .update({ expense_id: expense.id, status: 'processed' })
                 .eq('id', ingestRecord.id)

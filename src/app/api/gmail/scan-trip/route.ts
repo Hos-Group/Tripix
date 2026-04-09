@@ -60,18 +60,20 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Scan ──────────────────────────────────────────────────────────────────
+  console.log(`[gmail/scan-trip] Starting scan for user=${user.id} trip=${tripId}`)
   try {
     const stats = await scanTripGmail(supabase, user.id, tripId)
+    console.log(`[gmail/scan-trip] Done — scanned=${stats.scanned} created=${stats.created}`)
     return NextResponse.json(stats)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'שגיאה בסריקה'
+    console.error('[gmail/scan-trip] Error:', message, err)
     if (message.includes('לא נמצא')) {
       return NextResponse.json({ error: message }, { status: 404 })
     }
     if (message.includes('פג תוקף')) {
       return NextResponse.json({ error: message }, { status: 401 })
     }
-    console.error('[gmail/scan-trip] Unexpected error:', err)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
