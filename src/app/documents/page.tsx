@@ -21,9 +21,11 @@ export default function DocumentsPage() {
   useEffect(() => {
     loadTravelers().then(setTravelers)
   }, [])
-  const [documents,    setDocuments]    = useState<Document[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [reprocessing, setReprocessing] = useState<string | null>(null)
+  const [documents,        setDocuments]        = useState<Document[]>([])
+  const [loading,          setLoading]          = useState(true)
+  const [reprocessing,     setReprocessing]     = useState<string | null>(null)
+  const [reprocessingAll,  setReprocessingAll]  = useState(false)
+  const [reprocessProgress, setReprocessProgress] = useState<{ done: number; total: number } | null>(null)
   const [filterType, setFilterType] = useState<DocType | null>(null)
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'grid'>('list')
@@ -106,8 +108,7 @@ export default function DocumentsPage() {
       if (!res.ok || json.error) {
         toast.error('שגיאה בעיבוד מחדש: ' + (json.error || ''))
       } else {
-        toast.success('המסמך עובד מחדש בהצלחה!')
-        // Refresh documents list to reflect updated extracted_data
+        toast.success('המסמך עובד מחדש!')
         fetchDocuments()
       }
     } catch {
@@ -115,6 +116,32 @@ export default function DocumentsPage() {
     } finally {
       setReprocessing(null)
     }
+  }
+
+  const handleReprocessAll = async () => {
+    const docsWithFile = documents.filter(d => d.file_url)
+    if (docsWithFile.length === 0) { toast.error('אין מסמכים לעיבוד'); return }
+
+    setReprocessingAll(true)
+    setReprocessProgress({ done: 0, total: docsWithFile.length })
+
+    let done = 0
+    for (const doc of docsWithFile) {
+      try {
+        await fetch('/api/documents/reprocess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId: doc.id }),
+        })
+      } catch {/* ignore individual errors */}
+      done++
+      setReprocessProgress({ done, total: docsWithFile.length })
+    }
+
+    setReprocessingAll(false)
+    setReprocessProgress(null)
+    toast.success(`${docsWithFile.length} מסמכים עובדו בהצלחה!`)
+    fetchDocuments()
   }
 
   const filtered = documents.filter(d => {
@@ -156,6 +183,19 @@ export default function DocumentsPage() {
               </button>
             ))}
           </div>
+
+          {/* Reprocess all button */}
+          <button
+            onClick={handleReprocessAll}
+            disabled={reprocessingAll || documents.filter(d => d.file_url).length === 0}
+            className="flex items-center gap-1.5 bg-indigo-50 text-indigo-600 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-transform disabled:opacity-40"
+            title="עיבוד מחדש של כל המסמכים">
+            <RefreshCw className={`w-4 h-4 ${reprocessingAll ? 'animate-spin' : ''}`} />
+            {reprocessingAll && reprocessProgress
+              ? `${reprocessProgress.done}/${reprocessProgress.total}`
+              : 'רענן'}
+          </button>
+
           <Link href="/scan"
             className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1">
             <Plus className="w-4 h-4" /> העלאה
@@ -327,22 +367,10 @@ export default function DocumentsPage() {
                         </p>
                       )}
                     </div>
-                    <div className="flex flex-col gap-1 flex-shrink-0">
-                      {/* Re-process button — available for hotel and flight docs */}
-                      {(doc.doc_type === 'hotel' || doc.doc_type === 'flight' || doc.doc_type === 'activity') && doc.file_url && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleReprocess(doc.id) }}
-                          disabled={reprocessing === doc.id}
-                          className="p-2 text-gray-300 hover:text-indigo-500 active:scale-95 transition-all"
-                          title="עיבוד מחדש עם AI">
-                          <RefreshCw className={`w-3.5 h-3.5 ${reprocessing === doc.id ? 'animate-spin text-indigo-500' : ''}`} />
-                        </button>
-                      )}
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                        className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                      className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all flex-shrink-0">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </motion.div>
               ))}
