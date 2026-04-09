@@ -62,11 +62,12 @@ export async function POST(req: NextRequest) {
     // Docs have no trip_id — allow deletion for any authenticated user
     authorizedIds = docs.map(d => d.id)
   } else {
+    // Accept trips owned by this user OR trips with no user_id (created before multi-user support)
     const { data: userTrips, error: tripsErr } = await supabase
       .from('trips')
-      .select('id')
-      .eq('user_id', user.id)
+      .select('id, user_id')
       .in('id', tripIds)
+      .or(`user_id.eq.${user.id},user_id.is.null`)
 
     if (tripsErr) {
       console.error('[documents/delete] Trips ownership check error:', tripsErr)
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ownedTripIds = new Set((userTrips || []).map(t => t.id))
+    console.log(`[documents/delete] tripIds=${tripIds.join(',')}, ownedTripIds=${Array.from(ownedTripIds).join(',')}`)
 
     // Authorize docs whose trip is owned by this user, OR docs with no trip_id
     authorizedIds = docs
