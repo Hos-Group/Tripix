@@ -27,8 +27,154 @@ import {
   getEmailAttachments,
   downloadAttachment,
 } from './gmailClient'
-import { parseBookingEmail, htmlToText } from './emailParser'
+import { parseBookingEmail, htmlToText, ParsedBooking } from './emailParser'
 import { matchTripToBooking, TripRecord } from './tripMatcher'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trip relevance filter
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Map of country keys → all known city/region/airport-code aliases.
+ * Used to check if a parsed booking matches the trip destination.
+ */
+const COUNTRY_CITY_MAP: Record<string, string[]> = {
+  thailand:      ['thailand', 'thai', 'bangkok', 'bkk', 'phuket', 'hkt', 'koh samui',
+                  'ko samui', 'samui', 'koh phangan', 'ko phangan', 'phangan', 'krabi',
+                  'chiang mai', 'chiangmai', 'pattaya', 'hua hin', 'ayutthaya', 'sukhothai'],
+  israel:        ['israel', 'tel aviv', 'tlv', 'jerusalem', 'haifa', 'eilat', 'ben gurion',
+                  'ישראל', 'תל אביב', 'ירושלים', 'חיפה', 'אילת'],
+  spain:         ['spain', 'barcelona', 'bcn', 'madrid', 'mad', 'seville', 'svq',
+                  'valencia', 'vlc', 'malaga', 'agp', 'ibiza', 'ibz', 'majorca', 'mallorca', 'pmi'],
+  france:        ['france', 'paris', 'cdg', 'ory', 'nice', 'nce', 'lyon', 'lys', 'marseille', 'mrs'],
+  italy:         ['italy', 'rome', 'fco', 'milan', 'mxp', 'lin', 'venice', 'vce', 'florence', 'flr',
+                  'naples', 'nap', 'sicily', 'sardinia'],
+  japan:         ['japan', 'tokyo', 'nrt', 'hnd', 'osaka', 'kix', 'itm', 'kyoto', 'hiroshima', 'hiroshima'],
+  usa:           ['usa', 'united states', 'america', 'new york', 'jfk', 'lga', 'ewr',
+                  'los angeles', 'lax', 'miami', 'mia', 'chicago', 'ord', 'miami', 'las vegas', 'mccarran'],
+  uk:            ['uk', 'united kingdom', 'england', 'london', 'lhr', 'lgw', 'stn', 'luton',
+                  'manchester', 'man', 'edinburgh', 'edi'],
+  germany:       ['germany', 'berlin', 'txl', 'ber', 'munich', 'muc', 'frankfurt', 'fra', 'hamburg', 'ham'],
+  netherlands:   ['netherlands', 'holland', 'amsterdam', 'ams', 'schiphol'],
+  greece:        ['greece', 'athens', 'ath', 'santorini', 'jtr', 'mykonos', 'jmk',
+                  'thessaloniki', 'skg', 'crete', 'her', 'rhodes', 'rho', 'corfu', 'cfu'],
+  portugal:      ['portugal', 'lisbon', 'lis', 'porto', 'opo', 'faro', 'fao', 'algarve'],
+  uae:           ['uae', 'dubai', 'dxb', 'abu dhabi', 'auh', 'sharjah', 'shj'],
+  turkey:        ['turkey', 'istanbul', 'ist', 'saw', 'antalya', 'ayt', 'ankara', 'esb', 'bodrum', 'bjv'],
+  czechia:       ['czech', 'prague', 'prg', 'brno', 'czechia', 'czech republic'],
+  hungary:       ['hungary', 'budapest', 'bud'],
+  austria:       ['austria', 'vienna', 'vie', 'salzburg', 'szg'],
+  switzerland:   ['switzerland', 'zurich', 'zrh', 'geneva', 'gva', 'basel', 'bsl'],
+  poland:        ['poland', 'warsaw', 'waw', 'krakow', 'krk'],
+  croatia:       ['croatia', 'zagreb', 'zag', 'split', 'spu', 'dubrovnik', 'dbv'],
+  morocco:       ['morocco', 'marrakech', 'rak', 'casablanca', 'cmn', 'fez', 'fes', 'agadir', 'aga'],
+  egypt:         ['egypt', 'cairo', 'cai', 'sharm', 'ssh', 'hurghada', 'hrg', 'luxor', 'lxr'],
+  jordan:        ['jordan', 'amman', 'amm', 'petra', 'aqaba', 'aqj'],
+  india:         ['india', 'mumbai', 'bom', 'delhi', 'del', 'goa', 'goi', 'bangalore', 'blr'],
+  singapore:     ['singapore', 'sin', 'changi'],
+  indonesia:     ['indonesia', 'bali', 'dps', 'jakarta', 'cgk', 'lombok', 'amm'],
+  vietnam:       ['vietnam', 'hanoi', 'han', 'ho chi minh', 'sgn', 'da nang', 'dad', 'hoi an'],
+  cambodia:      ['cambodia', 'phnom penh', 'pnh', 'siem reap', 'rep', 'angkor'],
+  maldives:      ['maldives', 'male', 'mle'],
+  mexico:        ['mexico', 'cancun', 'cun', 'mexico city', 'mex', 'los cabos', 'sjd', 'playa del carmen'],
+  brazil:        ['brazil', 'rio', 'gig', 'sao paulo', 'gru', 'salvador', 'ssa'],
+}
+
+/** Map Hebrew destination words → English country key */
+const HE_TO_COUNTRY: Record<string, string> = {
+  'תאילנד': 'thailand', 'פוקט': 'thailand', 'בנגקוק': 'thailand',
+  'קוסמוי': 'thailand', 'קוסאמוי': 'thailand',
+  'ישראל': 'israel', 'ספרד': 'spain', 'ברצלונה': 'spain',
+  'צרפת': 'france', 'פריז': 'france',
+  'איטליה': 'italy', 'רומא': 'italy',
+  'יפן': 'japan', 'טוקיו': 'japan',
+  'ארצות הברית': 'usa', 'ניו יורק': 'usa', 'אמריקה': 'usa',
+  'בריטניה': 'uk', 'לונדון': 'uk', 'אנגליה': 'uk',
+  'גרמניה': 'germany', 'הולנד': 'netherlands', 'אמסטרדם': 'netherlands',
+  'יוון': 'greece', 'פורטוגל': 'portugal',
+  'דובאי': 'uae', 'איחוד האמירויות': 'uae',
+  'טורקיה': 'turkey', 'איסטנבול': 'turkey',
+  'צ\'כיה': 'czechia', 'פראג': 'czechia',
+  'הונגריה': 'hungary', 'בודפשט': 'hungary',
+  'אוסטריה': 'austria', 'וינה': 'austria',
+  'שווייץ': 'switzerland', 'זוריך': 'switzerland',
+  'פולין': 'poland', 'קרקוב': 'poland',
+  'קרואטיה': 'croatia', 'דוברובניק': 'croatia',
+  'מרוקו': 'morocco', 'מרקש': 'morocco',
+  'מצרים': 'egypt', 'שארם': 'egypt', 'הורגדה': 'egypt',
+  'ירדן': 'jordan', 'פטרה': 'jordan',
+  'הודו': 'india', 'גואה': 'india',
+  'סינגפור': 'singapore',
+  'אינדונזיה': 'indonesia', 'באלי': 'indonesia',
+  'וייטנאם': 'vietnam',
+  'קמבודיה': 'cambodia',
+  'מלדיביים': 'maldives',
+  'מקסיקו': 'mexico', 'קנקון': 'mexico',
+  'ברזיל': 'brazil',
+}
+
+/** Resolve trip destination string → internal country key */
+function resolveTripCountry(destination: string): string | null {
+  // Check Hebrew words first
+  for (const [heb, key] of Object.entries(HE_TO_COUNTRY)) {
+    if (destination.includes(heb)) return key
+  }
+  const lower = destination.toLowerCase()
+  for (const key of Object.keys(COUNTRY_CITY_MAP)) {
+    if (lower.includes(key)) return key
+    // Check city aliases too
+    if (COUNTRY_CITY_MAP[key].some(alias => lower.includes(alias))) return key
+  }
+  return null
+}
+
+/**
+ * Decide if a Claude-parsed booking is relevant to the given trip.
+ * Returns true if destination matches AND booking dates are within window.
+ */
+function isRelevantToTrip(booking: ParsedBooking, trip: TripRow): boolean {
+  const tripCountry = resolveTripCountry(trip.destination)
+
+  if (tripCountry) {
+    const aliases = COUNTRY_CITY_MAP[tripCountry]
+    const city    = (booking.destination_city    || '').toLowerCase()
+    const country = (booking.destination_country || '').toLowerCase()
+
+    const destMatch =
+      aliases.some(a => city.includes(a) || a.includes(city.replace(/\s+/g, ''))) ||
+      aliases.some(a => country.includes(a) || a.includes(country))
+
+    if (!destMatch && city && country) {
+      console.log(
+        `[gmailScanner/trip] Skipping "${booking.vendor}" — destination "${city}/${country}" `+
+        `doesn't match trip to "${trip.destination}"`,
+      )
+      return false
+    }
+  }
+
+  // Date window: allow bookings from 180 days before trip start to 7 days after trip end
+  const tripStart = new Date(trip.start_date)
+  const tripEnd   = new Date(trip.end_date)
+  const windowStart = new Date(tripStart)
+  windowStart.setDate(windowStart.getDate() - 180)
+  const windowEnd = new Date(tripEnd)
+  windowEnd.setDate(windowEnd.getDate() + 7)
+
+  const bookingDateStr = booking.check_in || booking.departure_date
+  if (bookingDateStr) {
+    const bd = new Date(bookingDateStr)
+    if (bd < windowStart || bd > windowEnd) {
+      console.log(
+        `[gmailScanner/trip] Skipping "${booking.vendor}" — date "${bookingDateStr}" `+
+        `outside window [${windowStart.toISOString().slice(0,10)}, ${windowEnd.toISOString().slice(0,10)}]`,
+      )
+      return false
+    }
+  }
+
+  return true
+}
 
 export interface ScanStats {
   scanned:          number
@@ -336,27 +482,47 @@ export async function scanTripGmail(
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
-      // ── Process ALL emails in parallel (fetch body + Claude parse simultaneously)
+      // ── Process ALL emails in parallel (fetch body + PDF + Claude parse) ──
       const parsed = await Promise.allSettled(
         messages.map(async (msg) => {
-          // Fetch email body (skip PDF downloads to stay fast)
+          // Fetch email body
           let body = ''
           try { body = await getEmailBody(accessToken, msg.id) } catch { return null }
-          stats.scannedEmailOnly++
           const emailContent = body || msg.snippet
 
+          // Also try to download the largest PDF attachment (best-effort)
+          let pdfBase64: string | undefined
+          let pdfFilename: string | undefined
+          try {
+            const attachments = await getEmailAttachments(accessToken, msg.id)
+            // Only download PDFs up to 5 MB to avoid timeout
+            const pdf = attachments
+              .filter(a => a.size < 5 * 1024 * 1024)
+              .sort((a, b) => b.size - a.size)[0]
+            if (pdf) {
+              pdfBase64    = await downloadAttachment(accessToken, msg.id, pdf.attachmentId)
+              pdfFilename  = pdf.filename
+              stats.scannedWithPDF++
+            } else {
+              stats.scannedEmailOnly++
+            }
+          } catch { stats.scannedEmailOnly++ }
+
           // Parse with Claude — real confirmation or marketing?
-          const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
+          const parsedBooking = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
           if (!parsedBooking || parsedBooking.confidence < 0.5) return null
 
-          return { msg, parsedBooking, emailContent, rawHtml: body }
+          // ── Relevance filter: destination + date must match this trip ──────
+          if (!isRelevantToTrip(parsedBooking, t)) return null
+
+          return { msg, parsedBooking, emailContent, rawHtml: body, pdfBase64, pdfFilename }
         }),
       )
 
       // ── Write successful parses to DB ─────────────────────────────────────
       for (const result of parsed) {
         if (result.status !== 'fulfilled' || !result.value) continue
-        const { msg, parsedBooking, emailContent, rawHtml } = result.value
+        const { msg, parsedBooking, emailContent, rawHtml, pdfBase64, pdfFilename } = result.value
         stats.parsed++
 
         try {
@@ -377,13 +543,37 @@ export async function scanTripGmail(
               ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
             parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
 
-          // ── Upload email body as HTML file (viewable from the documents page) ──
+          const safeId = msg.id.replace(/[^a-zA-Z0-9]/g, '')
           let fileUrl: string | null = null
-          if (rawHtml) {
+          let fileType = 'gmail'
+
+          // ── 1. Prefer PDF attachment — save as actual PDF file ────────────
+          if (pdfBase64) {
             try {
-              const safeId   = msg.id.replace(/[^a-zA-Z0-9]/g, '')
+              const pdfName   = pdfFilename || `booking-${safeId}.pdf`
+              const filePath  = `${tripId}/${pdfName}`
+              const pdfBuffer = Buffer.from(pdfBase64, 'base64')
+              const { error: pdfErr } = await supabase.storage
+                .from('documents')
+                .upload(filePath, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+              if (!pdfErr) {
+                const { data: urlData } = supabase.storage
+                  .from('documents').getPublicUrl(filePath)
+                fileUrl  = urlData?.publicUrl || null
+                fileType = 'pdf'
+                console.log(`[gmailScanner/trip] PDF saved: ${pdfName}`)
+              } else {
+                console.warn('[gmailScanner/trip] PDF upload error:', pdfErr.message)
+              }
+            } catch (pdfEx) {
+              console.warn('[gmailScanner/trip] PDF upload exception:', pdfEx)
+            }
+          }
+
+          // ── 2. Fallback: save email body as HTML snapshot ─────────────────
+          if (!fileUrl && rawHtml) {
+            try {
               const filePath = `${tripId}/email-${safeId}.html`
-              // Wrap in minimal HTML page so it renders nicely
               const htmlFile = `<!DOCTYPE html><html dir="auto"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${bookingTitle || msg.subject}</title></head><body>${rawHtml}</body></html>`
               const blob     = Buffer.from(htmlFile, 'utf-8')
               const { error: uploadErr } = await supabase.storage
@@ -393,8 +583,7 @@ export async function scanTripGmail(
                 console.warn('[gmailScanner/trip] HTML upload error:', uploadErr.message)
               } else {
                 const { data: urlData } = supabase.storage
-                  .from('documents')
-                  .getPublicUrl(filePath)
+                  .from('documents').getPublicUrl(filePath)
                 fileUrl = urlData?.publicUrl || null
               }
             } catch (uploadEx) {
@@ -409,8 +598,8 @@ export async function scanTripGmail(
               trip_id:        tripId,
               name:           bookingTitle,
               doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
-              file_type:      'gmail',
-              file_url:       fileUrl,   // HTML snapshot — tap to view full email
+              file_type:      fileType,  // 'pdf' if attachment found, 'gmail' for HTML snapshot
+              file_url:       fileUrl,
               booking_ref:    parsedBooking.confirmation_number !== 'N/A'
                                 ? parsedBooking.confirmation_number : null,
               valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
