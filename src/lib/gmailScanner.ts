@@ -495,40 +495,66 @@ export async function scanTripGmail(
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
-      // ── Process ALL emails in parallel (fetch body + PDF + Claude parse) ──
-      const parsed = await Promise.allSettled(
+      // ── PASS 1: Fetch bodies + parse with Claude (text-only, no PDFs yet) ──
+      // This is fast (~5-8s for 20 emails in parallel).
+      // We avoid downloading PDFs until we know an email is relevant.
+      const pass1 = await Promise.allSettled(
         messages.map(async (msg) => {
-          // Fetch email body
           let body = ''
           try { body = await getEmailBody(accessToken, msg.id) } catch { return null }
           const emailContent = body || msg.snippet
 
-          // Also try to download the largest PDF attachment (best-effort)
+          // Text-only parse — fast, no PDF needed yet
+          const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
+          if (!parsedBooking || parsedBooking.confidence < 0.5) return null
+          if (!isRelevantToTrip(parsedBooking, t))              return null
+
+          return { msg, parsedBooking, emailContent, rawHtml: body }
+        }),
+      )
+
+      // Collect emails that survived text-only filtering
+      type Pass1Item = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
+      const relevant: Pass1Item[] = []
+      for (const r of pass1) {
+        if (r.status === 'fulfilled' && r.value !== null) relevant.push(r.value as Pass1Item)
+      }
+
+      console.log(`[gmailScanner/trip] Pass 1 done: ${relevant.length}/${messages.length} relevant`)
+
+      // ── PASS 2: For relevant emails only, download PDF attachments ────────
+      // Typically 1-5 emails, so this adds very little time.
+      const parsed = await Promise.allSettled(
+        relevant.map(async ({ msg, parsedBooking, emailContent, rawHtml }) => {
           let pdfBase64: string | undefined
           let pdfFilename: string | undefined
           try {
             const attachments = await getEmailAttachments(accessToken, msg.id)
-            // Only download PDFs up to 5 MB to avoid timeout
+            // Only download PDFs up to 4 MB to stay fast
             const pdf = attachments
-              .filter(a => a.size < 5 * 1024 * 1024)
+              .filter(a => a.size > 0 && a.size < 4 * 1024 * 1024)
               .sort((a, b) => b.size - a.size)[0]
             if (pdf) {
-              pdfBase64    = await downloadAttachment(accessToken, msg.id, pdf.attachmentId)
-              pdfFilename  = pdf.filename
+              pdfBase64   = await downloadAttachment(accessToken, msg.id, pdf.attachmentId)
+              pdfFilename = pdf.filename
               stats.scannedWithPDF++
             } else {
               stats.scannedEmailOnly++
             }
           } catch { stats.scannedEmailOnly++ }
 
-          // Parse with Claude — real confirmation or marketing?
-          const parsedBooking = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
-          if (!parsedBooking || parsedBooking.confidence < 0.5) return null
+          // Re-parse with PDF if we got one (higher quality extraction)
+          let finalBooking = parsedBooking
+          if (pdfBase64) {
+            try {
+              const withPdf = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
+              if (withPdf && withPdf.confidence >= parsedBooking.confidence) {
+                finalBooking = withPdf
+              }
+            } catch { /* keep text-only result */ }
+          }
 
-          // ── Relevance filter: destination + date must match this trip ──────
-          if (!isRelevantToTrip(parsedBooking, t)) return null
-
-          return { msg, parsedBooking, emailContent, rawHtml: body, pdfBase64, pdfFilename }
+          return { msg, parsedBooking: finalBooking, emailContent, rawHtml, pdfBase64, pdfFilename }
         }),
       )
 
