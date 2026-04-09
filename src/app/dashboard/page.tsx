@@ -85,8 +85,10 @@ export default function DashboardPage() {
 
   if (loading || tripsLoading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
+        <div className="w-10 h-10 rounded-full animate-spin"
+          style={{ border: '3px solid rgba(108,71,255,0.15)', borderTopColor: '#6C47FF' }} />
+        <p className="text-sm text-gray-400 font-medium">טוען...</p>
       </div>
     )
   }
@@ -102,20 +104,22 @@ export default function DashboardPage() {
           className="w-full max-w-sm"
         >
           {/* Greeting */}
-          <div className="w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
-            <Plane className="w-12 h-12 text-primary" />
+          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6"
+            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+            <Plane className="w-12 h-12 text-white" />
           </div>
           {displayName && (
             <p className="text-gray-400 text-sm mb-1">שלום {displayName} 👋</p>
           )}
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">מוכן לטיול הראשון?</h2>
+          <h2 className="text-2xl font-bold tracking-tight mb-2">מוכן לטיול הראשון?</h2>
           <p className="text-gray-500 text-sm leading-relaxed mb-8">
             צור טיול ראשון כדי להתחיל לעקוב אחר ההוצאות, המסמכים ולוח הזמנים שלך
           </p>
 
           {/* CTA */}
           <Link href="/trips/new"
-            className="w-full bg-primary text-white rounded-2xl py-4 font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-md">
+            className="w-full text-white rounded-2xl py-4 font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-all shadow-fab"
+            style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
             <Plus className="w-5 h-5" />
             צור טיול ראשון
           </Link>
@@ -145,10 +149,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 page-enter">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Tripix</h1>
+      <div className="flex items-center justify-between pt-1">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight gradient-text">Tripix</h1>
+          {displayName && <p className="text-xs text-gray-400 mt-0.5">שלום, {displayName} 👋</p>}
+        </div>
         <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
       </div>
 
@@ -157,21 +164,32 @@ export default function DashboardPage() {
         data-tour="dashboard-card"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-br from-[#185FA5] to-[#378ADD] rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
-        {/* Decorative circle */}
-        <div className="absolute -top-8 -left-8 w-40 h-40 rounded-full bg-white/5 pointer-events-none" />
-        <div className="absolute -bottom-6 -right-4 w-28 h-28 rounded-full bg-white/5 pointer-events-none" />
+        transition={{ duration: 0.4 }}
+        className="rounded-3xl p-6 text-white relative overflow-hidden"
+        style={{ background: 'linear-gradient(140deg, #6C47FF 0%, #9B7BFF 60%, #B9A0FF 100%)' }}
+      >
+        {/* Subtle decorative blobs */}
+        <div className="absolute -top-10 -left-10 w-44 h-44 rounded-full bg-white/8 pointer-events-none" style={{ background: 'rgba(255,255,255,0.07)' }} />
+        <div className="absolute -bottom-8 -right-6 w-32 h-32 rounded-full pointer-events-none" style={{ background: 'rgba(255,255,255,0.06)' }} />
+        <div className="absolute top-4 left-20 w-20 h-20 rounded-full pointer-events-none" style={{ background: 'rgba(255,255,255,0.04)' }} />
 
         <div className="relative">
-          <div className="flex items-center gap-2 mb-3">
-            <Plane className="w-4 h-4 opacity-70" />
-            <span className="text-sm opacity-80 truncate">{tripName} · {tripDestination}</span>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center">
+              <Plane className="w-3.5 h-3.5" />
+            </div>
+            <span className="text-sm font-medium opacity-90 truncate">{tripName} · {tripDestination}</span>
           </div>
-          <p className="text-xs opacity-60 mb-1">סה&quot;כ הוצאות</p>
+          <p className="text-xs font-medium opacity-60 mb-1 tracking-wide uppercase">סה״כ הוצאות</p>
           <p className="text-4xl font-bold tracking-tight">{convert(totalIls)}</p>
-          <div className="flex items-center justify-between mt-3">
-            <div className="text-xs opacity-60">{totalTripDays} ימים · {daysRemaining} נותרו</div>
-            <div className="text-xs bg-white/20 rounded-full px-2 py-0.5">{displayCurrency}</div>
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-1.5 text-xs opacity-70">
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>{totalTripDays} ימים · {daysRemaining} נותרו</span>
+            </div>
+            <div className="text-xs font-semibold bg-white/20 rounded-full px-2.5 py-0.5 backdrop-blur-sm">
+              {displayCurrency}
+            </div>
           </div>
         </div>
       </motion.div>
@@ -182,29 +200,29 @@ export default function DashboardPage() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { icon: Wallet, label: 'סה"כ', value: convert(totalIls), color: 'text-primary', bg: 'bg-primary/8' },
-          { icon: TrendingUp, label: 'ממוצע יומי', value: convert(avgDaily), color: 'text-green-600', bg: 'bg-green-50' },
-          { icon: CalendarDays, label: 'היום', value: convert(todayTotal), color: 'text-orange-500', bg: 'bg-orange-50' },
-          { icon: Plane, label: 'ימי טיול', value: `${totalTripDays}`, color: 'text-purple-500', bg: 'bg-purple-50' },
+          { icon: Wallet,       label: 'סה"כ',     value: convert(totalIls),  color: 'text-primary',     bg: 'bg-primary-50' },
+          { icon: TrendingUp,   label: 'ממוצע יומי', value: convert(avgDaily), color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { icon: CalendarDays, label: 'היום',      value: convert(todayTotal), color: 'text-amber-600',  bg: 'bg-amber-50' },
+          { icon: Plane,        label: 'ימי טיול',  value: `${totalTripDays}`, color: 'text-sky-500',    bg: 'bg-sky-50' },
         ].map((stat, i) => (
           <motion.div key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
-            <div className={`w-8 h-8 rounded-xl ${stat.bg} flex items-center justify-center mb-2`}>
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 + i * 0.06, duration: 0.3 }}
+            className="bg-white rounded-2xl p-4 shadow-card border border-gray-50/80">
+            <div className={`w-8 h-8 rounded-xl ${stat.bg} flex items-center justify-center mb-3`}>
               <stat.icon className={`w-4 h-4 ${stat.color}`} />
             </div>
-            <p className="text-lg font-bold">{stat.value}</p>
-            <span className="text-xs text-gray-400">{stat.label}</span>
+            <p className="text-xl font-bold tracking-tight leading-tight">{stat.value}</p>
+            <span className="text-xs text-gray-400 font-medium mt-0.5">{stat.label}</span>
           </motion.div>
         ))}
       </div>
 
       {/* Pie Chart */}
       {categoryData.length > 0 && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-50">
-          <h3 className="text-sm font-bold mb-3">חלוקה לפי קטגוריה</h3>
+        <div className="bg-white rounded-2xl p-4 shadow-card border border-gray-50/80">
+          <h3 className="text-sm font-bold mb-3 tracking-tight">חלוקה לפי קטגוריה</h3>
           <div className="flex items-center">
             <ResponsiveContainer width="50%" height={160}>
               <PieChart>
@@ -232,8 +250,8 @@ export default function DashboardPage() {
 
       {/* Recent Expenses */}
       {lastFive.length > 0 ? (
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-bold mb-3">הוצאות אחרונות</h3>
+        <div className="bg-white rounded-2xl p-4 shadow-card border border-gray-50/80">
+          <h3 className="text-sm font-bold mb-3 tracking-tight">הוצאות אחרונות</h3>
           <div className="space-y-3">
             {lastFive.map(exp => {
               const meta = CATEGORY_META[exp.category]
