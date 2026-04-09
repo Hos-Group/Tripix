@@ -246,26 +246,33 @@ export async function getEmailBody(
   return body
 }
 
-/** Recursively extract the best available text from the payload tree */
+/**
+ * Recursively extract the best available body from the payload tree.
+ * Prefers text/html so booking emails retain their full visual design
+ * (logos, colors, tables) when saved as HTML snapshots and rendered
+ * in the document viewer. Claude handles HTML perfectly for parsing.
+ */
 function extractBody(payload: GmailMessagePayload): string {
-  // Prefer text/plain, accept text/html as fallback
-  if (payload.mimeType === 'text/plain' && payload.body?.data) {
-    return decodeBase64Url(payload.body.data)
-  }
+  // Direct HTML part — best for display
   if (payload.mimeType === 'text/html' && payload.body?.data) {
     return decodeBase64Url(payload.body.data)
   }
+  // Plain text — only if no HTML available
+  if (payload.mimeType === 'text/plain' && payload.body?.data) {
+    return decodeBase64Url(payload.body.data)
+  }
 
-  // Walk parts
+  // Walk multipart/* children — prefer HTML child over plain text child
   if (payload.parts?.length) {
-    // Try text/plain first
-    const plainPart = payload.parts.find(p => p.mimeType === 'text/plain')
-    if (plainPart?.body?.data) return decodeBase64Url(plainPart.body.data)
-
+    // Check for HTML first (richer, visual)
     const htmlPart = payload.parts.find(p => p.mimeType === 'text/html')
     if (htmlPart?.body?.data) return decodeBase64Url(htmlPart.body.data)
 
-    // Recurse into nested multipart
+    // Fallback to plain text
+    const plainPart = payload.parts.find(p => p.mimeType === 'text/plain')
+    if (plainPart?.body?.data) return decodeBase64Url(plainPart.body.data)
+
+    // Recurse into nested multipart (e.g. multipart/related inside multipart/alternative)
     for (const part of payload.parts) {
       const found = extractBody(part)
       if (found) return found
