@@ -28,9 +28,10 @@ export default function DocumentsPage() {
   const [reprocessProgress, setReprocessProgress] = useState<{ done: number; total: number } | null>(null)
 
   // ── Multi-select state ──────────────────────────────────────────────────
-  const [selectMode,   setSelectMode]   = useState(false)
-  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
-  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [selectMode,      setSelectMode]      = useState(false)
+  const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set())
+  const [bulkDeleting,    setBulkDeleting]    = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   // ── Gmail sync state ────────────────────────────────────────────────────
   const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string }[] | null>(null)
@@ -185,10 +186,17 @@ export default function DocumentsPage() {
     }
   }, [])
 
-  // ── Single delete ────────────────────────────────────────────────────────
+  // ── Single delete (inline confirm — no window.confirm) ──────────────────
   const handleDelete = async (id: string) => {
-    const confirmed = window.confirm('למחוק את המסמך לצמיתות?')
-    if (!confirmed) return
+    if (pendingDeleteId !== id) {
+      // First tap: arm the button (show confirmation state)
+      setPendingDeleteId(id)
+      // Auto-disarm after 3 seconds
+      setTimeout(() => setPendingDeleteId(prev => prev === id ? null : prev), 3000)
+      return
+    }
+    // Second tap: confirmed — delete
+    setPendingDeleteId(null)
     const ok = await deleteDocumentsByIds([id])
     if (ok) {
       toast.success('המסמך נמחק')
@@ -199,8 +207,6 @@ export default function DocumentsPage() {
   // ── Bulk delete ──────────────────────────────────────────────────────────
   const handleBulkDelete = async () => {
     if (!selectedIds.size) return
-    const confirmed = window.confirm(`למחוק ${selectedIds.size} מסמכים לצמיתות?`)
-    if (!confirmed) return
     setBulkDeleting(true)
     const ids = Array.from(selectedIds)
     const ok = await deleteDocumentsByIds(ids)
@@ -419,7 +425,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-4 pb-32">
+    <div className="space-y-4 pb-32" onClick={() => pendingDeleteId && setPendingDeleteId(null)}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">כספת מסמכים</h1>
@@ -562,9 +568,15 @@ export default function DocumentsPage() {
                         {doc.file_type === 'gmail' && <Mail className="w-3 h-3 text-orange-400" />}
                         {doc.file_url && <ExternalLink className="w-3 h-3 text-primary" />}
                         {!selectMode && (
-                          <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                            className="text-gray-300 hover:text-red-400 active:scale-95">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                            className={`flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-medium active:scale-95 transition-all ${
+                              pendingDeleteId === doc.id
+                                ? 'bg-red-500 text-white'
+                                : 'text-gray-300 hover:text-red-400'
+                            }`}>
                             <Trash2 className="w-3 h-3" />
+                            {pendingDeleteId === doc.id && <span>מחק?</span>}
                           </button>
                         )}
                       </div>
@@ -596,9 +608,15 @@ export default function DocumentsPage() {
                       </div>
                     </div>
                     {!selectMode && (
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                        className="p-2 text-gray-300 hover:text-red-400 active:scale-95">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium active:scale-95 transition-all ${
+                          pendingDeleteId === doc.id
+                            ? 'bg-red-500 text-white'
+                            : 'p-2 text-gray-300 hover:text-red-400'
+                        }`}>
                         <Trash2 className="w-4 h-4" />
+                        {pendingDeleteId === doc.id && <span>מחק?</span>}
                       </button>
                     )}
                   </div>
@@ -691,9 +709,15 @@ export default function DocumentsPage() {
                       )}
                     </div>
                     {!selectMode && (
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                        className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                        className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium active:scale-95 transition-all flex-shrink-0 ${
+                          pendingDeleteId === doc.id
+                            ? 'bg-red-500 text-white'
+                            : 'text-gray-300 hover:text-red-400'
+                        }`}>
                         <Trash2 className="w-4 h-4" />
+                        {pendingDeleteId === doc.id && <span>מחק?</span>}
                       </button>
                     )}
                   </div>
