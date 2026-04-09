@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Plane, ChevronLeft, Check, Trash2, Calendar, MapPin, Users, DollarSign, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Plane, ChevronLeft, Check, Trash2, Calendar, MapPin, Users, DollarSign, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
@@ -155,6 +155,11 @@ export default function TripsPage() {
                     className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-gray-400 active:bg-gray-50">
                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     {isExpanded ? 'פחות' : 'פרטים'}
+                  </button>
+                  <div className="w-px bg-gray-100" />
+                  <button onClick={(e) => { e.stopPropagation(); router.push(`/trips/${trip.id}/edit`) }}
+                    className="px-4 py-2 text-xs text-primary active:bg-primary/5 flex items-center gap-1">
+                    <Pencil className="w-3.5 h-3.5" /> ערוך
                   </button>
                   <div className="w-px bg-gray-100" />
                   <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(trip.id) }}
