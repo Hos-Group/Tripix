@@ -65,7 +65,7 @@ export default function TripsPage() {
   }
 
   const TRIP_GRADIENTS = [
-    'from-[#185FA5] to-[#378ADD]',
+    'from-violet-500 to-indigo-600',
     'from-purple-500 to-indigo-500',
     'from-teal-500 to-cyan-400',
     'from-orange-400 to-rose-400',
@@ -91,10 +91,11 @@ export default function TripsPage() {
             <Link href="/dashboard" className="active:scale-95 transition-transform">
               <ChevronLeft className="w-5 h-5 text-gray-500" />
             </Link>
-            <h1 className="text-xl font-bold">הטיולים שלי</h1>
+            <h1 className="text-xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>הטיולים שלי</h1>
           </div>
           <Link href="/trips/new"
-            className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1">
+            className="text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1"
+            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
             <Plus className="w-4 h-4" /> טיול חדש
           </Link>
         </div>
@@ -105,7 +106,8 @@ export default function TripsPage() {
             <Plane className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-400 mb-4">עדיין אין טיולים</p>
             <Link href="/trips/new"
-              className="inline-flex items-center gap-1 bg-primary text-white rounded-xl px-6 py-3 text-sm font-medium active:scale-95">
+              className="inline-flex items-center gap-1 text-white rounded-xl px-6 py-3 text-sm font-medium active:scale-95"
+              style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
               <Plus className="w-4 h-4" /> צור טיול ראשון
             </Link>
           </div>

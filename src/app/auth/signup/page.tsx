@@ -84,7 +84,7 @@ export default function SignupPage() {
 
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-primary mb-1">Tripix ✈️</h1>
+          <h1 className="text-4xl font-black mb-1" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Tripix ✈️</h1>
           <p className="text-gray-500 text-sm">צור חשבון ותתחיל לתכנן את הטיול שלך</p>
         </div>
 
@@ -101,7 +101,7 @@ export default function SignupPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="ישראל ישראלי"
               autoComplete="name"
-              className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -115,7 +115,7 @@ export default function SignupPage() {
               placeholder="you@example.com"
               dir="ltr"
               autoComplete="email"
-              className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left"
+              className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left"
             />
           </div>
 
@@ -130,7 +130,7 @@ export default function SignupPage() {
                 placeholder="לפחות 6 תווים"
                 dir="ltr"
                 autoComplete="new-password"
-                className="w-full bg-gray-50 rounded-xl px-4 py-3 pr-12 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left"
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3 pr-12 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left"
               />
               <button
                 type="button"
@@ -164,7 +164,7 @@ export default function SignupPage() {
           </div>
 
           {/* Benefits list */}
-          <div className="bg-primary/5 rounded-xl p-3 space-y-1.5">
+          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-3 space-y-1.5">
             {['ניהול הוצאות בכל מטבע', 'סריקת קבלות חכמה', 'שיתוף עם הנוסעים'].map(item => (
               <div key={item} className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
@@ -177,7 +177,8 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary text-white rounded-xl py-3.5 font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full text-white rounded-2xl py-3.5 font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {loading ? 'יוצר חשבון...' : '🚀 צור חשבון'}

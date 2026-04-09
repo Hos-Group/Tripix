@@ -1,6 +1,7 @@
 'use client'
 
-import { Phone, MapPin, Shield, Heart, AlertTriangle, ChevronLeft, Globe, Building2, Clock } from 'lucide-react'
+import type { ElementType } from 'react'
+import { Phone, MapPin, Shield, Heart, AlertTriangle, ChevronLeft, Globe, Building2, Clock, Flame, Info, Anchor } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useTrip } from '@/contexts/TripContext'
@@ -854,6 +855,17 @@ const DESTINATION_MAP: Record<string, string> = {
   ירושלים: 'israel', jerusalem: 'israel', eilat: 'israel', אילת: 'israel',
 }
 
+function getContactStyle(color: string): { icon: ElementType; bg: string } {
+  if (color === 'bg-blue-500' || color === 'bg-indigo-500') return { icon: Shield, bg: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)' }
+  if (color === 'bg-red-500') return { icon: Heart, bg: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)' }
+  if (color === 'bg-orange-500') return { icon: Flame, bg: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)' }
+  if (color === 'bg-green-500') return { icon: Info, bg: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)' }
+  if (color === 'bg-purple-500') return { icon: AlertTriangle, bg: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }
+  if (color === 'bg-cyan-500') return { icon: Anchor, bg: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)' }
+  if (color === 'bg-gray-500' || color === 'bg-gray-600') return { icon: Shield, bg: 'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)' }
+  return { icon: Phone, bg: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }
+}
+
 function detectCountry(destination: string): CountryData {
   if (!destination) return GENERIC_DATA
   const lower = destination.toLowerCase().trim()
@@ -885,7 +897,7 @@ export default function EmergencyPage() {
           <ChevronLeft className="w-5 h-5 text-gray-500" />
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-red-500">מצב חירום 🆘</h1>
+          <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>מצב חירום</h1>
           {currentTrip && (
             <p className="text-xs text-gray-400">{countryData.flag} {currentTrip.name} · {currentTrip.destination}</p>
           )}
@@ -896,43 +908,48 @@ export default function EmergencyPage() {
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-gradient-to-br from-red-500 to-red-700 rounded-3xl p-5 text-center text-white shadow-lg">
-        <p className="text-4xl mb-1">{countryData.flag}</p>
-        <p className="font-bold text-lg">חירום ב{countryData.nameHe}?</p>
-        <p className="text-sm opacity-80 mb-4">לחץ להתקשרות מיידית</p>
+        className="rounded-3xl p-6 text-center text-white shadow-xl"
+        style={{ background: 'linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)' }}>
+        <p className="text-5xl mb-2">{countryData.flag}</p>
+        <p className="font-black text-xl mb-1">חירום ב{countryData.nameHe}?</p>
+        <p className="text-sm opacity-80 mb-5">לחץ להתקשרות מיידית</p>
         <button onClick={() => handleCall(countryData.primaryNumber)}
-          className="bg-white text-red-600 rounded-2xl px-8 py-4 font-bold text-2xl active:scale-95 transition-transform shadow-md tracking-widest">
-          📞 {countryData.primaryNumber}
+          className="bg-white text-red-600 rounded-2xl px-8 py-4 font-black text-3xl active:scale-95 transition-transform shadow-lg tracking-widest flex items-center gap-3 mx-auto">
+          <Phone className="w-7 h-7" />
+          {countryData.primaryNumber}
         </button>
-        <p className="text-xs opacity-70 mt-2">{countryData.primaryLabel}</p>
+        <p className="text-xs opacity-70 mt-3 font-medium">{countryData.primaryLabel}</p>
       </motion.div>
 
       {/* Emergency Numbers Grid */}
       <div className="space-y-2">
-        <h3 className="text-sm font-bold text-gray-600 px-1">מספרי חירום ב{countryData.nameHe}</h3>
+        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">מספרי חירום ב{countryData.nameHe}</h3>
         <div className="grid grid-cols-2 gap-2">
-          {countryData.numbers.map((contact) => (
-            <button key={contact.number + contact.label} onClick={() => handleCall(contact.number)}
-              className="bg-white rounded-2xl p-4 shadow-sm text-center active:scale-95 transition-transform border border-gray-100">
-              <div className={`w-10 h-10 ${contact.color} rounded-full flex items-center justify-center mx-auto mb-2`}>
-                <span className="text-lg">{contact.icon}</span>
-              </div>
-              <p className="text-xs font-medium text-gray-600">{contact.label}</p>
-              <p className="text-xl font-bold text-gray-900 tracking-wide">{contact.number}</p>
-            </button>
-          ))}
+          {countryData.numbers.map((contact) => {
+            const { icon: ContactIcon, bg } = getContactStyle(contact.color)
+            return (
+              <button key={contact.number + contact.label} onClick={() => handleCall(contact.number)}
+                className="bg-white rounded-2xl p-4 shadow-sm text-center active:scale-[0.97] transition-all border border-gray-100">
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center mx-auto mb-2" style={{ background: bg }}>
+                  <ContactIcon className="w-5 h-5 text-white" />
+                </div>
+                <p className="text-[11px] font-medium text-gray-500 mb-0.5">{contact.label}</p>
+                <p className="text-2xl font-black text-gray-900 tracking-wide" dir="ltr">{contact.number}</p>
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {/* Embassy / Consulate — prominent card */}
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 shadow-sm border border-blue-100 space-y-3">
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
         {/* Title */}
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
             <Building2 className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wide">{countryData.embassy.type} ישראל</p>
+            <p className="text-[10px] font-bold text-primary uppercase tracking-wide">{countryData.embassy.type} ישראל</p>
             <p className="text-sm font-bold text-gray-800 leading-tight">{countryData.embassy.name}</p>
           </div>
         </div>
@@ -953,7 +970,7 @@ export default function EmergencyPage() {
 
         {/* Note (additional consulates) */}
         {countryData.embassy.note && (
-          <div className="bg-blue-100/60 rounded-xl px-3 py-2 text-[10px] text-blue-700 leading-relaxed">
+          <div className="rounded-xl px-3 py-2 text-[10px] leading-relaxed" style={{ background: 'rgba(108,71,255,0.08)', color: '#6C47FF' }}>
             {countryData.embassy.note}
           </div>
         )}
@@ -961,12 +978,14 @@ export default function EmergencyPage() {
         {/* Call Buttons */}
         <div className="grid grid-cols-2 gap-2">
           <button onClick={() => handleCall(countryData.embassy.phone)}
-            className="bg-blue-500 text-white rounded-xl py-3 text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5">
+            className="text-white rounded-2xl py-3 text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5"
+            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
             <Phone className="w-3.5 h-3.5" />
             <span>מרכזייה</span>
           </button>
           <button onClick={() => handleCall(countryData.embassy.emergency)}
-            className="bg-red-500 text-white rounded-xl py-3 text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5">
+            className="text-white rounded-2xl py-3 text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5"
+            style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)' }}>
             <AlertTriangle className="w-3.5 h-3.5" />
             <span>חירום 24/7</span>
           </button>
@@ -974,20 +993,23 @@ export default function EmergencyPage() {
 
         {/* Phone numbers shown */}
         <div className="grid grid-cols-2 gap-1">
-          <p className="text-[9px] text-center text-blue-500 font-mono">{countryData.embassy.phone}</p>
+          <p className="text-[9px] text-center text-primary font-mono">{countryData.embassy.phone}</p>
           <p className="text-[9px] text-center text-red-500 font-mono">{countryData.embassy.emergency}</p>
         </div>
       </div>
 
       {/* Israeli Foreign Ministry — always shown */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2">
+      <div className="rounded-2xl p-4 shadow-sm border border-violet-100 space-y-2" style={{ background: 'rgba(108,71,255,0.04)' }}>
         <div className="flex items-center gap-2 mb-1">
-          <Globe className="w-4 h-4 text-indigo-500" />
-          <p className="text-sm font-bold">מוקד חירום — משרד החוץ הישראלי</p>
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+            <Globe className="w-4 h-4 text-white" />
+          </div>
+          <p className="text-sm font-bold text-gray-800">מוקד חירום — משרד החוץ הישראלי</p>
         </div>
         <p className="text-[10px] text-gray-400">זמין 24/7 לכל אזרח ישראלי בחו&quot;ל</p>
         <button onClick={() => handleCall('+97225303111')}
-          className="w-full bg-indigo-500 text-white rounded-xl py-3 text-sm font-bold active:scale-95 flex items-center justify-center gap-2">
+          className="w-full text-white rounded-2xl py-3 text-sm font-bold active:scale-95 flex items-center justify-center gap-2"
+          style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
           <Phone className="w-4 h-4" />
           +972-2-530-3111
         </button>
@@ -999,17 +1021,17 @@ export default function EmergencyPage() {
       {/* Hospitals */}
       {countryData.hospitals && countryData.hospitals.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-gray-600 px-1">בתי חולים</h3>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">בתי חולים</h3>
           {countryData.hospitals.map((hospital) => (
             <button key={hospital.phone} onClick={() => handleCall(hospital.phone)}
-              className="w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-transform border border-gray-100">
-              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Heart className="w-5 h-5 text-red-400" />
+              className="w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.97] transition-all border border-gray-100">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)' }}>
+                <Heart className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 text-right">
                 <p className="text-xs font-bold text-gray-800">{hospital.label}</p>
-                <p className="text-[10px] text-gray-400">{hospital.value}</p>
-                <p className="text-[10px] text-blue-500 font-mono mt-0.5">{hospital.phone}</p>
+                <p className="text-[10px] text-gray-500">{hospital.value}</p>
+                <p className="text-[10px] text-primary font-mono mt-0.5">{hospital.phone}</p>
               </div>
               <Phone className="w-4 h-4 text-primary flex-shrink-0" />
             </button>

@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatDateShort } from '@/lib/utils'
 import { Document, DocType, DOC_TYPE_META, TravelerId } from '@/types'
+import { DocTypeIconBadge } from '@/lib/iconConfig'
 import DocumentViewer from '@/components/DocumentViewer'
 import { loadTravelers, getTravelerName, type Traveler } from '@/lib/travelers'
 import { useTrip } from '@/contexts/TripContext'
@@ -671,7 +672,7 @@ export default function DocumentsPage() {
               {isSel ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4 text-gray-300" />}
             </div>
           )}
-          <div className="text-2xl mb-2">{meta.icon}</div>
+          <div className="mb-3"><DocTypeIconBadge type={doc.doc_type} size="md" /></div>
           <p className="text-xs font-bold truncate">{doc.name}</p>
           <p className="text-[10px] text-gray-400 truncate">{getTravelerName(travelers, doc.traveler_id)}</p>
           {doc.booking_ref && (
@@ -709,7 +710,7 @@ export default function DocumentsPage() {
           )}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{meta.icon}</span>
+              <DocTypeIconBadge type={doc.doc_type} size="md" />
               <div>
                 <p className="text-sm font-bold">{doc.name}</p>
                 <p className="text-xs text-gray-400">{getTravelerName(travelers, doc.traveler_id)}</p>
@@ -769,12 +770,10 @@ export default function DocumentsPage() {
               : 'bg-white'
         }`}>
         <div className="flex items-start gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
-            isSel ? 'bg-primary/10' : isNew ? 'bg-emerald-100' : 'bg-gray-50'
-          }`}>
+          <div className="flex items-center justify-center flex-shrink-0">
             {selectMode
-              ? (isSel ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5 text-gray-300" />)
-              : meta.icon}
+              ? <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-surface-secondary">{isSel ? <CheckSquare className="w-5 h-5 text-primary" /> : <Square className="w-5 h-5 text-gray-300" />}</div>
+              : <DocTypeIconBadge type={doc.doc_type} size="md" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
@@ -826,7 +825,6 @@ export default function DocumentsPage() {
   // ── Render a folder card (group with multiple docs) ────────────────────────
   const renderFolderCard = (group: DocGroup) => {
     const primary = group.docs[0]
-    const primaryMeta = DOC_TYPE_META[primary.doc_type]
     const isExpanded = expandedGroups.has(group.key)
     const allSel = group.docs.every(d => selectedIds.has(d.id))
     const anySel = group.docs.some(d => selectedIds.has(d.id))
@@ -838,19 +836,19 @@ export default function DocumentsPage() {
         key={group.key}
         initial={{ opacity: 0, y: isNew ? -8 : 0 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`rounded-2xl overflow-hidden shadow-sm border-2 transition-all ${
+        className={`rounded-2xl overflow-hidden shadow-sm border transition-all ${
           allSel
             ? 'border-primary bg-primary/5'
             : anySel
               ? 'border-primary/40 bg-primary/3'
               : isNew
                 ? 'border-emerald-300 bg-emerald-50'
-                : 'border-amber-200 bg-amber-50'
+                : 'border-gray-100 bg-white'
         }`}>
 
         {/* ── Primary doc section ── */}
         <div
-          className="p-4 cursor-pointer active:bg-amber-100/50 transition-colors"
+          className="p-4 cursor-pointer active:bg-gray-50 transition-colors"
           onClick={() => {
             if (selectMode) toggleGroupSelect(group)
             else if (primary.file_url) setViewerUrl(primary.file_url)
@@ -858,8 +856,8 @@ export default function DocumentsPage() {
         >
           <div className="flex items-start gap-3">
             {/* Icon / checkbox */}
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
-              allSel ? 'bg-primary/10' : isNew ? 'bg-emerald-100' : 'bg-amber-100'
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              allSel ? 'bg-primary/10' : isNew ? 'bg-emerald-100' : 'bg-surface-secondary'
             }`}>
               {selectMode
                 ? (allSel
@@ -867,13 +865,13 @@ export default function DocumentsPage() {
                     : anySel
                       ? <CheckSquare className="w-5 h-5 text-primary/40" />
                       : <Square className="w-5 h-5 text-gray-300" />)
-                : primaryMeta.icon}
+                : <DocTypeIconBadge type={primary.doc_type} size="md" />}
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-bold truncate">{primary.name}</p>
-                <span className="flex-shrink-0 bg-amber-300/70 text-amber-900 text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                <span className="flex-shrink-0 bg-primary/10 text-primary text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                   <FolderOpen className="w-2.5 h-2.5" /> {group.docs.length}
                 </span>
                 {isNew && (
@@ -911,13 +909,13 @@ export default function DocumentsPage() {
         {/* ── Expand toggle strip ── */}
         <button
           onClick={() => toggleGroupExpand(group.key)}
-          className="w-full flex items-center justify-between px-4 py-2 bg-amber-100/60 border-t border-amber-200 text-xs text-amber-800 font-medium active:bg-amber-200/60 transition-colors"
+          className="w-full flex items-center justify-between px-4 py-2 bg-surface-secondary border-t border-gray-100 text-xs text-gray-500 font-medium active:bg-gray-100 transition-colors"
         >
           <span className="flex items-center gap-1.5">
             <FolderOpen className="w-3.5 h-3.5" />
             {isExpanded ? 'הסתר מסמכים' : `${group.docs.length} מסמכים`}
             {!isExpanded && extraLabels && (
-              <span className="text-amber-600 font-normal">— {extraLabels}</span>
+              <span className="text-gray-400 font-normal">— {extraLabels}</span>
             )}
           </span>
           {isExpanded
@@ -935,9 +933,8 @@ export default function DocumentsPage() {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="border-t border-amber-200 divide-y divide-amber-100/80">
+              <div className="border-t border-gray-100 divide-y divide-gray-50">
                 {group.docs.map((doc) => {
-                  const meta = DOC_TYPE_META[doc.doc_type]
                   const isDocSel = selectedIds.has(doc.id)
                   return (
                     <div
@@ -962,7 +959,7 @@ export default function DocumentsPage() {
                       )}
 
                       {/* Icon */}
-                      <span className="text-xl flex-shrink-0">{meta.icon}</span>
+                      <DocTypeIconBadge type={doc.doc_type} size="sm" />
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
@@ -1007,8 +1004,6 @@ export default function DocumentsPage() {
 
   // ── Render a type-level folder (Passports / Hotels / Flights) ─────────────
   const renderTypeFolder = (item: TypeFolderItem) => {
-    const style = TYPE_FOLDER_STYLE[item.type]
-    if (!style) return null
     const meta = DOC_TYPE_META[item.type]
     const isExpanded = expandedTypeFolders.has(item.type)
     const totalDocs  = item.groups.reduce((sum, g) => sum + g.docs.length, 0)
@@ -1022,7 +1017,7 @@ export default function DocumentsPage() {
         key={`type-${item.type}`}
         initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`rounded-2xl overflow-hidden border-2 shadow-sm ${style.border} ${style.bg} ${
+        className={`rounded-2xl overflow-hidden border shadow-sm bg-white border-gray-100 ${
           hasNew ? 'ring-2 ring-emerald-200' : ''
         } ${allSel ? 'ring-2 ring-primary' : anySel ? 'ring-1 ring-primary/40' : ''}`}
       >
@@ -1041,19 +1036,19 @@ export default function DocumentsPage() {
             : toggleTypeFolder(item.type)}
           className="w-full flex items-center gap-3 p-4 text-right active:bg-black/5 transition-colors"
         >
-          <div className={`w-12 h-12 ${style.iconBg} rounded-2xl flex items-center justify-center text-2xl flex-shrink-0`}>
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 bg-surface-secondary">
             {selectMode
               ? (allSel
                   ? <CheckSquare className="w-6 h-6 text-primary" />
                   : anySel
                     ? <CheckSquare className="w-6 h-6 text-primary/40" />
                     : <Square className="w-6 h-6 text-gray-400" />)
-              : meta.icon}
+              : <DocTypeIconBadge type={item.type} size="lg" />}
           </div>
           <div className="flex-1 min-w-0 text-right">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className={`text-base font-bold ${style.text}`}>{style.label}</p>
-              <span className={`bg-white/80 ${style.text} text-xs font-semibold px-2 py-0.5 rounded-full border ${style.border}`}>
+              <p className="text-base font-bold text-gray-800">{meta.label}</p>
+              <span className="bg-primary/10 text-primary text-xs font-semibold px-2 py-0.5 rounded-full">
                 {item.groups.length} הזמנות
               </span>
               {totalDocs !== item.groups.length && (
@@ -1082,7 +1077,7 @@ export default function DocumentsPage() {
               transition={{ duration: 0.22 }}
               className="overflow-hidden"
             >
-              <div className={`border-t ${style.border} p-3 space-y-2`}>
+              <div className="border-t border-gray-100 p-3 space-y-2">
                 {item.groups.map(group =>
                   group.docs.length === 1
                     ? renderSingleDoc(group.docs[0], 'list')
@@ -1100,17 +1095,20 @@ export default function DocumentsPage() {
     <div className="space-y-4 pb-32" onClick={() => pendingDeleteId && setPendingDeleteId(null)}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">כספת מסמכים</h1>
+        <div>
+          <h1 className="text-xl font-black gradient-text">כספת מסמכים</h1>
+          <p className="text-xs text-gray-400 mt-0.5">{documents.length} מסמכים שמורים</p>
+        </div>
         <div className="flex items-center gap-2">
           {/* View mode */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <div className="flex bg-surface-secondary rounded-xl p-0.5">
             {([
               { mode: 'list'  as const, icon: List,       label: 'רשימה'   },
               { mode: 'cards' as const, icon: CreditCard, label: 'כרטיסים' },
               { mode: 'grid'  as const, icon: LayoutGrid,  label: 'רשת'     },
             ]).map(({ mode, icon: Icon }) => (
               <button key={mode} onClick={() => setViewMode(mode)}
-                className={`p-1.5 rounded-md transition-all ${viewMode === mode ? 'bg-white shadow text-primary' : 'text-gray-400'}`}>
+                className={`p-1.5 rounded-lg transition-all ${viewMode === mode ? 'bg-white shadow text-primary' : 'text-gray-400'}`}>
                 <Icon className="w-4 h-4" />
               </button>
             ))}
@@ -1119,28 +1117,24 @@ export default function DocumentsPage() {
           {/* Multi-select toggle */}
           <button
             onClick={() => { setSelectMode(s => !s); setSelectedIds(new Set()) }}
-            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-all ${
-              selectMode ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+            className={`p-2 rounded-xl text-sm font-medium active:scale-95 transition-all ${
+              selectMode ? 'bg-primary text-white' : 'bg-surface-secondary text-gray-500'
             }`}
             title="בחירה מרובה">
             <CheckSquare className="w-4 h-4" />
-            {selectMode ? 'בטל' : 'בחר'}
           </button>
 
           {/* Reprocess all */}
           <button
             onClick={handleReprocessAll}
             disabled={reprocessingAll || documents.filter(d => d.file_url).length === 0}
-            className="flex items-center gap-1.5 bg-indigo-50 text-indigo-600 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-transform disabled:opacity-40"
-            title="עיבוד מחדש של כל המסמכים">
+            className="p-2 bg-surface-secondary rounded-xl text-gray-400 active:scale-95 transition-all disabled:opacity-40"
+            title={reprocessingAll && reprocessProgress ? `${reprocessProgress.done}/${reprocessProgress.total}` : 'עיבוד מחדש של כל המסמכים'}>
             <RefreshCw className={`w-4 h-4 ${reprocessingAll ? 'animate-spin' : ''}`} />
-            {reprocessingAll && reprocessProgress
-              ? `${reprocessProgress.done}/${reprocessProgress.total}`
-              : 'רענן'}
           </button>
 
           <Link href="/scan"
-            className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1">
+            className="btn-cta px-4 py-2 text-sm flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> העלאה
           </Link>
         </div>
@@ -1151,27 +1145,25 @@ export default function DocumentsPage() {
 
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <span className="text-xs text-gray-500">סוג מסמך:</span>
-        </div>
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           <button onClick={() => setFilterType(null)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${!filterType ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
+            className={`flex-shrink-0 px-3 py-1.5 rounded-2xl text-xs font-medium active:scale-95 transition-all ${!filterType ? 'text-white' : 'bg-white shadow-sm text-gray-500'}`}
+            style={!filterType ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}>
             הכל
           </button>
           {DOC_TYPES.map(dt => (
             <button key={dt} onClick={() => setFilterType(filterType === dt ? null : dt)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${filterType === dt ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
+              className={`flex-shrink-0 px-3 py-1.5 rounded-2xl text-xs font-medium active:scale-95 transition-all ${filterType === dt ? 'text-white' : 'bg-white shadow-sm text-gray-500'}`}
+              style={filterType === dt ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}>
               {DOC_TYPE_META[dt].icon} {DOC_TYPE_META[dt].label}
             </button>
           ))}
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          <span className="flex-shrink-0 text-xs text-gray-500 self-center">נוסע:</span>
           {[{ id: 'all', name: 'כולם' }, ...travelers].map(t => (
             <button key={t.id} onClick={() => setFilterTraveler(filterTraveler === t.id ? null : t.id as TravelerId)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${filterTraveler === t.id ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
+              className={`flex-shrink-0 px-3 py-1.5 rounded-2xl text-xs font-medium active:scale-95 transition-all ${filterTraveler === t.id ? 'text-white' : 'bg-white shadow-sm text-gray-500'}`}
+              style={filterTraveler === t.id ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}>
               {t.name}
             </button>
           ))}
@@ -1194,13 +1186,15 @@ export default function DocumentsPage() {
       {/* ── Documents ─────────────────────────────────────────────────────── */}
       <div ref={newDocsRef} />
       {displayItems.length === 0 ? (
-        <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-          <div className="text-3xl mb-2">📁</div>
-          <p className="font-bold mb-1">אין מסמכים</p>
-          <p className="text-sm text-gray-500 mb-3">העלו מסמכי הזמנה, דרכונים וכרטיסי טיסה</p>
-          <Link href="/scan"
-            className="inline-block bg-primary text-white rounded-xl px-6 py-2 text-sm font-medium active:scale-95 transition-transform">
-            העלה מסמך
+        <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+            <FolderOpen className="w-8 h-8 text-white" />
+          </div>
+          <p className="font-bold text-gray-800 mb-1">הכספת ריקה</p>
+          <p className="text-sm text-gray-400 mb-4">הוסף מסמכי הזמנה, דרכונים וכרטיסי טיסה</p>
+          <Link href="/scan" className="inline-flex items-center gap-2 btn-cta px-6 py-3 text-sm">
+            <Plus className="w-4 h-4" /> הוסף מסמך ראשון
           </Link>
         </div>
       ) : viewMode === 'grid' ? (
@@ -1235,30 +1229,20 @@ export default function DocumentsPage() {
       <AnimatePresence>
         {selectMode && selectedIds.size > 0 && (
           <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0,   opacity: 1 }}
-            exit={{   y: 100, opacity: 0 }}
-            className="fixed bottom-20 left-4 right-4 z-50 bg-gray-900 text-white rounded-2xl p-3 flex items-center gap-2 shadow-2xl">
-            <span className="flex-1 text-sm font-semibold">{selectedIds.size} נבחרו</span>
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-all">
-              <Download className="w-4 h-4" /> ייצוא
-            </button>
-            <button
-              onClick={handleBulkDelete}
-              disabled={bulkDeleting}
-              className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-all disabled:opacity-50">
-              {bulkDeleting
-                ? <span className="animate-spin">⏳</span>
-                : <Trash2 className="w-4 h-4" />}
-              מחק
-            </button>
-            <button
-              onClick={() => { setSelectedIds(new Set()); setSelectMode(false) }}
-              className="p-2 text-white/60 hover:text-white active:scale-95">
-              <X className="w-4 h-4" />
-            </button>
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-50">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-3 flex items-center gap-3">
+              <span className="text-sm font-bold text-gray-800 flex-1">{selectedIds.size} נבחרו</span>
+              <button onClick={handleExport} className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-xl px-4 py-2.5 text-sm font-semibold active:scale-95">
+                <Download className="w-4 h-4" /> ייצוא
+              </button>
+              <button onClick={handleBulkDelete} disabled={bulkDeleting}
+                className="flex items-center gap-1.5 bg-red-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold active:scale-95 disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> {bulkDeleting ? 'מוחק...' : 'מחק'}
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

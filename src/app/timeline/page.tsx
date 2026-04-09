@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, formatDate } from '@/lib/utils'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document as TripDoc } from '@/types'
+import { DocEventIconBadge, CategoryIconBadge } from '@/lib/iconConfig'
 import { useTrip } from '@/contexts/TripContext'
 import { eachDayOfInterval, parseISO, format, isToday, differenceInDays } from 'date-fns'
 import CurrencySelector from '@/components/CurrencySelector'
@@ -541,33 +542,33 @@ export default function TimelinePage() {
     <div className="space-y-4 pb-8" dir="rtl">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="active:scale-95 transition-transform">
             <ChevronLeft className="w-5 h-5 text-gray-500" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold">ציר זמן</h1>
-            <p className="text-xs text-gray-400">{currentTrip.destination} · {totalDays} ימים</p>
+            <h1 className="text-xl font-black gradient-text">ציר זמן</h1>
+            <p className="text-xs text-gray-400 mt-0.5">{currentTrip?.destination || ''}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* View mode toggle */}
-          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          {/* View mode toggle — pill style */}
+          <div className="flex items-center p-0.5 bg-surface-secondary rounded-2xl">
             <button
               onClick={() => setViewMode('timeline')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'timeline' ? 'bg-white shadow text-primary' : 'text-gray-400'}`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${viewMode === 'timeline' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'}`}
               title="ציר זמן"
             >
-              <LayoutList className="w-4 h-4" />
+              <LayoutList className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode('summary')}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === 'summary' ? 'bg-white shadow text-primary' : 'text-gray-400'}`}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${viewMode === 'summary' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'}`}
               title="סיכום נסיעה"
             >
-              <BarChart2 className="w-4 h-4" />
+              <BarChart2 className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -650,7 +651,9 @@ export default function TimelinePage() {
             {summary.flights.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
-                  <Plane className="w-4 h-4 text-blue-500" />
+                  <div className="w-7 h-7 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <Plane className="w-4 h-4 text-blue-600" />
+                  </div>
                   <h3 className="text-sm font-bold">לוח טיסות</h3>
                   <span className="text-xs text-gray-400 mr-auto">{summary.flights.length} רגלים</span>
                 </div>
@@ -694,7 +697,9 @@ export default function TimelinePage() {
             {summary.hotels.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
-                  <Hotel className="w-4 h-4 text-emerald-500" />
+                  <div className="w-7 h-7 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
+                    <Hotel className="w-4 h-4 text-teal-600" />
+                  </div>
                   <h3 className="text-sm font-bold">לינות</h3>
                 </div>
                 <div className="space-y-2">
@@ -724,7 +729,9 @@ export default function TimelinePage() {
             {summary.cars.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
-                  <Car className="w-4 h-4 text-amber-500" />
+                  <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <Car className="w-4 h-4 text-amber-600" />
+                  </div>
                   <h3 className="text-sm font-bold">השכרת רכב / הסעות</h3>
                 </div>
                 <div className="space-y-2">
@@ -755,7 +762,9 @@ export default function TimelinePage() {
             {summary.activities.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
-                  <Briefcase className="w-4 h-4 text-purple-500" />
+                  <div className="w-7 h-7 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+                    <Briefcase className="w-4 h-4 text-violet-600" />
+                  </div>
                   <h3 className="text-sm font-bold">פעילויות ואירועים</h3>
                   <span className="text-xs text-gray-400 mr-auto">{summary.activities.length}</span>
                 </div>
@@ -853,28 +862,30 @@ export default function TimelinePage() {
             {/* Stats strip */}
             <div className="grid grid-cols-3 gap-2">
               {[
-                { icon: Wallet,     label: 'סה״כ',        value: convert(totalIls),  color: 'text-primary' },
-                { icon: TrendingUp, label: 'ממוצע / יום',  value: convert(avgPerDay), color: 'text-green-600' },
-                { icon: Calendar,  label: 'נותרו',        value: `${daysRemaining} ימים`, color: 'text-orange-500' },
+                { icon: Wallet,     label: 'סה״כ',        value: convert(totalIls),       iconBg: 'bg-violet-100', iconColor: 'text-primary' },
+                { icon: TrendingUp, label: 'ממוצע / יום',  value: convert(avgPerDay),       iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
+                { icon: Calendar,   label: 'נותרו',        value: `${daysRemaining} ימים`, iconBg: 'bg-orange-100', iconColor: 'text-orange-500' },
               ].map((s, i) => (
-                <div key={i} className="bg-white rounded-2xl p-3 shadow-sm text-center">
-                  <s.icon className={`w-4 h-4 ${s.color} mx-auto mb-1`} />
-                  <p className="text-sm font-bold">{s.value}</p>
-                  <p className="text-[10px] text-gray-400">{s.label}</p>
+                <div key={i} className="bg-white rounded-2xl p-3.5 shadow-sm text-center">
+                  <div className={`w-7 h-7 rounded-xl ${s.iconBg} flex items-center justify-center mx-auto mb-2`}>
+                    <s.icon className={`w-3.5 h-3.5 ${s.iconColor}`} />
+                  </div>
+                  <p className="text-lg font-black text-gray-900 leading-tight">{s.value}</p>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>
 
             {/* Budget bar */}
             {currentTrip.budget_ils && (
-              <div className="bg-white rounded-2xl px-4 py-3 shadow-sm space-y-1.5">
+              <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">תקציב</span>
-                  <span className="font-semibold">
-                    {convert(totalIls)} / {convert(currentTrip.budget_ils)}
+                  <span className="text-gray-500 font-medium">תקציב</span>
+                  <span className="font-semibold text-gray-700">
+                    סה&quot;כ {convert(totalIls)} מתוך {convert(currentTrip.budget_ils)}
                   </span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min((totalIls / currentTrip.budget_ils) * 100, 100)}%` }}
@@ -896,18 +907,19 @@ export default function TimelinePage() {
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 <button
                   onClick={() => setFilterCat('all')}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                    filterCat === 'all' ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-500 shadow-sm'
-                  }`}>
+                  className={`flex-shrink-0 rounded-2xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    filterCat === 'all' ? 'text-white shadow-sm' : 'bg-white shadow-sm text-gray-500'
+                  }`}
+                  style={filterCat === 'all' ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : {}}>
                   הכל
                 </button>
                 {usedCategories.map(cat => (
                   <button key={cat}
                     onClick={() => setFilterCat(filterCat === cat ? 'all' : cat)}
-                    className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                      filterCat === cat ? 'text-white shadow-sm' : 'bg-white text-gray-500 shadow-sm'
+                    className={`flex-shrink-0 rounded-2xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      filterCat === cat ? 'text-white shadow-sm' : 'bg-white shadow-sm text-gray-500'
                     }`}
-                    style={filterCat === cat ? { backgroundColor: CATEGORY_META[cat].color } : {}}>
+                    style={filterCat === cat ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : {}}>
                     <span>{CATEGORY_META[cat].icon}</span>
                     {CATEGORY_META[cat].label}
                   </button>
@@ -934,10 +946,12 @@ export default function TimelinePage() {
                           ? 'bg-primary/5 ring-1 ring-primary/20'
                           : day.isFuture ? 'opacity-30' : 'opacity-50'
                       }`}>
-                      <div className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
-                        day.isToday ? 'bg-primary text-white' :
-                        day.isPast  ? 'bg-gray-300 text-white' : 'bg-gray-100 text-gray-400'
-                      }`}>
+                      <div
+                        className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
+                          !day.isToday && day.isPast ? 'bg-gray-300 text-white' :
+                          !day.isToday ? 'bg-gray-100 text-gray-400' : ''
+                        }`}
+                        style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
                         {day.dayNumber >= 1 ? (
                           <>
                             <span className="text-[9px] leading-none opacity-70">יום</span>
@@ -970,10 +984,12 @@ export default function TimelinePage() {
 
                     {/* Day header */}
                     <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-50">
-                      <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
-                        day.isToday ? 'bg-primary text-white' :
-                        day.isPast  ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500'
-                      }`}>
+                      <div
+                        className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
+                          !day.isToday && day.isPast ? 'bg-gray-800 text-white' :
+                          !day.isToday ? 'bg-gray-100 text-gray-500' : ''
+                        }`}
+                        style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
                         {day.dayNumber >= 1 ? (
                           <>
                             <span className="text-[10px] font-normal leading-none opacity-70">יום</span>
@@ -1011,24 +1027,20 @@ export default function TimelinePage() {
                           return (
                             <div key={`ev-${i}`} className="flex gap-3 items-start">
                               <div className="flex flex-col items-center">
-                                <div
-                                  className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0"
-                                  style={{ backgroundColor: ev.bgColor }}>
-                                  {ev.icon}
-                                </div>
+                                <DocEventIconBadge type={ev.type} size={8} />
                                 {!isLast && <div className="w-0.5 h-3 bg-gray-100 mt-1" />}
                               </div>
                               <div className="flex-1 pb-3 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   {ev.time && (
-                                    <span className="text-[10px] font-bold tabular-nums" style={{ color: ev.color }}>
+                                    <span className="text-[11px] font-bold tabular-nums" style={{ color: ev.color }}>
                                       {ev.time}
                                     </span>
                                   )}
-                                  <p className="text-sm font-semibold text-gray-800">{ev.title}</p>
+                                  <p className="text-sm font-semibold text-gray-900">{ev.title}</p>
                                 </div>
                                 {ev.subtitle && (
-                                  <p className="text-xs text-gray-500 mt-0.5">{ev.subtitle}</p>
+                                  <p className="text-xs text-gray-400 mt-0.5">{ev.subtitle}</p>
                                 )}
                               </div>
                               <button
@@ -1040,7 +1052,7 @@ export default function TimelinePage() {
                                     .single()
                                   if (data?.file_url) setViewerDoc({ url: data.file_url, title: data.name, docType: data.doc_type })
                                 }}
-                                className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 mt-1 active:scale-90"
+                                className="w-6 h-6 rounded-lg bg-surface-secondary flex items-center justify-center flex-shrink-0 mt-1 active:scale-90"
                                 title="צפה במסמך">
                                 <Paperclip className="w-3 h-3 text-gray-300" />
                               </button>
@@ -1055,17 +1067,17 @@ export default function TimelinePage() {
                       <div className="px-4 pb-3">
                         <button
                           onClick={() => setExpandedExpDay(isExpExpanded ? null : day.date)}
-                          className="w-full flex items-center gap-2 bg-gray-50 hover:bg-gray-100 active:scale-[0.98] transition-all rounded-xl px-3 py-2">
+                          className="w-full flex items-center gap-2 bg-surface-secondary active:bg-gray-100 active:scale-[0.98] transition-all rounded-2xl px-4 py-2.5">
                           <div className="flex items-center gap-0.5">
                             {Array.from(new Set(day.expenses.map(e => e.category))).slice(0, 4).map(cat => (
                               <span key={cat} className="text-xs">{CATEGORY_META[cat as Category]?.icon}</span>
                             ))}
                           </div>
-                          <span className="text-xs font-semibold text-gray-700 flex-1 text-right">
+                          <span className="text-sm font-bold text-gray-800 flex-1 text-right">
                             {convert(day.totalIls)}
                           </span>
                           <span className="text-[10px] text-gray-400">{day.expenses.length} פריטים</span>
-                          <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${isExpExpanded ? 'rotate-180' : ''}`} />
+                          <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform flex-shrink-0 ${isExpExpanded ? 'rotate-180' : ''}`} />
                         </button>
 
                         {/* Expanded expense list */}
@@ -1084,11 +1096,8 @@ export default function TimelinePage() {
 
                                   return (
                                     <div key={exp.id}
-                                      className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 shadow-sm border border-gray-50">
-                                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                                        style={{ backgroundColor: meta.color + '20' }}>
-                                        {meta.icon}
-                                      </div>
+                                      className="flex items-center gap-3 bg-white rounded-2xl px-3 py-2.5 shadow-sm border border-gray-50">
+                                      <CategoryIconBadge category={exp.category as Category} size="sm" />
 
                                       <div className="flex-1 min-w-0">
                                         {isEditing ? (
@@ -1104,7 +1113,7 @@ export default function TimelinePage() {
                                             dir="rtl"
                                           />
                                         ) : (
-                                          <p className="text-xs font-medium truncate">{exp.title}</p>
+                                          <p className="text-xs font-semibold text-gray-800 truncate">{exp.title}</p>
                                         )}
                                         <p className="text-[10px] text-gray-400">{meta.label}</p>
                                       </div>
@@ -1174,10 +1183,13 @@ export default function TimelinePage() {
             </div>
 
             {expenses.length === 0 && days.every(d => d.docEvents.length === 0) && (
-              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-                <div className="text-4xl mb-3">✈️</div>
-                <p className="font-bold mb-1">אין הוצאות עדיין</p>
-                <p className="text-sm text-gray-400">הוצאות ומסמכים שתוסיף יופיעו כאן לפי ימי הטיול</p>
+              <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
+                <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
+                  <Calendar className="w-8 h-8 text-white" />
+                </div>
+                <p className="font-bold text-gray-800 mb-1">הציר ריק עדיין</p>
+                <p className="text-sm text-gray-400">הוסף מסמכים כדי לראות את לוח הנסיעה</p>
               </div>
             )}
           </motion.div>

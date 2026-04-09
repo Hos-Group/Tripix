@@ -456,7 +456,7 @@ export default function PackingPage() {
             <Link href="/dashboard" className="active:scale-95 transition-transform">
               <ChevronLeft className="w-5 h-5 text-gray-500" />
             </Link>
-            <h1 className="text-xl font-bold">רשימת אריזה</h1>
+            <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>רשימת אריזה</h1>
           </div>
 
           {/* Question */}
@@ -498,11 +498,11 @@ export default function PackingPage() {
         <Link href="/dashboard" className="active:scale-95 transition-transform">
           <ChevronLeft className="w-5 h-5 text-gray-500" />
         </Link>
-        <h1 className="text-xl font-bold">רשימת אריזה</h1>
+        <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>רשימת אריזה</h1>
       </div>
 
       {/* Progress Card */}
-      <div className="bg-gradient-to-br from-[#185FA5] to-[#0D3B6E] rounded-2xl p-5 text-white">
+      <div className="rounded-3xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Luggage className="w-5 h-5" />
@@ -535,11 +535,12 @@ export default function PackingPage() {
             <button
               key={opt.value}
               onClick={() => setTripType(opt.value)}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
                 tripType === opt.value
-                  ? 'bg-[#185FA5] text-white shadow-sm'
+                  ? 'text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600'
               }`}
+              style={tripType === opt.value ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : {}}
             >
               <span>{opt.icon}</span>
               <span>{opt.label}</span>
@@ -559,7 +560,8 @@ export default function PackingPage() {
         </button>
         <button
           onClick={() => setShowAddForm(v => !v)}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-[#185FA5] rounded-xl text-sm text-white font-medium active:scale-95 transition-all flex-1 justify-center"
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm text-white font-bold active:scale-95 transition-all flex-1 justify-center"
+          style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
         >
           <Plus className="w-4 h-4" />
           הוסף פריט
@@ -597,7 +599,8 @@ export default function PackingPage() {
                 </select>
                 <button
                   onClick={addCustomItem}
-                  className="px-4 py-2 bg-[#185FA5] text-white rounded-xl text-sm font-medium active:scale-95"
+                  className="px-4 py-2 text-white rounded-2xl text-sm font-bold active:scale-95"
+                  style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
                 >
                   הוסף
                 </button>

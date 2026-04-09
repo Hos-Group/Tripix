@@ -185,8 +185,9 @@ export default function NewTripPage() {
                 <div
                   key={i}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i < currentProgress ? 'bg-primary w-8' : 'bg-gray-200 w-4'
+                    i < currentProgress ? 'w-8' : 'bg-gray-200 w-4'
                   }`}
+                  style={i < currentProgress ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}
                 />
               ))}
             </div>
@@ -205,7 +206,7 @@ export default function NewTripPage() {
               exit={{ opacity: 0, x: 20 }}
               className="space-y-3"
             >
-              <div className="bg-gradient-to-br from-primary to-primary-dark rounded-3xl p-6 text-white text-center">
+              <div className="rounded-3xl p-6 text-white text-center" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
                 <Plane className="w-10 h-10 mx-auto mb-2" />
                 <p className="font-bold text-lg">מה סוג הטיול?</p>
                 <p className="text-sm opacity-70 mt-1">בחר סוג כדי להתאים את החוויה</p>
@@ -241,7 +242,7 @@ export default function NewTripPage() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.05 }}
-                className="bg-gradient-to-br from-primary to-primary-dark rounded-3xl p-6 text-white text-center"
+                className="rounded-3xl p-6 text-white text-center" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
               >
                 <div className="text-5xl mb-3">{selectedType.emoji}</div>
                 <h2 className="text-xl font-bold mb-1">{selectedType.welcomeTitle}</h2>
@@ -334,9 +335,10 @@ export default function NewTripPage() {
                                 }}
                                 className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
                                   isSelected
-                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    ? 'text-white border-transparent shadow-sm'
                                     : 'bg-gray-50 text-gray-600 border-gray-200'
                                 }`}
+                                style={isSelected ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}
                               >
                                 {isSelected ? '✓ ' : ''}{city}
                               </button>
@@ -347,7 +349,7 @@ export default function NewTripPage() {
 
                       {/* Selected cities display */}
                       {selectedCities.length > 0 && (
-                        <div className="bg-primary/5 rounded-xl px-3 py-2 text-xs text-primary font-medium">
+                        <div className="bg-violet-50 rounded-xl px-3 py-2 text-xs text-violet-600 font-medium">
                           מסלול: {selectedCities.join(' → ')}
                         </div>
                       )}
@@ -377,7 +379,8 @@ export default function NewTripPage() {
                               }
                               setCustomCityInput('')
                             }}
-                            className="bg-primary text-white rounded-xl px-3 text-xs font-bold active:scale-95"
+                            className="text-white rounded-xl px-3 text-xs font-bold active:scale-95"
+                            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
                           >
                             הוסף
                           </button>
@@ -393,7 +396,8 @@ export default function NewTripPage() {
                     if (!destination) { toast.error('נא לבחור מדינה'); return }
                     setStep(3)
                   }}
-                  className="w-full bg-primary text-white rounded-xl py-3 font-bold active:scale-95 transition-transform"
+                  className="w-full text-white rounded-2xl py-3 font-bold active:scale-95 transition-transform"
+                  style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
                 >
                   המשך →
                 </button>
@@ -457,7 +461,8 @@ export default function NewTripPage() {
 
               <button
                 onClick={() => setStep(4)}
-                className="w-full bg-primary text-white rounded-xl py-3.5 font-bold active:scale-95 transition-transform"
+                className="w-full text-white rounded-2xl py-3.5 font-bold active:scale-95 transition-transform"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
               >
                 המשך →
               </button>
@@ -537,7 +542,8 @@ export default function NewTripPage() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="w-full bg-primary text-white rounded-2xl py-4 font-bold text-lg active:scale-95 transition-transform disabled:opacity-50 shadow-md"
+                className="w-full text-white rounded-2xl py-4 font-bold text-lg active:scale-95 transition-transform disabled:opacity-50 shadow-md"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
               >
                 {saving ? 'יוצר טיול...' : '🚀 יאללה, טסים!'}
               </button>

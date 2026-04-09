@@ -106,7 +106,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gray-50">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-primary mb-2">Tripix</h1>
+          <h1 className="text-4xl font-black mb-2" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Tripix</h1>
           <p className="text-gray-500 text-sm">מנהל טיול חכם</p>
         </div>
 
@@ -115,24 +115,25 @@ export default function LoginPage() {
 
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="אימייל" dir="ltr"
-            className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left" />
+            className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left" />
 
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="סיסמא" dir="ltr"
-            className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left" />
+            className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 text-left" />
 
           {/* Remember me */}
           <label className="flex items-center gap-2 cursor-pointer">
             <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-              rememberMe ? 'bg-primary border-primary' : 'border-gray-300'
-            }`} onClick={() => setRememberMe(!rememberMe)}>
+              rememberMe ? 'border-transparent' : 'border-gray-300'
+            }`} style={rememberMe ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : {}} onClick={() => setRememberMe(!rememberMe)}>
               {rememberMe && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
             </div>
             <span className="text-sm text-gray-600">זכור אותי</span>
           </label>
 
           <button type="submit" disabled={loading}
-            className="w-full bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2">
+            className="w-full text-white rounded-2xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {loading ? 'מתחבר...' : 'התחבר'}
           </button>
@@ -140,7 +141,7 @@ export default function LoginPage() {
           {/* Face ID / Biometric */}
           {biometricAvailable && (
             <button type="button" onClick={handleBiometric} disabled={loading}
-              className="w-full border-2 border-gray-200 rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2 text-gray-600 hover:bg-gray-50">
+              className="w-full border-2 border-gray-200 rounded-2xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2 text-gray-600 hover:bg-gray-50">
               <ScanFace className="w-5 h-5" />
               התחבר עם Face ID
             </button>

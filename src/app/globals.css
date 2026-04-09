@@ -90,6 +90,15 @@ input, textarea, select {
   .tap-scale {
     @apply active:scale-95 transition-transform duration-150;
   }
+
+  /* Primary CTA button — gradient */
+  .btn-cta {
+    background: linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%);
+    @apply text-white rounded-2xl font-bold active:scale-95 transition-all;
+  }
+  .btn-cta:disabled {
+    opacity: 0.45;
+  }
 }
 
 /* ─── Transition overrides ─── */

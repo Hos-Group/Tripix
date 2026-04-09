@@ -572,8 +572,8 @@ export default function ScanPage() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const inputClass = 'w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20'
-  const selectClass = 'w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none'
+  const inputClass = 'w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all'
+  const selectClass = 'w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none'
 
   const getFileFormat = () => {
     if (!file) return ''
@@ -611,7 +611,7 @@ export default function ScanPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">סריקה חכמה</h1>
+      <h1 className="text-2xl font-black tracking-tight gradient-text pt-1">סריקה חכמה</h1>
 
       <AnimatePresence mode="wait">
         {/* Choose */}
@@ -619,37 +619,39 @@ export default function ScanPage() {
           <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
             <p className="text-sm text-gray-500 text-center">בחרו מה לסרוק — Claude ינתח הכל אוטומטית</p>
 
-            {/* Primary camera button — large and prominent */}
+            {/* Primary camera button */}
             <button onClick={() => { setMode('receipt'); cameraRef.current?.click() }}
-              className="w-full relative overflow-hidden bg-gradient-to-br from-orange-400 to-orange-600 rounded-3xl p-6 shadow-lg active:scale-95 transition-transform text-white">
-              {/* Pulsing ring animation */}
-              <span className="absolute inset-0 flex items-center justify-center">
-                <span className="w-24 h-24 rounded-full bg-white/10 animate-ping" />
+              className="w-full relative overflow-hidden rounded-3xl p-7 active:scale-95 transition-all text-white"
+              style={{ background: 'linear-gradient(140deg, #6C47FF 0%, #9B7BFF 60%, #B9A0FF 100%)', boxShadow: '0 12px 32px rgba(108,71,255,0.35)' }}>
+              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="w-32 h-32 rounded-full bg-white/8 animate-ping" style={{ background: 'rgba(255,255,255,0.06)' }} />
               </span>
-              <div className="relative flex flex-col items-center gap-3">
-                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center">
+              <div className="relative flex flex-col items-center gap-4">
+                <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center"
+                  style={{ backdropFilter: 'blur(8px)' }}>
                   <Camera className="w-10 h-10 text-white" />
                 </div>
                 <div className="text-center">
-                  <p className="font-bold text-lg">צלם קבלה</p>
-                  <p className="text-sm text-white/80">מצלמה אחורית → חילוץ אוטומטי עם AI</p>
+                  <p className="font-black text-xl tracking-tight">צלם קבלה</p>
+                  <p className="text-sm text-white/75 mt-0.5">AI מחלץ הכל אוטומטית</p>
                 </div>
               </div>
             </button>
 
             {/* Secondary options */}
             {[
-              { m: 'document' as ScanMode, icon: Upload, color: 'blue', title: 'העלה מסמך הזמנה', sub: 'טיסה / מלון / מעבורת / פעילות', useCamera: false },
-              { m: 'passport' as ScanMode, icon: FileText, color: 'green', title: 'סרוק דרכון', sub: 'חילוץ פרטי דרכון אוטומטי', useCamera: false },
-            ].map(({ m, icon: Icon, color, title, sub, useCamera }) => (
+              { m: 'document' as ScanMode, icon: Upload,   bg: 'rgba(59,130,246,0.10)',  iconColor: '#3B82F6', title: 'העלה מסמך הזמנה', sub: 'טיסה / מלון / מעבורת / פעילות', useCamera: false },
+              { m: 'passport' as ScanMode, icon: FileText, bg: 'rgba(16,185,129,0.10)', iconColor: '#10B981', title: 'סרוק דרכון',          sub: 'חילוץ פרטי דרכון אוטומטי',    useCamera: false },
+            ].map(({ m, icon: Icon, bg, iconColor, title, sub, useCamera }) => (
               <button key={m} onClick={() => { setMode(m); (useCamera ? cameraRef : fileRef).current?.click() }}
-                className="w-full bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4 active:scale-95 transition-transform border border-gray-50">
-                <div className={`w-12 h-12 bg-${color}-50 rounded-xl flex items-center justify-center`}>
-                  <Icon className={`w-6 h-6 text-${color}-500`} />
+                className="w-full bg-white rounded-2xl p-5 shadow-card flex items-center gap-4 active:scale-95 transition-all border border-gray-50/80">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: bg }}>
+                  <Icon className="w-6 h-6" style={{ color: iconColor }} />
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-sm">{title}</p>
-                  <p className="text-xs text-gray-400">{sub}</p>
+                  <p className="font-bold text-sm text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
                 </div>
               </button>
             ))}
@@ -664,9 +666,12 @@ export default function ScanPage() {
         {/* Loading */}
         {step === 'loading' && (
           <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="bg-white rounded-2xl p-8 shadow-sm text-center">
-            <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-            <p className="font-bold mb-1">Claude מנתח...</p>
+            className="bg-white rounded-3xl p-10 shadow-card text-center border border-gray-50/80">
+            <div className="w-16 h-16 rounded-full mx-auto mb-5 flex items-center justify-center"
+              style={{ background: 'rgba(108,71,255,0.10)' }}>
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+            <p className="font-black text-lg tracking-tight mb-1">Claude מנתח...</p>
             <p className="text-sm text-gray-400">
               {mode === 'receipt' && 'מחלץ פרטי קבלה'}
               {mode === 'document' && 'מחלץ פרטי הזמנה'}
@@ -700,7 +705,8 @@ export default function ScanPage() {
 
             <div className="flex gap-2">
               <button onClick={handleConfirm} disabled={!editTitle.trim() || !editAmount}
-                className="flex-1 bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-40">
+                className="flex-1 text-white rounded-2xl py-3 font-bold active:scale-95 transition-all disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
                 המשך לאישור
               </button>
               <button onClick={resetState} className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">ביטול</button>
@@ -750,7 +756,8 @@ export default function ScanPage() {
 
             <div className="flex gap-2">
               <button onClick={handleConfirm} disabled={!passport.firstName.trim() || !passport.lastName.trim()}
-                className="flex-1 bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-40">
+                className="flex-1 text-white rounded-2xl py-3 font-bold active:scale-95 transition-all disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
                 המשך לאישור
               </button>
               <button onClick={resetState} className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">ביטול</button>
@@ -857,7 +864,8 @@ export default function ScanPage() {
             )}
 
             <div className="flex gap-2">
-              <button onClick={handleConfirm} className="flex-1 bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform">המשך לאישור</button>
+              <button onClick={handleConfirm} className="flex-1 text-white rounded-2xl py-3 font-bold active:scale-95 transition-all"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>המשך לאישור</button>
               <button onClick={resetState} className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">ביטול</button>
             </div>
           </motion.div>
@@ -895,7 +903,8 @@ export default function ScanPage() {
 
             <div className="flex gap-2">
               <button onClick={handleConfirm} disabled={!hotel.hotelName.trim()}
-                className="flex-1 bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-40">המשך לאישור</button>
+                className="flex-1 text-white rounded-2xl py-3 font-bold active:scale-95 transition-all disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>המשך לאישור</button>
               <button onClick={resetState} className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">ביטול</button>
             </div>
           </motion.div>
@@ -936,7 +945,8 @@ export default function ScanPage() {
 
             <div className="flex gap-2">
               <button onClick={handleConfirm} disabled={!generic.docName.trim()}
-                className="flex-1 bg-primary text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-40">המשך לאישור</button>
+                className="flex-1 text-white rounded-2xl py-3 font-bold active:scale-95 transition-all disabled:opacity-40"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>המשך לאישור</button>
               <button onClick={resetState} className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">ביטול</button>
             </div>
           </motion.div>

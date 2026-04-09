@@ -5,36 +5,126 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import {
   Plane, TrendingUp, CalendarDays, Wallet, Plus,
   ScanLine, FolderOpen, MoreHorizontal, ArrowLeftRight,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Smartphone, ShieldCheck,
+  Building2, Car, Calendar, Clock, Cloud,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, getDaysRemaining, getTripDays } from '@/lib/utils'
-import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/types'
+import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document as TripDoc } from '@/types'
+import { DocEventIconBadge } from '@/lib/iconConfig'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
 import GmailScanButton from '@/components/GmailScanButton'
 import CurrencySelector from '@/components/CurrencySelector'
 
+// ── Upcoming event extracted from documents ────────────────────────────────────
+interface UpcomingEvent {
+  date:      string
+  title:     string
+  subtitle?: string
+  type:      string
+  time?:     string
+  docId:     string
+}
+
+function extractUpcomingEvents(docs: TripDoc[], todayStr: string): UpcomingEvent[] {
+  const events: UpcomingEvent[] = []
+
+  for (const doc of docs) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ext = doc.extracted_data as any
+    if (!ext) continue
+
+    if (doc.doc_type === 'flight') {
+      const legs = ext.legs || []
+      for (const leg of legs) {
+        const date = leg.departure_date || leg.dep_date
+        if (!date || date < todayStr) continue
+        events.push({
+          date,
+          title:    (leg.departure_city && leg.arrival_city)
+                      ? `${leg.departure_city} → ${leg.arrival_city}`
+                      : doc.name,
+          subtitle: [leg.flight_number || leg.airline, leg.departure_time].filter(Boolean).join(' · '),
+          type:     'flight',
+          time:     leg.departure_time || undefined,
+          docId:    doc.id,
+        })
+      }
+      // fallback for flat flight doc
+      if (!ext.legs?.length) {
+        const date = ext.departure_date || ext.dep_date
+        if (date && date >= todayStr) {
+          events.push({
+            date,
+            title:    (ext.departure_city && ext.arrival_city)
+                        ? `${ext.departure_city} → ${ext.arrival_city}`
+                        : doc.name,
+            subtitle: [ext.flight_number || ext.airline, ext.departure_time].filter(Boolean).join(' · '),
+            type:     'flight',
+            time:     ext.departure_time || undefined,
+            docId:    doc.id,
+          })
+        }
+      }
+    }
+
+    if (doc.doc_type === 'hotel') {
+      const checkIn = ext.check_in
+      if (checkIn && checkIn >= todayStr) {
+        events.push({
+          date:     checkIn,
+          title:    ext.hotel_name || doc.name,
+          subtitle: `צ׳ק אין${ext.check_out ? ` → ${ext.check_out}` : ''}`,
+          type:     'hotel_checkin',
+          docId:    doc.id,
+        })
+      }
+    }
+
+    // Car rental
+    if (ext.pickup_date && ext.pickup_date >= todayStr) {
+      events.push({
+        date:     ext.pickup_date,
+        title:    `איסוף רכב${ext.rental_company ? ` — ${ext.rental_company}` : ''}`,
+        subtitle: [ext.car_type, ext.pickup_location, ext.pickup_time].filter(Boolean).join(' · '),
+        type:     'car_pickup',
+        time:     ext.pickup_time || undefined,
+        docId:    doc.id,
+      })
+    }
+  }
+
+  return events
+    .sort((a, b) => {
+      const dc = a.date.localeCompare(b.date)
+      if (dc !== 0) return dc
+      return (a.time || '').localeCompare(b.time || '')
+    })
+    .slice(0, 6)
+}
+
 export default function DashboardPage() {
   const { currentTrip, trips, loading: tripsLoading } = useTrip()
   const { displayName } = useAuth()
-  const [expenses, setExpenses] = useState<Expense[]>([])
-  const [loading, setLoading] = useState(true)
+  const [expenses, setExpenses]         = useState<Expense[]>([])
+  const [documents, setDocuments]       = useState<TripDoc[]>([])
+  const [loading, setLoading]           = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('ILS')
-  const [showChart, setShowChart] = useState(false)
+  const [showChart, setShowChart]       = useState(false)
+  const [miniWeather, setMiniWeather]   = useState<{ temp: number; emoji: string; city: string; desc: string } | null>(null)
 
   const fetchExpenses = useCallback(async () => {
-    if (!currentTrip) { setExpenses([]); setLoading(false); return }
+    if (!currentTrip) { setExpenses([]); setDocuments([]); setLoading(false); return }
     try {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('trip_id', currentTrip.id)
-        .order('expense_date', { ascending: false })
-
-      if (!error) setExpenses(data || [])
+      const [expRes, docRes] = await Promise.all([
+        supabase.from('expenses').select('*').eq('trip_id', currentTrip.id).order('expense_date', { ascending: false }),
+        supabase.from('documents').select('*').eq('trip_id', currentTrip.id),
+      ])
+      if (!expRes.error) setExpenses(expRes.data || [])
+      if (!docRes.error) setDocuments(docRes.data || [])
     } catch (err) {
       console.error('Supabase not configured:', err)
     }
@@ -42,6 +132,30 @@ export default function DashboardPage() {
   }, [currentTrip])
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
+
+  // Fetch mini weather widget for the trip's main city
+  useEffect(() => {
+    if (!currentTrip?.destination) return
+    const city = currentTrip.destination.split(/[,، ]/)[0].trim() || 'Bangkok'
+    const WMO_EMOJI: Record<string, string> = {
+      '0': '☀️', '1': '🌤', '2': '⛅', '3': '☁️',
+      '45': '🌫', '48': '🌫',
+      '51': '🌦', '53': '🌦', '55': '🌧',
+      '61': '🌧', '63': '🌧', '65': '🌧',
+      '71': '❄️', '73': '❄️', '75': '❄️',
+      '80': '⛈', '81': '⛈', '82': '⛈',
+      '95': '⛈', '96': '⛈', '99': '⛈',
+    }
+    fetch(`/api/weather?city=${encodeURIComponent(city)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.current) return
+        const code = String(data.current.weatherCode ?? 0)
+        const emoji = WMO_EMOJI[code] ?? '🌡️'
+        setMiniWeather({ temp: Math.round(data.current.temperature), emoji, city: data.city, desc: data.current.weatherCode <= 2 ? 'שמיים בהירים' : data.current.weatherCode <= 3 ? 'מעונן חלקית' : data.current.weatherCode <= 48 ? 'ערפל' : data.current.weatherCode <= 67 ? 'גשם' : data.current.weatherCode <= 77 ? 'שלג' : 'סופה' })
+      })
+      .catch(() => {})
+  }, [currentTrip?.destination])
 
   const totalIls = expenses.reduce((sum, e) => sum + (e.amount_ils || 0), 0)
 
@@ -73,7 +187,8 @@ export default function DashboardPage() {
     color: CATEGORY_META[cat as Category]?.color || '#888',
   }))
 
-  const recentExpenses = expenses.slice(0, 8)
+  const recentExpenses    = expenses.slice(0, 8)
+  const upcomingEvents    = extractUpcomingEvents(documents, todayStr)
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading || tripsLoading) {
@@ -208,28 +323,41 @@ export default function DashboardPage() {
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          QUICK ACTIONS — 4 circular buttons
+          QUICK ACTIONS — 5 service shortcuts (horizontal scroll)
           ════════════════════════════════════════════════════ */}
       <div className="bg-white px-5 pt-5 pb-4 border-b border-gray-50">
-        <div className="flex items-start justify-around">
+        <div className="flex gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {[
-            { href: '/scan',      icon: ScanLine,       label: 'סרוק',    color: '#6C47FF', bg: 'rgba(108,71,255,0.12)' },
-            { href: '/expenses',  icon: Plus,           label: 'הוסף',    color: '#10B981', bg: 'rgba(16,185,129,0.10)' },
-            { href: '/documents', icon: FolderOpen,     label: 'מסמכים',  color: '#F59E0B', bg: 'rgba(245,158,11,0.10)' },
-            { href: '/tools',     icon: ArrowLeftRight, label: 'המרה',    color: '#3B82F6', bg: 'rgba(59,130,246,0.10)' },
+            { href: 'https://www.airalo.com',  icon: Smartphone,  label: 'eSim',          color: '#6C47FF', bg: 'rgba(108,71,255,0.12)', external: true  },
+            { href: '/documents',              icon: ShieldCheck,  label: 'ביטוח',         color: '#10B981', bg: 'rgba(16,185,129,0.10)', external: false },
+            { href: '/documents',              icon: Building2,    label: 'מלונות',        color: '#0891B2', bg: 'rgba(8,145,178,0.10)',  external: false },
+            { href: '/documents',              icon: Car,          label: 'השכרת רכב',    color: '#D97706', bg: 'rgba(217,119,6,0.10)',  external: false },
+            { href: '/documents',              icon: Plane,        label: 'טיסות',         color: '#3B82F6', bg: 'rgba(59,130,246,0.10)', external: false },
           ].map((item, i) => (
-            <motion.div key={item.href}
+            <motion.div key={i}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.05 }}>
-              <Link href={item.href}
-                className="flex flex-col items-center gap-1.5 active:scale-90 transition-all">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center"
-                  style={{ background: item.bg }}>
-                  <item.icon className="w-6 h-6" style={{ color: item.color }} strokeWidth={1.8} />
-                </div>
-                <span className="text-[11px] font-semibold text-gray-600">{item.label}</span>
-              </Link>
+              transition={{ delay: 0.1 + i * 0.05 }}
+              className="flex-shrink-0">
+              {item.external ? (
+                <a href={item.href} target="_blank" rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-1.5 active:scale-90 transition-all">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                    style={{ background: item.bg }}>
+                    <item.icon className="w-6 h-6" style={{ color: item.color }} strokeWidth={1.8} />
+                  </div>
+                  <span className="text-[11px] font-semibold text-gray-600 text-center">{item.label}</span>
+                </a>
+              ) : (
+                <Link href={item.href}
+                  className="flex flex-col items-center gap-1.5 active:scale-90 transition-all">
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                    style={{ background: item.bg }}>
+                    <item.icon className="w-6 h-6" style={{ color: item.color }} strokeWidth={1.8} />
+                  </div>
+                  <span className="text-[11px] font-semibold text-gray-600 text-center">{item.label}</span>
+                </Link>
+              )}
             </motion.div>
           ))}
         </div>
@@ -265,146 +393,99 @@ export default function DashboardPage() {
               </div>
             </motion.div>
           ))}
+          {/* Weather mini-widget */}
+          {miniWeather && (
+            <Link href="/weather"
+              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl flex-shrink-0 active:scale-95 transition-all"
+              style={{ background: '#EFF6FF' }}>
+              <span className="text-xl leading-none">{miniWeather.emoji}</span>
+              <div>
+                <p className="text-[10px] text-gray-400 font-medium">{miniWeather.city}</p>
+                <p className="text-sm font-bold text-gray-800 leading-tight">{miniWeather.temp}°C</p>
+              </div>
+            </Link>
+          )}
         </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          TRANSACTIONS LIST — Revolut style
+          UPCOMING SCHEDULE — from timeline documents
           ════════════════════════════════════════════════════ */}
       <div className="bg-white">
         {/* Section header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
-          <h2 className="text-sm font-bold text-gray-800">הוצאות אחרונות</h2>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setShowChart(c => !c)}
-              className="text-xs font-semibold px-2.5 py-1 rounded-full transition-all active:scale-95"
-              style={{
-                background: showChart ? 'rgba(108,71,255,0.10)' : 'transparent',
-                color: showChart ? '#6C47FF' : '#9CA3AF',
-              }}>
-              {showChart ? 'רשימה' : 'גרף'}
-            </button>
-            <Link href="/expenses"
-              className="text-xs font-semibold text-primary px-2.5 py-1 rounded-full active:scale-95">
-              הכל
-            </Link>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-bold text-gray-800">לוז קרוב</h2>
           </div>
+          <Link href="/timeline"
+            className="text-xs font-semibold text-primary px-2.5 py-1 rounded-full active:scale-95">
+            הכל
+          </Link>
         </div>
 
-        <AnimatePresence mode="wait">
-          {showChart ? (
-            /* ── Chart view ── */
-            <motion.div key="chart"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="px-5 py-4 overflow-hidden">
-              {categoryData.length > 0 ? (
-                <div className="flex items-center gap-4">
-                  <ResponsiveContainer width="45%" height={140}>
-                    <PieChart>
-                      <Pie data={categoryData} dataKey="value" cx="50%" cy="50%"
-                        innerRadius={38} outerRadius={60} paddingAngle={4}>
-                        {categoryData.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(val) => formatMoney(Number(val))} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex-1 space-y-2">
-                    {categoryData.slice(0, 5).map((cat, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: cat.color }} />
-                        <span className="flex-1 text-gray-500 truncate">{cat.name}</span>
-                        <span className="font-bold text-gray-800">{formatMoney(cat.value)}</span>
-                      </div>
-                    ))}
+        {upcomingEvents.length > 0 ? (
+          <div>
+            {upcomingEvents.map((ev, i) => {
+              const isEvToday = ev.date === todayStr
+              return (
+                <motion.div key={`${ev.docId}-${i}`}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className={`flex items-center gap-3.5 px-5 py-3.5 active:bg-gray-50 transition-colors
+                    ${i < upcomingEvents.length - 1 ? 'border-b border-gray-50' : ''}`}>
+
+                  {/* Icon badge */}
+                  <DocEventIconBadge type={ev.type} size={10} />
+
+                  {/* Title + date */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{ev.title}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {ev.time && (
+                        <span className="text-[11px] font-bold text-primary tabular-nums">{ev.time}</span>
+                      )}
+                      <p className="text-[11px] text-gray-400">
+                        {isEvToday ? 'היום' : ev.date}
+                        {ev.subtitle ? ` · ${ev.subtitle}` : ''}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-6">אין נתונים</p>
-              )}
-            </motion.div>
-          ) : (
-            /* ── Transaction list ── */
-            <motion.div key="list"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}>
-              {recentExpenses.length > 0 ? (
-                <div>
-                  {recentExpenses.map((exp, i) => {
-                    const meta = CATEGORY_META[exp.category]
-                    const isToday = exp.expense_date === todayStr
-                    return (
-                      <motion.div key={exp.id}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                        className={`flex items-center gap-3.5 px-5 py-3.5 active:bg-gray-50 transition-colors
-                          ${i < recentExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                        {/* Icon */}
-                        <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl flex-shrink-0"
-                          style={{ backgroundColor: meta.color + '18' }}>
-                          {meta.icon}
-                        </div>
 
-                        {/* Title + meta */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{exp.title}</p>
-                          <p className="text-[11px] text-gray-400 mt-0.5">
-                            {isToday ? 'היום' : exp.expense_date}
-                            {' · '}{meta.label}
-                          </p>
-                        </div>
-
-                        {/* Amount */}
-                        <div className="text-left flex-shrink-0">
-                          <p className="text-sm font-bold text-gray-900">
-                            -{formatMoney(exp.amount_ils)}
-                          </p>
-                          {exp.currency !== 'ILS' && (
-                            <p className="text-[10px] text-gray-400 text-left">
-                              {CURRENCY_SYMBOL[exp.currency as Currency]}{exp.amount}
-                            </p>
-                          )}
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-
-                  {/* "See all" row */}
-                  {expenses.length > 8 && (
-                    <Link href="/expenses"
-                      className="flex items-center justify-between px-5 py-3.5 border-t border-gray-50 active:bg-gray-50 transition-colors">
-                      <span className="text-sm font-semibold text-primary">
-                        כל ההוצאות ({expenses.length})
-                      </span>
-                      <ChevronLeft className="w-4 h-4 text-primary" />
-                    </Link>
+                  {/* Today badge */}
+                  {isEvToday && (
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex-shrink-0">
+                      היום
+                    </span>
                   )}
-                </div>
-              ) : (
-                /* Empty state */
-                <div className="px-5 py-10 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
-                    <Wallet className="w-7 h-7 text-gray-300" />
-                  </div>
-                  <p className="text-sm font-bold text-gray-600 mb-1">אין הוצאות עדיין</p>
-                  <p className="text-xs text-gray-400 mb-5">התחל לתעד את הוצאות הטיול</p>
-                  <Link href="/scan"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-all"
-                    style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
-                    <ScanLine className="w-4 h-4" />
-                    סרוק קבלה ראשונה
-                  </Link>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </motion.div>
+              )
+            })}
+
+            <Link href="/timeline"
+              className="flex items-center justify-between px-5 py-3.5 border-t border-gray-50 active:bg-gray-50 transition-colors">
+              <span className="text-sm font-semibold text-primary">ציר הזמן המלא</span>
+              <ChevronLeft className="w-4 h-4 text-primary" />
+            </Link>
+          </div>
+        ) : (
+          /* Empty state */
+          <div className="px-5 py-10 text-center">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3"
+              style={{ background: 'linear-gradient(135deg, #6C47FF18, #9B7BFF18)' }}>
+              <Clock className="w-7 h-7 text-primary/50" />
+            </div>
+            <p className="text-sm font-bold text-gray-600 mb-1">אין אירועים קרובים</p>
+            <p className="text-xs text-gray-400 mb-5">הוסף מסמכי הזמנה כדי לראות את הלוז</p>
+            <Link href="/scan"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-all"
+              style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
+              <ScanLine className="w-4 h-4" />
+              הוסף מסמך ראשון
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Bottom padding */}
