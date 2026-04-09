@@ -110,7 +110,7 @@ export default function DocumentsPage() {
 
       if (!res.ok) { setGmailError((json.error as string) || 'שגיאה בסריקה'); return }
       setGmailResult({ scanned: json.scanned as number, created: json.created as number })
-      if ((json.created as number) > 0) fetchDocuments()
+      fetchDocuments() // always refresh — new documents may have been added
     } catch (err) {
       console.error('[gmail scan] network error:', err)
       setGmailError('שגיאת רשת — בדוק חיבור לאינטרנט ונסה שוב')
@@ -422,6 +422,7 @@ export default function DocumentsPage() {
                         </p>
                       )}
                       <div className="flex justify-between items-center mt-2">
+                        {doc.file_type === 'gmail' && <Mail className="w-3 h-3 text-orange-400" />}
                         {doc.file_url && <ExternalLink className="w-3 h-3 text-primary" />}
                         <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
                           className="text-gray-300 hover:text-red-400 active:scale-95">
@@ -472,6 +473,11 @@ export default function DocumentsPage() {
                         {formatDateShort(doc.valid_from)}
                       </span>
                     )}
+                    {doc.file_type === 'gmail' && (
+                      <span className="bg-orange-50 text-orange-500 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Mail className="w-2.5 h-2.5" /> Gmail
+                      </span>
+                    )}
                     {doc.file_url && (
                       <span className="bg-primary/5 text-primary text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
                         <ExternalLink className="w-2.5 h-2.5" /> צפייה
@@ -514,6 +520,11 @@ export default function DocumentsPage() {
                         {doc.valid_from && <span>מ-{formatDateShort(doc.valid_from)}</span>}
                         {doc.valid_until && <span>עד {formatDateShort(doc.valid_until)}</span>}
                       </div>
+                      {doc.file_type === 'gmail' && (
+                        <p className="text-[10px] text-orange-500 mt-1.5 flex items-center gap-1">
+                          <Mail className="w-3 h-3" /> ייובא מ-Gmail
+                        </p>
+                      )}
                       {doc.file_url && (
                         <p className="text-[10px] text-primary mt-1.5 flex items-center gap-1">
                           <ExternalLink className="w-3 h-3" /> לחץ לצפייה במסמך

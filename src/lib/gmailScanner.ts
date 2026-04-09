@@ -322,72 +322,93 @@ export async function scanTripGmail(
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
   }
 
+  const categoryMap: Record<string, string> = {
+    hotel: 'hotel', flight: 'flight', car_rental: 'taxi',
+    activity: 'activity', tour: 'activity', insurance: 'other', other: 'other',
+  }
+
+  const docTypeMap: Record<string, string> = {
+    hotel: 'hotel', flight: 'flight', car_rental: 'other',
+    activity: 'activity', tour: 'activity', insurance: 'insurance', other: 'other',
+  }
+
   // ── 5. Scan each connected Gmail account ─────────────────────────────────
   for (const conn of connections as GmailConnection[]) {
     try {
       const accessToken = await getValidToken(supabase, conn)
-      const messages = await searchBookingEmails(accessToken, daysSearched, 15, destQuery)
+      // Limit to 8 emails — processed in parallel, so speed is ~equal to 1 email
+      const messages = await searchBookingEmails(accessToken, daysSearched, 8, destQuery)
       stats.scanned += messages.length
-      console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for trip ${t.name}`)
+      console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
-      // Use processMessages with forceTripId — but we need deduplication here
-      // so we process inline with a confidence threshold of 0.5
-      for (const msg of messages) {
-        try {
+      // ── Process ALL emails in parallel (fetch body + Claude parse simultaneously)
+      const parsed = await Promise.allSettled(
+        messages.map(async (msg) => {
+          // Fetch email body (skip PDF downloads — too slow)
           let body = ''
-          try { body = await getEmailBody(accessToken, msg.id) } catch { continue }
+          try { body = await getEmailBody(accessToken, msg.id) } catch { return null }
+          stats.scannedEmailOnly++
           const emailContent = body || msg.snippet
 
-          let pdfBase64: string | undefined
-          try {
-            const atts = await getEmailAttachments(accessToken, msg.id)
-            if (atts.length > 0) {
-              const pdf = atts.sort((a, b) => b.size - a.size)[0]
-              pdfBase64 = await downloadAttachment(accessToken, msg.id, pdf.attachmentId)
-              stats.scannedWithPDF++
-            } else { stats.scannedEmailOnly++ }
-          } catch { stats.scannedEmailOnly++ }
+          // Parse with Claude (haiku only for speed)
+          const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
+          if (!parsedBooking || parsedBooking.confidence < 0.5) return null
 
-          const parsedBooking = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
-          if (!parsedBooking) continue
-          stats.parsed++
-          if (parsedBooking.confidence < 0.5) continue
+          return { msg, parsedBooking, emailContent }
+        }),
+      )
 
-          // Deduplication by confirmation number
+      // ── Write successful parses to DB ─────────────────────────────────────
+      for (const result of parsed) {
+        if (result.status !== 'fulfilled' || !result.value) continue
+        const { msg, parsedBooking, emailContent } = result.value
+        stats.parsed++
+
+        try {
+          // Deduplication: skip if a document with same booking_ref already exists
           if (parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {
-            const { data: existing } = await supabase
-              .from('email_ingests').select('id')
+            const { data: existingDoc } = await supabase
+              .from('documents')
+              .select('id')
               .eq('trip_id', tripId)
-              .contains('parsed_data', { confirmation_number: parsedBooking.confirmation_number })
+              .eq('booking_ref', parsedBooking.confirmation_number)
               .maybeSingle()
-            if (existing) continue
+            if (existingDoc) continue
           }
 
-          const rawText = htmlToText(emailContent).slice(0, 10000)
-          const { data: ingestRecord } = await supabase
-            .from('email_ingests')
+          const bookingTitle =
+            parsedBooking.hotel_name ||
+            (parsedBooking.airline && parsedBooking.flight_number
+              ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
+            parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
+
+          // ── Create a Document record so it shows in the documents page ──
+          const { data: docRecord, error: docError } = await supabase
+            .from('documents')
             .insert({
-              user_id: userId, from_address: msg.from, subject: msg.subject,
-              raw_html: null, raw_text: rawText, parsed_data: parsedBooking,
-              trip_id: tripId, match_score: 100, match_reason: 'ייבוא ידני לטיול',
-              status: 'matched', source: 'gmail_trip_import',
+              trip_id:        tripId,
+              name:           bookingTitle,
+              doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
+              file_type:      'gmail',          // identifies this as a Gmail import
+              booking_ref:    parsedBooking.confirmation_number !== 'N/A'
+                                ? parsedBooking.confirmation_number : null,
+              valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
+              valid_until:    parsedBooking.check_out || parsedBooking.return_date   || null,
+              flight_number:  parsedBooking.flight_number || null,
+              notes:          `ייובא מ-Gmail\nשולח: ${msg.from}\n${parsedBooking.summary || ''}`,
+              extracted_data: parsedBooking as unknown as Record<string, unknown>,
             })
-            .select('id').single()
+            .select('id')
+            .single()
 
-          if (ingestRecord) {
-            const categoryMap: Record<string, string> = {
-              hotel: 'hotel', flight: 'flight', car_rental: 'taxi',
-              activity: 'activity', tour: 'activity', insurance: 'other', other: 'other',
-            }
-            const expenseTitle =
-              parsedBooking.hotel_name ||
-              (parsedBooking.airline && parsedBooking.flight_number
-                ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
-              parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
+          if (docError) console.error('[gmailScanner/trip] Document insert error:', docError)
 
-            const { data: expense, error: expenseError } = await supabase.from('expenses').insert({
+          // ── Create an Expense record ──────────────────────────────────────
+          const { data: expense, error: expenseError } = await supabase
+            .from('expenses')
+            .insert({
               trip_id:      tripId,
-              title:        expenseTitle,
+              title:        bookingTitle,
               amount:       parsedBooking.amount || 0,
               currency:     parsedBooking.currency || 'ILS',
               amount_ils:   parsedBooking.amount || 0,
@@ -396,22 +417,30 @@ export async function scanTripGmail(
               notes:        `מספר אישור: ${parsedBooking.confirmation_number}\nייובא מ-Gmail: ${msg.from}`,
               source:       'document',
               is_paid:      true,
-            }).select('id').single()
+            })
+            .select('id')
+            .single()
 
-            if (expenseError) {
-              console.error('[gmailScanner/trip] Expense insert error:', expenseError)
-            }
+          if (expenseError) console.error('[gmailScanner/trip] Expense insert error:', expenseError)
 
-            if (expense) {
-              // Best-effort: link email_ingest → expense (column may not exist on all deployments)
-              await supabase.from('email_ingests')
-                .update({ expense_id: expense.id, status: 'processed' })
-                .eq('id', ingestRecord.id)
-              stats.created++
-            }
-          }
+          // ── Save to email_ingests for audit trail ─────────────────────────
+          const rawText = htmlToText(emailContent).slice(0, 10000)
+          await supabase.from('email_ingests').insert({
+            user_id:      userId,
+            from_address: msg.from,
+            subject:      msg.subject,
+            raw_text:     rawText,
+            parsed_data:  parsedBooking,
+            trip_id:      tripId,
+            match_score:  100,
+            match_reason: 'ייבוא ידני לטיול',
+            status:       expense ? 'processed' : 'matched',
+            source:       'gmail_trip_import',
+          })
+
+          if (docRecord || expense) stats.created++
         } catch (err) {
-          console.error(`[gmailScanner/trip] Error processing ${msg.id}:`, err)
+          console.error(`[gmailScanner/trip] DB write error for ${msg.id}:`, err)
         }
       }
     } catch (err) {
