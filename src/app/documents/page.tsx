@@ -276,6 +276,29 @@ export default function DocumentsPage() {
     fetchDocuments()
   }
 
+  // ── Delete duplicate documents (same name + same valid_from) ───────────────
+  const handleDeleteDuplicates = async () => {
+    // Sort oldest-first so we keep the first import and delete later duplicates
+    const sorted = [...documents].sort(
+      (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
+    )
+    const seen   = new Set<string>()
+    const toDelete: string[] = []
+    for (const doc of sorted) {
+      const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
+      if (key === '|') continue          // skip docs with neither name nor date
+      if (seen.has(key)) toDelete.push(doc.id)
+      else seen.add(key)
+    }
+    if (toDelete.length === 0) { toast('אין כפילויות'); return }
+    const confirmed = window.confirm(`נמצאו ${toDelete.length} כפילויות. למחוק?`)
+    if (!confirmed) return
+    const { error } = await supabase.from('documents').delete().in('id', toDelete)
+    if (error) { toast.error('שגיאה במחיקה'); return }
+    toast.success(`נמחקו ${toDelete.length} כפילויות ✓`)
+    setDocuments(prev => prev.filter(d => !toDelete.includes(d.id)))
+  }
+
   const filtered = documents.filter(d => {
     if (filterType && d.doc_type !== filterType) return false
     if (filterTraveler && d.traveler_id !== filterTraveler) return false
@@ -463,6 +486,29 @@ export default function DocumentsPage() {
               </button>
             ))}
           </div>
+
+          {/* Delete duplicates button — shown only when duplicates exist */}
+          {(() => {
+            const seen = new Set<string>()
+            let dupCount = 0
+            for (const doc of [...documents].sort(
+              (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
+            )) {
+              const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
+              if (key === '|') continue
+              if (seen.has(key)) dupCount++
+              else seen.add(key)
+            }
+            return dupCount > 0 ? (
+              <button
+                onClick={handleDeleteDuplicates}
+                className="flex items-center gap-1.5 bg-red-50 text-red-500 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-transform"
+                title={`נמצאו ${dupCount} כפילויות`}>
+                <Trash2 className="w-4 h-4" />
+                {dupCount} כפולים
+              </button>
+            ) : null
+          })()}
 
           {/* Reprocess all button */}
           <button

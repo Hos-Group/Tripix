@@ -141,7 +141,7 @@ function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_de
     const country = (booking.destination_country || '').toLowerCase().trim()
 
     if (city.length >= 3 || country.length >= 3) {
-      // At least one of city/country was extracted — check if it matches trip destination
+      // At least one of city/country was extracted — must match trip destination
       const matchesAlias = (text: string) =>
         text.length >= 3 &&
         aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
@@ -155,8 +155,16 @@ function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_de
         )
         return 'wrong_dest'
       }
+    } else {
+      // No destination extracted by AI — only accept if confidence is very high (≥ 0.8)
+      // This prevents random high-confidence emails (newsletters, promos) from slipping through
+      if (booking.confidence < 0.8) {
+        console.log(
+          `[gmailScanner/trip] ✗ no destination + conf ${booking.confidence} < 0.8: "${booking.vendor}"`,
+        )
+        return 'wrong_dest'
+      }
     }
-    // Destination not extracted (city+country both empty/short) → trust confidence score
   }
 
   // ── Date window: 180 days before trip start → 7 days after trip end ───────
@@ -589,22 +597,46 @@ export async function scanTripGmail(
         stats.parsed++
 
         try {
-          // Deduplication: skip if a document with same booking_ref already exists
+          // Compute booking title first — used for both dedup and DB insert
+          const bookingTitle =
+            parsedBooking.hotel_name ||
+            (parsedBooking.airline && parsedBooking.flight_number
+              ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
+            parsedBooking.vendor || msg.subject.slice(0, 60)
+
+          const dedupDate = parsedBooking.check_in || parsedBooking.departure_date
+
+          // ── Deduplication 1: same booking_ref ─────────────────────────────
           if (parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {
-            const { data: existingDoc } = await supabase
+            const { data: existingByRef } = await supabase
               .from('documents')
               .select('id')
               .eq('trip_id', tripId)
               .eq('booking_ref', parsedBooking.confirmation_number)
               .maybeSingle()
-            if (existingDoc) { stats.filteredDuplicate++; continue }
+            if (existingByRef) {
+              console.log(`[gmailScanner/trip] skip dup by ref: "${bookingTitle}" ref=${parsedBooking.confirmation_number}`)
+              stats.filteredDuplicate++; continue
+            }
           }
 
-          const bookingTitle =
-            parsedBooking.hotel_name ||
-            (parsedBooking.airline && parsedBooking.flight_number
-              ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
-            parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
+          // ── Deduplication 2: same name + same check-in/departure date ─────
+          // Booking.com / airlines send 10+ emails per booking (confirmation,
+          // payment, modification, reminder…). Without this check, each email
+          // would create a separate document for the same reservation.
+          if (bookingTitle && dedupDate) {
+            const { data: existingByName } = await supabase
+              .from('documents')
+              .select('id')
+              .eq('trip_id', tripId)
+              .eq('name', bookingTitle)
+              .eq('valid_from', dedupDate)
+              .maybeSingle()
+            if (existingByName) {
+              console.log(`[gmailScanner/trip] skip dup by name+date: "${bookingTitle}" ${dedupDate}`)
+              stats.filteredDuplicate++; continue
+            }
+          }
 
           const safeId = msg.id.replace(/[^a-zA-Z0-9]/g, '')
           let fileUrl: string | null = null
