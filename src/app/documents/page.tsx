@@ -94,12 +94,26 @@ export default function DocumentsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ trip_id: currentTrip.id }),
       })
-      const json = await res.json()
-      if (!res.ok) { setGmailError(json.error || 'שגיאה בסריקה'); return }
-      setGmailResult({ scanned: json.scanned, created: json.created })
-      if (json.created > 0) fetchDocuments()
-    } catch {
-      setGmailError('שגיאת רשת — נסה שוב')
+
+      // Safely parse JSON — a 504 timeout returns HTML, not JSON
+      let json: Record<string, unknown> = {}
+      try {
+        json = await res.json()
+      } catch {
+        if (res.status === 504 || res.status === 524) {
+          setGmailError('הסריקה ארכה יותר מדי — נסה שוב (המיילים שנמצאו ייבאו בפעם הבאה)')
+        } else {
+          setGmailError(`שגיאת שרת (${res.status}) — נסה שוב`)
+        }
+        return
+      }
+
+      if (!res.ok) { setGmailError((json.error as string) || 'שגיאה בסריקה'); return }
+      setGmailResult({ scanned: json.scanned as number, created: json.created as number })
+      if ((json.created as number) > 0) fetchDocuments()
+    } catch (err) {
+      console.error('[gmail scan] network error:', err)
+      setGmailError('שגיאת רשת — בדוק חיבור לאינטרנט ונסה שוב')
     } finally {
       setGmailScanning(false)
     }

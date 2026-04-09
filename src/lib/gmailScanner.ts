@@ -322,7 +322,7 @@ export async function scanTripGmail(
   for (const conn of connections as GmailConnection[]) {
     try {
       const accessToken = await getValidToken(supabase, conn)
-      const messages = await searchBookingEmails(accessToken, daysSearched, 100, destQuery)
+      const messages = await searchBookingEmails(accessToken, daysSearched, 15, destQuery)
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for trip ${t.name}`)
 

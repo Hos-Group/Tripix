@@ -21,6 +21,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { scanTripGmail } from '@/lib/gmailScanner'
 
+// Allow up to 60 seconds — scanning + Claude parsing takes time
+export const maxDuration = 60
+
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
