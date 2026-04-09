@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -21,8 +21,9 @@ export default function DocumentsPage() {
   useEffect(() => {
     loadTravelers().then(setTravelers)
   }, [])
-  const [documents, setDocuments] = useState<Document[]>([])
-  const [loading, setLoading] = useState(true)
+  const [documents,    setDocuments]    = useState<Document[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [reprocessing, setReprocessing] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<DocType | null>(null)
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'grid'>('list')
@@ -91,6 +92,29 @@ export default function DocumentsPage() {
 
     toast.success('המסמך נמחק לצמיתות')
     setDocuments(prev => prev.filter(d => d.id !== id))
+  }
+
+  const handleReprocess = async (id: string) => {
+    setReprocessing(id)
+    try {
+      const res = await fetch('/api/documents/reprocess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId: id }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        toast.error('שגיאה בעיבוד מחדש: ' + (json.error || ''))
+      } else {
+        toast.success('המסמך עובד מחדש בהצלחה!')
+        // Refresh documents list to reflect updated extracted_data
+        fetchDocuments()
+      }
+    } catch {
+      toast.error('שגיאת רשת')
+    } finally {
+      setReprocessing(null)
+    }
   }
 
   const filtered = documents.filter(d => {
@@ -303,10 +327,22 @@ export default function DocumentsPage() {
                         </p>
                       )}
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                      className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all flex-shrink-0">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      {/* Re-process button — available for hotel and flight docs */}
+                      {(doc.doc_type === 'hotel' || doc.doc_type === 'flight' || doc.doc_type === 'activity') && doc.file_url && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleReprocess(doc.id) }}
+                          disabled={reprocessing === doc.id}
+                          className="p-2 text-gray-300 hover:text-indigo-500 active:scale-95 transition-all"
+                          title="עיבוד מחדש עם AI">
+                          <RefreshCw className={`w-3.5 h-3.5 ${reprocessing === doc.id ? 'animate-spin text-indigo-500' : ''}`} />
+                        </button>
+                      )}
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                        className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               ))}

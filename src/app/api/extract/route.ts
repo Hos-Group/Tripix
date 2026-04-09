@@ -47,8 +47,19 @@ const DOCUMENT_PROMPT = `אתה מנתח מסמכי הזמנה לטיול תאי
   "connection_city": "עיר קונקשיין אם יש",
   "connection_duration_minutes": 0,
   "hotel_name": "שם מלון",
+  "room_type": "סוג החדר (Deluxe/Superior/Suite וכד׳)",
   "check_in": "YYYY-MM-DD",
   "check_out": "YYYY-MM-DD",
+  "nights": 0,
+  "additional_services": [
+    {
+      "service_type": "airport_transfer|vip_lounge|shuttle|meal|spa|activity|other",
+      "name": "שם השירות",
+      "date": "YYYY-MM-DD",
+      "time": "HH:MM",
+      "description": "תיאור קצר"
+    }
+  ],
   "valid_until": "YYYY-MM-DD",
   "passport_number": "מספר דרכון",
   "full_name": "שם מלא באנגלית כפי שמופיע בדרכון",
@@ -67,6 +78,18 @@ const DOCUMENT_PROMPT = `אתה מנתח מסמכי הזמנה לטיול תאי
 - התעלם לחלוטין מ: Subtotal, Base Fare, Fare, מחיר בסיס, מחיר לפני מסים, Service Fee (אם הוא לא כלול בסה"כ)
 - אם יש כמה שורות "Total" — קח תמיד את הגדולה ביותר / האחרונה שמייצגת את הסכום הכולל שנגבה
 - אם רואה "You paid" / "Charged" / "Payment" — זה הסכום הנכון
+חשוב למלונות — קרא בעיון:
+- hotel_name = שם המלון המלא
+- check_in = תאריך צ׳ק אין בפורמט YYYY-MM-DD
+- check_out = תאריך צ׳ק אאוט בפורמט YYYY-MM-DD
+- nights = מספר הלילות (חשב מהפרש בין check_out ל-check_in)
+- room_type = סוג החדר אם מצוין
+- additional_services = מערך של כל השירותים הנוספים שנכללו בהזמנה:
+  * העברות שדה תעופה (airport transfer/shuttle)
+  * שירות VIP / לאונג׳
+  * ארוחות (breakfast included, half board וכד׳) — ציין כשירות
+  * כל שירות אחר שמופיע בהזמנה מחוץ ללינה עצמה
+  * לכל שירות: service_type, name, date (תאריך השירות), time, description
 חשוב לטיסות — קרא בעיון:
 - total_amount = הסכום הסופי האחרון שהלקוח שילם (Grand Total / Total Amount Due). התעלם מ-Base Fare, Taxes, Fees כשורות נפרדות.
 - legs = מערך של כל רגלי הטיסה בנפרד, כולל:

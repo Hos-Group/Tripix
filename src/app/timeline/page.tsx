@@ -11,13 +11,25 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, formatDate } from '@/lib/utils'
-import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL } from '@/types'
+import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document as TripDoc } from '@/types'
 import { useTrip } from '@/contexts/TripContext'
 import { eachDayOfInterval, parseISO, format, isToday, differenceInDays } from 'date-fns'
 import CurrencySelector from '@/components/CurrencySelector'
 import DocumentViewer  from '@/components/DocumentViewer'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+/** אירוע שנגזר ממסמך (מלון/שירות) ומוצג בציר הזמן */
+interface DocEvent {
+  type:     'hotel_checkin' | 'hotel_stay' | 'hotel_checkout' | 'service'
+  title:    string
+  subtitle?: string
+  icon:     string
+  color:    string
+  bgColor:  string
+  docId:    string
+}
+
 interface DayData {
   date:      string
   dayNumber: number
@@ -25,6 +37,7 @@ interface DayData {
   isPast:    boolean
   isFuture:  boolean
   expenses:  Expense[]
+  docEvents: DocEvent[]
   totalIls:  number
 }
 
@@ -32,12 +45,30 @@ type FilterCat  = 'all' | Category
 type ViewMode   = 'timeline' | 'summary'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function buildDays(startDate: string, endDate: string, expenses: Expense[]): DayData[] {
+
+/** מחזיר icon ו-service_type לפי סוג שירות */
+function serviceIcon(serviceType: string): string {
+  switch (serviceType) {
+    case 'airport_transfer': return '🚐'
+    case 'vip_lounge':       return '⭐'
+    case 'shuttle':          return '🚌'
+    case 'meal':             return '🍽️'
+    case 'spa':              return '💆'
+    case 'activity':         return '🎯'
+    default:                 return '✨'
+  }
+}
+
+function buildDays(
+  startDate: string,
+  endDate:   string,
+  expenses:  Expense[],
+  documents: TripDoc[],
+): DayData[] {
   const tripStart = parseISO(startDate)
   const tripEnd   = parseISO(endDate)
 
   // Extend range to cover any expense dates that fall outside the trip window
-  // (e.g. a return flight whose date == trip end, or expenses entered before departure)
   const expDates = expenses
     .map(e => parseISO(e.expense_date))
     .filter(d => !isNaN(d.getTime()))
@@ -56,8 +87,80 @@ function buildDays(startDate: string, endDate: string, expenses: Expense[]): Day
     const dateStr  = format(day, 'yyyy-MM-dd')
     const dayExps  = expenses.filter(e => e.expense_date === dateStr)
     const totalIls = dayExps.reduce((s, e) => s + (e.amount_ils || 0), 0)
-    // Day number relative to trip start (day before trip = -1, etc.)
     const dayNumber = differenceInDays(day, tripStart) + 1
+
+    // ── Build document events for this day ──────────────────────────────────
+    const docEvents: DocEvent[] = []
+
+    for (const doc of documents) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ext = doc.extracted_data as any
+
+      // ── Hotel events ───────────────────────────────────────────────────────
+      if (doc.doc_type === 'hotel') {
+        const hotelName  = ext?.hotel_name || doc.name
+        const checkIn    = ext?.check_in  as string | undefined
+        const checkOut   = ext?.check_out as string | undefined
+        const totalNights = checkIn && checkOut
+          ? differenceInDays(parseISO(checkOut), parseISO(checkIn))
+          : 0
+
+        if (checkIn === dateStr) {
+          docEvents.push({
+            type:     'hotel_checkin',
+            title:    `צ׳ק אין — ${hotelName}`,
+            subtitle: ext?.room_type || undefined,
+            icon:     '🏨',
+            color:    '#16a34a',
+            bgColor:  '#f0fdf4',
+            docId:    doc.id,
+          })
+        } else if (checkOut === dateStr) {
+          docEvents.push({
+            type:     'hotel_checkout',
+            title:    `צ׳ק אאוט — ${hotelName}`,
+            subtitle: undefined,
+            icon:     '🏁',
+            color:    '#dc2626',
+            bgColor:  '#fef2f2',
+            docId:    doc.id,
+          })
+        } else if (checkIn && checkOut && dateStr > checkIn && dateStr < checkOut) {
+          const nightNum = differenceInDays(parseISO(dateStr), parseISO(checkIn))
+          docEvents.push({
+            type:     'hotel_stay',
+            title:    hotelName,
+            subtitle: `לילה ${nightNum} מתוך ${totalNights}`,
+            icon:     '🌙',
+            color:    '#16a34a',
+            bgColor:  '#f0fdf4',
+            docId:    doc.id,
+          })
+        }
+      }
+
+      // ── Additional services (from any document type) ────────────────────
+      const services = ext?.additional_services as Array<{
+        service_type: string; name: string; date?: string; time?: string; description?: string
+      }> | undefined
+
+      if (services?.length) {
+        for (const svc of services) {
+          if (svc.date === dateStr) {
+            docEvents.push({
+              type:     'service',
+              title:    svc.name,
+              subtitle: svc.description || svc.time || undefined,
+              icon:     serviceIcon(svc.service_type),
+              color:    '#7c3aed',
+              bgColor:  '#f5f3ff',
+              docId:    doc.id,
+            })
+          }
+        }
+      }
+    }
+
     return {
       date:      dateStr,
       dayNumber,
@@ -65,6 +168,7 @@ function buildDays(startDate: string, endDate: string, expenses: Expense[]): Day
       isPast:    day < today && !isToday(day),
       isFuture:  day > today,
       expenses:  dayExps,
+      docEvents,
       totalIls,
     }
   })
@@ -199,6 +303,7 @@ export default function TimelinePage() {
   const { currentTrip } = useTrip()
 
   const [expenses,    setExpenses]    = useState<Expense[]>([])
+  const [documents,   setDocuments]   = useState<TripDoc[]>([])
   const [loading,     setLoading]     = useState(true)
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
   const [filterCat,   setFilterCat]   = useState<FilterCat>('all')
@@ -212,15 +317,16 @@ export default function TimelinePage() {
   const [viewerDoc,    setViewerDoc]    = useState<{ url: string; title: string; docType: string } | null>(null)
   const [loadingDocId, setLoadingDocId] = useState<string | null>(null)
 
-  // ── Fetch expenses ─────────────────────────────────────────────────────────
+  // ── Fetch expenses + documents ─────────────────────────────────────────────
   const fetchExpenses = useCallback(async () => {
-    if (!currentTrip) { setExpenses([]); setLoading(false); return }
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('trip_id', currentTrip.id)
-      .order('expense_date', { ascending: true })
-    if (!error) setExpenses(data || [])
+    if (!currentTrip) { setExpenses([]); setDocuments([]); setLoading(false); return }
+
+    const [{ data: expData, error: expErr }, { data: docData }] = await Promise.all([
+      supabase.from('expenses').select('*').eq('trip_id', currentTrip.id).order('expense_date', { ascending: true }),
+      supabase.from('documents').select('*').eq('trip_id', currentTrip.id),
+    ])
+    if (!expErr) setExpenses(expData || [])
+    setDocuments(docData || [])
     setLoading(false)
   }, [currentTrip])
 
@@ -229,8 +335,8 @@ export default function TimelinePage() {
   // ── Derived data ──────────────────────────────────────────────────────────
   const days = useMemo(() => {
     if (!currentTrip) return []
-    return buildDays(currentTrip.start_date, currentTrip.end_date, expenses)
-  }, [currentTrip, expenses])
+    return buildDays(currentTrip.start_date, currentTrip.end_date, expenses, documents)
+  }, [currentTrip, expenses, documents])
 
   const filteredDays = useMemo(() => {
     if (filterCat === 'all') return days
@@ -714,10 +820,11 @@ export default function TimelinePage() {
             {/* Day list */}
             <div className="space-y-2">
               {filteredDays.map((day) => {
-                const isExpanded = expandedDay === day.date
-                const progress   = maxDayTotal > 0 ? day.totalIls / maxDayTotal : 0
-                const isHighest  = day.date === highestDay.date && day.totalIls > 0 && filterCat === 'all'
-                const cats       = Array.from(new Set(day.expenses.map(e => e.category))) as Category[]
+                const isExpanded  = expandedDay === day.date
+                const progress    = maxDayTotal > 0 ? day.totalIls / maxDayTotal : 0
+                const isHighest   = day.date === highestDay.date && day.totalIls > 0 && filterCat === 'all'
+                const cats        = Array.from(new Set(day.expenses.map(e => e.category))) as Category[]
+                const hasContent  = day.expenses.length > 0 || day.docEvents.length > 0
 
                 return (
                   <motion.div key={day.date}
@@ -725,11 +832,11 @@ export default function TimelinePage() {
                     animate={{ opacity: 1, y: 0 }}>
 
                     <button
-                      onClick={() => day.expenses.length > 0 && setExpandedDay(isExpanded ? null : day.date)}
+                      onClick={() => hasContent && setExpandedDay(isExpanded ? null : day.date)}
                       className={`w-full bg-white rounded-2xl px-3 py-2.5 shadow-sm text-right transition-all
                         ${day.isToday ? 'ring-2 ring-primary ring-offset-1' : ''}
-                        ${day.expenses.length > 0 ? 'active:scale-[0.99]' : 'cursor-default'}
-                        ${day.isFuture && day.expenses.length === 0 ? 'opacity-40' : ''}
+                        ${hasContent ? 'active:scale-[0.99]' : 'cursor-default'}
+                        ${day.isFuture && !hasContent ? 'opacity-40' : ''}
                       `}
                     >
                       <div className="flex items-center gap-3">
@@ -779,6 +886,22 @@ export default function TimelinePage() {
                             </div>
                           )}
 
+                          {/* doc events badges (check-in / checkout / services) */}
+                          {day.docEvents.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-1">
+                              {day.docEvents.slice(0, 3).map((ev, i) => (
+                                <span key={i}
+                                  className="text-[11px] flex items-center gap-0.5 px-1.5 py-0.5 rounded-full font-medium"
+                                  style={{ backgroundColor: ev.bgColor, color: ev.color }}>
+                                  {ev.icon} {ev.type === 'hotel_stay' ? ev.subtitle : ev.title.length > 20 ? ev.title.slice(0, 20) + '…' : ev.title}
+                                </span>
+                              ))}
+                              {day.docEvents.length > 3 && (
+                                <span className="text-[10px] text-gray-400">+{day.docEvents.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+
                           {cats.length > 0 ? (
                             <div className="flex items-center gap-1">
                               {cats.map(cat => (
@@ -790,18 +913,18 @@ export default function TimelinePage() {
                               ))}
                               <span className="text-[10px] text-gray-400 mr-auto">{day.expenses.length} פריטים</span>
                             </div>
-                          ) : (
+                          ) : day.docEvents.length === 0 ? (
                             <p className="text-[11px] text-gray-300">אין הוצאות</p>
-                          )}
+                          ) : null}
                         </div>
 
-                        {day.expenses.length > 0 && (
+                        {hasContent && (
                           <ChevronDown className={`w-4 h-4 text-gray-300 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         )}
                       </div>
                     </button>
 
-                    {/* Expanded expense list */}
+                    {/* Expanded content: doc events + expenses */}
                     <AnimatePresence>
                       {isExpanded && (
                         <motion.div
@@ -810,6 +933,40 @@ export default function TimelinePage() {
                           exit={{ opacity: 0, height: 0 }}
                           className="overflow-hidden">
                           <div className="pt-1.5 pr-4 pl-1 space-y-1.5">
+
+                            {/* ── Document events (hotel / services) ──────────── */}
+                            {day.docEvents.map((ev, i) => (
+                              <div key={`ev-${i}`}
+                                className="flex items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm border"
+                                style={{ backgroundColor: ev.bgColor, borderColor: ev.color + '30' }}>
+                                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                                  style={{ backgroundColor: ev.color + '20' }}>
+                                  {ev.icon}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold truncate" style={{ color: ev.color }}>{ev.title}</p>
+                                  {ev.subtitle && (
+                                    <p className="text-[10px] text-gray-500">{ev.subtitle}</p>
+                                  )}
+                                </div>
+                                {/* paperclip to open the source document */}
+                                <button
+                                  onClick={async () => {
+                                    const { data } = await supabase
+                                      .from('documents')
+                                      .select('file_url, name, doc_type')
+                                      .eq('id', ev.docId)
+                                      .single()
+                                    if (data?.file_url) setViewerDoc({ url: data.file_url, title: data.name, docType: data.doc_type })
+                                  }}
+                                  className="w-6 h-6 flex items-center justify-center rounded-lg bg-white/60 active:scale-90 flex-shrink-0"
+                                  title="צפה במסמך">
+                                  <Paperclip className="w-3 h-3" style={{ color: ev.color }} />
+                                </button>
+                              </div>
+                            ))}
+
+                            {/* ── Expense rows ────────────────────────────────── */}
                             {day.expenses.map(exp => {
                               const meta      = CATEGORY_META[exp.category as Category]
                               const isEditing  = editingId === exp.id
