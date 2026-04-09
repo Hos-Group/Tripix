@@ -135,8 +135,12 @@ export async function searchBookingEmails(
   const queryParts = [
     // Subject keyword OR known travel domain — wide net, Claude does the filtering
     `(subject:(${subjectTerms}) OR (${senderDomains}))`,
+    // Search ALL folders (inbox, sent, promotions, updates, social, drafts…)
+    // but explicitly exclude Trash and Spam
+    'in:anywhere',
+    '-in:trash',
+    '-in:spam',
     `newer_than:${daysBack}d`,
-    // NOTE: NOT excluding -category:promotions — some airlines/hotels land there
   ]
   // Destination terms are truly optional — just boost relevance, don't block
   if (extraQuery.trim()) queryParts.push(`(${extraQuery.trim()} OR has:attachment)`)
