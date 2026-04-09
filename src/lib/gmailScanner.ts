@@ -27,7 +27,15 @@ import {
   getEmailAttachments,
   downloadAttachment,
 } from './gmailClient'
-import { parseBookingEmail, htmlToText, ParsedBooking } from './emailParser'
+import {
+  parseBookingEmail,
+  parseTripBookingEmail,
+  quickPreFilter,
+  isKnownBookingSender,
+  htmlToText,
+  ParsedBooking,
+  TripContext,
+} from './emailParser'
 import { matchTripToBooking, TripRecord } from './tripMatcher'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -784,48 +792,104 @@ export async function scanTripGmail(
         stats.filteredDuplicate += skippedByMsgId
       }
 
-      // ── PASS 1: Fetch bodies + parse with Claude (text-only, no PDFs yet) ──
-      // Fast (~5-10s for 20 emails in parallel). PDFs downloaded only for relevant ones.
+      // ── PASS 1: Pre-filter + context-aware Claude parse ───────────────────
+      // Steps per email:
+      //   a. quickPreFilter — heuristic check (subject/sender) before calling Claude
+      //      → 'skip' exits immediately, saving 60-70% of Claude API calls
+      //   b. parseTripBookingEmail — context-aware Claude parse with trip destination,
+      //      date range and traveler names → much more accurate trip_relevant detection
       //
-      // Confidence tiers:
-      //   < 0.35  → filteredLowConf (marketing / clearly not a booking)
-      //   0.35–0.7 → borderline: save to email_ingests as 'pending_review', ask user
-      //   ≥ 0.7   → auto-import (pass to Phase 2 for PDF download)
+      // Confidence tiers (with known-sender boost):
+      //   < LOW_CONF_FLOOR  → filteredLowConf (clear marketing / non-booking)
+      //   LOW_CONF_FLOOR–AUTO_THRESHOLD → borderline → pending_review (ask user)
+      //   ≥ AUTO_THRESHOLD  → auto-import (pass to Pass 2 for PDF download)
+      //
+      // Known-sender boost: emails from booking.com / elal / etc. get a 0.10
+      // confidence boost applied before threshold comparison, because their emails
+      // are structurally valid bookings even when text is light.
+
+      const tripCtx: TripContext = {
+        destination:   t.destination,
+        startDate:     t.start_date,
+        endDate:       t.end_date,
+        travelerNames: t.travelers.map(tr => tr.name).filter(Boolean),
+      }
+
+      // Thresholds — slightly lower for known senders
+      const AUTO_THRESHOLD  = 0.70   // ≥ this → auto-import
+      const PENDING_FLOOR   = 0.35   // ≥ this → pending review
+      const KNOWN_BOOST     = 0.10   // added to confidence for known booking domains
+
       type Pass1Item       = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
       type BorderlineItem  = { skip: 'borderline'; msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string }
+
       const pass1Results = await Promise.allSettled(
         newMessages.map(async (msg) => {
+          // ── a. Quick heuristic pre-filter (no API call) ─────────────────
+          const preFilter = quickPreFilter(msg.subject, msg.from, msg.snippet)
+          if (preFilter === 'skip') {
+            console.log(`[gmailScanner/trip] ⏭ pre-filter SKIP: "${msg.subject.slice(0, 60)}"`)
+            return { skip: 'low_conf' as const, conf: 0 }
+          }
+
+          // ── b. Fetch email body ──────────────────────────────────────────
           let body = ''
           try { body = await getEmailBody(accessToken, msg.id) } catch { return { skip: 'fetch_error' as const } }
           const emailContent = body || msg.snippet
 
-          // Text-only parse — fast, no PDF yet
-          const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
-          if (!parsedBooking || parsedBooking.confidence < 0.35) {
-            return { skip: 'low_conf' as const, conf: parsedBooking?.confidence ?? 0 }
+          // ── c. Context-aware Claude parse ────────────────────────────────
+          // Uses trip destination/dates/travelers for much better accuracy.
+          const parsed = await parseTripBookingEmail(emailContent, msg.subject, tripCtx)
+          if (!parsed) return { skip: 'low_conf' as const, conf: 0 }
+
+          // ── d. Sender confidence boost ───────────────────────────────────
+          const knownSender = isKnownBookingSender(msg.from)
+          const effectiveConf = knownSender
+            ? Math.min(1.0, parsed.confidence + KNOWN_BOOST)
+            : parsed.confidence
+
+          if (knownSender && effectiveConf !== parsed.confidence) {
+            console.log(
+              `[gmailScanner/trip] 🔑 known sender boost: ${parsed.confidence} → ${effectiveConf} (${msg.from.split('@')[1]})`,
+            )
           }
 
-          const relevance = checkRelevance(parsedBooking, t)
-          if (relevance !== 'ok') return { skip: relevance as 'wrong_dest' | 'wrong_date' }
+          // ── e. Confidence floor check ────────────────────────────────────
+          if (effectiveConf < PENDING_FLOOR) {
+            return { skip: 'low_conf' as const, conf: effectiveConf }
+          }
 
-          // Borderline confidence — queue for user confirmation
-          if (parsedBooking.confidence < 0.7) {
+          // ── f. Trip relevance check ──────────────────────────────────────
+          // Context-aware parse sets trip_relevant directly.
+          // Fall back to destination/date check for safety.
+          const tripRelevant = parsed.trip_relevant !== false
+          if (!tripRelevant) {
+            const relevance = checkRelevance(parsed, t)
+            if (relevance !== 'ok') {
+              return { skip: relevance as 'wrong_dest' | 'wrong_date' }
+            }
+          }
+
+          // Update parsed booking with effective confidence for downstream use
+          const parsedBooking: ParsedBooking = { ...parsed, confidence: effectiveConf }
+
+          // ── g. Borderline → pending review ──────────────────────────────
+          if (effectiveConf < AUTO_THRESHOLD) {
             console.log(
               `[gmailScanner/trip] ⚠ BORDERLINE: type=${parsedBooking.booking_type}` +
-              ` vendor="${parsedBooking.vendor}" conf=${parsedBooking.confidence} → pending_review`,
+              ` vendor="${parsedBooking.vendor}" conf=${effectiveConf}` +
+              ` tripRelevant=${tripRelevant} → pending_review`,
             )
             return { skip: 'borderline' as const, msg, parsedBooking, emailContent } as BorderlineItem
           }
 
-          // High confidence — auto-import
+          // ── h. High confidence → auto-import ────────────────────────────
           const travelerMatch = checkTravelerSoftMatch(parsedBooking.traveler_names, t.travelers)
           console.log(
-            `[gmailScanner/trip] ✓ RELEVANT: type=${parsedBooking.booking_type}` +
+            `[gmailScanner/trip] ✓ AUTO-IMPORT: type=${parsedBooking.booking_type}` +
             ` vendor="${parsedBooking.vendor}" city="${parsedBooking.destination_city}"` +
-            ` conf=${parsedBooking.confidence} traveler=${travelerMatch}` +
-            (travelerMatch === 'mismatch'
-              ? ` [parsed: ${parsedBooking.traveler_names.join(',')}]`
-              : ''),
+            ` conf=${effectiveConf} traveler=${travelerMatch}` +
+            (travelerMatch === 'mismatch' ? ` [${parsedBooking.traveler_names.join(',')}]` : ''),
           )
           return { msg, parsedBooking, emailContent, rawHtml: body }
         }),
