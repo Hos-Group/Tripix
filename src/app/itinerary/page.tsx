@@ -195,6 +195,33 @@ async function geocodeAddress(address: string): Promise<[number, number] | null>
   return null
 }
 
+// ── IATA → Airport name ──────────────────────────────────────────────────────
+const AIRPORT_NAMES: Record<string, string> = {
+  TLV: 'Ben Gurion International', ETH: 'Eilat Ramon Airport',
+  BKK: 'Suvarnabhumi Airport', DMK: 'Don Mueang International', HKT: 'Phuket International',
+  USM: 'Koh Samui Airport', CNX: 'Chiang Mai International', KBV: 'Krabi Airport',
+  SIN: 'Changi Airport', DPS: 'Ngurah Rai International', KUL: 'KLIA',
+  SGN: 'Tan Son Nhat International', HAN: 'Noi Bai International',
+  CDG: 'Charles de Gaulle Airport', ORY: 'Paris Orly Airport',
+  LHR: 'Heathrow Airport', LGW: 'Gatwick Airport', STN: 'Stansted Airport',
+  AMS: 'Amsterdam Airport Schiphol', FCO: 'Leonardo da Vinci Airport',
+  MAD: 'Adolfo Suárez Madrid–Barajas', BCN: 'Barcelona–El Prat Airport',
+  BER: 'Berlin Brandenburg Airport', MUC: 'Munich Airport', FRA: 'Frankfurt Airport',
+  ZRH: 'Zurich Airport', ATH: 'Athens International', JTR: 'Santorini Airport',
+  LIS: 'Humberto Delgado Airport', PRG: 'Václav Havel Airport', BUD: 'Budapest Ferenc Liszt',
+  VIE: 'Vienna International Airport', WAW: 'Warsaw Chopin Airport',
+  DXB: 'Dubai International Airport', AUH: 'Abu Dhabi International',
+  IST: 'Istanbul Airport', SAW: 'Sabiha Gökçen International',
+  CAI: 'Cairo International Airport', SSH: 'Sharm el-Sheikh International',
+  JFK: 'John F. Kennedy International', LAX: 'Los Angeles International',
+  MIA: 'Miami International Airport', LAS: 'Harry Reid International',
+  BOM: 'Chhatrapati Shivaji Maharaj', DEL: 'Indira Gandhi International',
+  MLE: 'Velana International Airport', NRT: 'Narita International Airport',
+  HND: 'Haneda Airport', ICN: 'Incheon International Airport',
+  PEK: 'Beijing Capital International', PVG: 'Shanghai Pudong International',
+  SYD: 'Sydney Kingsford Smith', MEL: 'Melbourne Airport',
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 
 interface FlightMarker {
@@ -205,6 +232,8 @@ interface FlightMarker {
   airline:     string
   depCity:     string
   arrCity:     string
+  depAirport:  string
+  arrAirport:  string
   depTime:     string
   arrTime:     string
   date:        string
@@ -224,6 +253,7 @@ interface HotelMarker {
   id:          string
   coords:      [number, number]
   name:        string
+  address:     string
   checkIn:     string
   checkOut:    string
   nights:      number
@@ -317,23 +347,25 @@ export default function ItineraryPage() {
         const arrTime  = ext.arrival_time     || ext.arr_time || ''
 
         // Try IATA code fields first, then city name
-        const depCode   = ext.departure_iata || ext.dep_iata || depCity
-        const arrCode   = ext.arrival_iata   || ext.arr_iata || arrCity
-        const depCoords = getCoords(depCode) || getCoords(depCity)
-        const arrCoords = getCoords(arrCode) || getCoords(arrCity)
+        const depCode    = ext.departure_iata || ext.dep_iata || depCity
+        const arrCode    = ext.arrival_iata   || ext.arr_iata || arrCity
+        const depCoords  = getCoords(depCode) || getCoords(depCity)
+        const arrCoords  = getCoords(arrCode) || getCoords(arrCity)
+        const depAirport = AIRPORT_NAMES[depCode.toUpperCase()] || ext.departure_airport || ''
+        const arrAirport = AIRPORT_NAMES[arrCode.toUpperCase()] || ext.arrival_airport   || ''
 
         if (depCoords) {
           flightMarkers.push({
             id: `${doc.id}-dep`, type: 'departure',
             coords: depCoords, flightNo, airline,
-            depCity, arrCity, depTime, arrTime, date, isConnection,
+            depCity, arrCity, depAirport, arrAirport, depTime, arrTime, date, isConnection,
           })
         }
         if (arrCoords) {
           flightMarkers.push({
             id: `${doc.id}-arr`, type: 'arrival',
             coords: arrCoords, flightNo, airline,
-            depCity, arrCity, depTime, arrTime, date, isConnection,
+            depCity, arrCity, depAirport, arrAirport, depTime, arrTime, date, isConnection,
           })
         }
         if (depCoords && arrCoords) {
@@ -347,6 +379,7 @@ export default function ItineraryPage() {
       const ext       = (doc.extracted_data || {}) as Record<string, string>
       const city      = ext.destination_city || ext.hotel_city || ext.city || ''
       const hotelName = ext.hotel_name || doc.name || ''
+      const street    = ext.address || ext.hotel_address || ext.street || ''
 
       let coords: [number, number] | null = null
       if (hotelName && city) coords = await geocodeAddress(`${hotelName}, ${city}`)
@@ -360,7 +393,12 @@ export default function ItineraryPage() {
         ? Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000)
         : 0
 
-      hotelMarkers.push({ id: doc.id, coords, name: hotelName || city, checkIn, checkOut, nights })
+      // Build display address: street if available, else "hotelName, city"
+      const address = street
+        ? `${street}${city ? ', ' + city : ''}`
+        : `${hotelName ? hotelName + ', ' : ''}${city}`
+
+      hotelMarkers.push({ id: doc.id, coords, name: hotelName || city, address, checkIn, checkOut, nights })
     }
 
     // ── Car Rentals ───────────────────────────────────────────────────────

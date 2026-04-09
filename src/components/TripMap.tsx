@@ -24,6 +24,8 @@ interface FlightMarker {
   airline:     string
   depCity:     string
   arrCity:     string
+  depAirport:  string
+  arrAirport:  string
   depTime:     string
   arrTime:     string
   date:        string
@@ -43,6 +45,7 @@ interface HotelMarker {
   id:          string
   coords:      [number, number]
   name:        string
+  address:     string
   checkIn:     string
   checkOut:    string
   nights:      number
@@ -236,29 +239,38 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
     for (const f of flights) {
       const icon = flightIcon(f.type as 'departure' | 'arrival', f.isConnection, f.seqNum)
 
-      const typeLabel = f.type === 'departure' ? `🛫 Departure — ${f.depCity}` : `🛬 Arrival — ${f.arrCity}`
+      const isDep = f.type === 'departure'
+      const airportName = isDep ? f.depAirport : f.arrAirport
+      const typeLabel   = isDep ? `🛫 Departure — ${f.depCity}` : `🛬 Arrival — ${f.arrCity}`
       const connBadge = f.isConnection
         ? `<div style="background:#F59E0B;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-bottom:4px;font-weight:600;">🔀 Connection</div>`
         : ''
       const seqLine = f.seqNum
         ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">Stop #${f.seqNum}</div>`
         : ''
+      const airportLine = airportName
+        ? `<div style="font-size:11px;color:#374151;font-weight:600;margin-top:2px;">✈️ ${airportName}</div>`
+        : ''
+      const timeLabel = isDep ? `🕐 Departure: ${f.depTime}` : `🕐 Arrival: ${f.arrTime}`
+      const timeLine  = (isDep ? f.depTime : f.arrTime)
+        ? `<div style="font-size:12px;color:#1D4ED8;font-weight:700;margin-top:4px;">${timeLabel}</div>`
+        : ''
 
       const popup = L.popup({
         closeButton: false,
         className:   'trip-popup',
         offset:      [0, -18],
-        maxWidth:    200,
+        maxWidth:    220,
       }).setContent(`
-        <div style="font-family:-apple-system,sans-serif;min-width:160px;">
+        <div style="font-family:-apple-system,sans-serif;min-width:175px;">
           ${connBadge}
           ${seqLine}
           <div style="font-size:13px;font-weight:700;margin-bottom:2px;">${f.flightNo}</div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;">${f.airline}</div>
           <div style="font-size:12px;font-weight:600;color:#1D4ED8;">${typeLabel}</div>
+          ${airportLine}
           <div style="font-size:11px;color:#555;margin-top:2px;">${f.depCity} → ${f.arrCity}</div>
-          ${f.depTime ? `<div style="font-size:11px;color:#777;margin-top:2px;">🕐 Dep: ${f.depTime}</div>` : ''}
-          ${f.arrTime ? `<div style="font-size:11px;color:#777;">🕐 Arr: ${f.arrTime}</div>` : ''}
+          ${timeLine}
           <div style="font-size:10px;color:#999;margin-top:3px;">${fmtDate(f.date)}</div>
         </div>
       `)
@@ -276,22 +288,26 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
         ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">Stop #${h.seqNum}</div>`
         : ''
 
+      const addressLine = h.address
+        ? `<div style="font-size:10px;color:#6B7280;margin-bottom:5px;line-height:1.4;">📍 ${h.address}</div>`
+        : ''
       const popup = L.popup({
         closeButton: false,
         className:   'trip-popup',
         offset:      [0, -18],
-        maxWidth:    200,
+        maxWidth:    230,
       }).setContent(`
-        <div style="font-family:-apple-system,sans-serif;min-width:160px;">
+        <div style="font-family:-apple-system,sans-serif;min-width:175px;">
           ${seqLine}
-          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🏨 ${h.name}</div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:3px;">🏨 ${h.name}</div>
+          ${addressLine}
           <div style="font-size:11px;color:#555;">
             <span style="color:#059669;font-weight:600;">Check-in:</span> ${fmtDate(h.checkIn)}
           </div>
           <div style="font-size:11px;color:#555;margin-top:1px;">
             <span style="color:#DC2626;font-weight:600;">Check-out:</span> ${fmtDate(h.checkOut)}
           </div>
-          ${h.nights > 0 ? `<div style="font-size:11px;color:#777;margin-top:3px;">🌙 ${h.nights} nights</div>` : ''}
+          ${h.nights > 0 ? `<div style="font-size:12px;font-weight:700;color:#374151;margin-top:4px;">🌙 ${h.nights} nights total</div>` : ''}
         </div>
       `)
 
