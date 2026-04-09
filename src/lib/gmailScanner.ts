@@ -746,11 +746,35 @@ export async function scanTripGmail(
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
+      // ── Pre-filter: skip Gmail messages already processed for this trip ───
+      // This is the most reliable dedup — Claude may extract different names
+      // for the same hotel across runs, so name+date matching is fragile.
+      // Storing the raw Gmail message ID gives a deterministic skip.
+      const { data: alreadyIngested } = await supabase
+        .from('email_ingests')
+        .select('gmail_message_id')
+        .eq('trip_id', tripId)
+        .eq('user_id', userId)
+        .not('gmail_message_id', 'is', null)
+
+      const processedIds = new Set(
+        (alreadyIngested || []).map(r => r.gmail_message_id as string)
+      )
+
+      const newMessages = messages.filter(m => !processedIds.has(m.id))
+      const skippedByMsgId = messages.length - newMessages.length
+      if (skippedByMsgId > 0) {
+        console.log(
+          `[gmailScanner/trip] Skipped ${skippedByMsgId} already-processed message(s) by Gmail ID`,
+        )
+        stats.filteredDuplicate += skippedByMsgId
+      }
+
       // ── PASS 1: Fetch bodies + parse with Claude (text-only, no PDFs yet) ──
       // Fast (~5-10s for 20 emails in parallel). PDFs downloaded only for relevant ones.
       type Pass1Item = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
       const pass1Results = await Promise.allSettled(
-        messages.map(async (msg) => {
+        newMessages.map(async (msg) => {
           let body = ''
           try { body = await getEmailBody(accessToken, msg.id) } catch { return { skip: 'fetch_error' as const } }
           const emailContent = body || msg.snippet
@@ -1042,19 +1066,22 @@ export async function scanTripGmail(
             })
           if (expenseError) console.error('[gmailScanner/trip] Expense insert error:', expenseError)
 
-          // ── Save to email_ingests for audit trail ─────────────────────────
+          // ── Save to email_ingests for audit trail + dedup key ────────────
+          // gmail_message_id is the primary dedup key for future scans —
+          // ensures re-scanning never re-processes the same email.
           const rawText = htmlToText(emailContent).slice(0, 10000)
           await supabase.from('email_ingests').insert({
-            user_id:      userId,
-            from_address: msg.from,
-            subject:      msg.subject,
-            raw_text:     rawText,
-            parsed_data:  parsedBooking,
-            trip_id:      tripId,
-            match_score:  100,
-            match_reason: 'ייבוא ידני לטיול',
-            status:       docRecord ? 'processed' : 'matched',
-            source:       'gmail_trip_import',
+            user_id:          userId,
+            from_address:     msg.from,
+            subject:          msg.subject,
+            raw_text:         rawText,
+            parsed_data:      parsedBooking,
+            trip_id:          tripId,
+            match_score:      100,
+            match_reason:     'ייבוא ידני לטיול',
+            status:           docRecord ? 'processed' : 'matched',
+            source:           'gmail_trip_import',
+            gmail_message_id: msg.id,   // ← primary dedup key
           })
         } catch (err) {
           console.error(`[gmailScanner/trip] DB write error for ${msg.id}:`, err)
