@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw, Mail, Settings, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw, Mail, Settings, ChevronRight, CheckSquare, Square, Download, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -21,35 +21,38 @@ export default function DocumentsPage() {
   useEffect(() => {
     loadTravelers().then(setTravelers)
   }, [])
-  const [documents,        setDocuments]        = useState<Document[]>([])
-  const [loading,          setLoading]          = useState(true)
-  const [reprocessing,     setReprocessing]     = useState<string | null>(null)
-  const [reprocessingAll,  setReprocessingAll]  = useState(false)
+
+  const [documents,         setDocuments]        = useState<Document[]>([])
+  const [loading,           setLoading]          = useState(true)
+  const [reprocessingAll,   setReprocessingAll]  = useState(false)
   const [reprocessProgress, setReprocessProgress] = useState<{ done: number; total: number } | null>(null)
+
+  // ── Multi-select state ──────────────────────────────────────────────────
+  const [selectMode,   setSelectMode]   = useState(false)
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // ── Gmail sync state ────────────────────────────────────────────────────
   const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string }[] | null>(null)
   const [gmailScanning,    setGmailScanning]    = useState(false)
   const [gmailResult,      setGmailResult]      = useState<{
-    scanned:           number
-    created:           number
-    createdDocs?:      Array<{ id: string; name: string; doc_type: string }>
-    filteredLowConf?:  number
+    scanned:            number
+    created:            number
+    createdDocs?:       Array<{ id: string; name: string; doc_type: string }>
+    filteredLowConf?:   number
     filteredWrongDest?: number
     filteredWrongDate?: number
     filteredDuplicate?: number
-    failedDB?:         number
-    lastDbError?:      string
+    failedDB?:          number
+    lastDbError?:       string
   } | null>(null)
-  const [gmailError,       setGmailError]       = useState<string | null>(null)
-  const [newDocIds,        setNewDocIds]         = useState<Set<string>>(new Set())
+  const [gmailError,  setGmailError]  = useState<string | null>(null)
+  const [newDocIds,   setNewDocIds]   = useState<Set<string>>(new Set())
   const newDocsRef = useRef<HTMLDivElement>(null)
-  const [filterType, setFilterType] = useState<DocType | null>(null)
+  const [filterType,     setFilterType]     = useState<DocType | null>(null)
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'cards' | 'grid'>('list')
-  const [viewerUrl, setViewerUrl] = useState<string | null>(null)
-  const [rowsPerPage, setRowsPerPage] = useState<number>(20)
-  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [viewMode,       setViewMode]       = useState<'list' | 'cards' | 'grid'>('list')
+  const [viewerUrl,      setViewerUrl]      = useState<string | null>(null)
 
   // ── Load Gmail connections ──────────────────────────────────────────────
   const loadGmailConnections = useCallback(async () => {
@@ -77,21 +80,15 @@ export default function DocumentsPage() {
         .select('*')
         .eq('trip_id', currentTrip.id)
         .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error(error)
-      } else {
-        setDocuments(data || [])
-      }
+      if (error) console.error(error)
+      else setDocuments(data || [])
     } catch (err) {
       console.error('Supabase not configured:', err)
     }
     setLoading(false)
   }, [currentTrip])
 
-  useEffect(() => {
-    fetchDocuments()
-  }, [fetchDocuments])
+  useEffect(() => { fetchDocuments() }, [fetchDocuments])
 
   // ── Scan Gmail for this trip ─────────────────────────────────────────────
   const handleGmailScan = useCallback(async () => {
@@ -109,13 +106,10 @@ export default function DocumentsPage() {
         body: JSON.stringify({ trip_id: currentTrip.id }),
       })
 
-      // Safely parse JSON — a 504 timeout returns HTML, not JSON
       let json: Record<string, unknown> = {}
-      try {
-        json = await res.json()
-      } catch {
+      try { json = await res.json() } catch {
         if (res.status === 504 || res.status === 524) {
-          setGmailError('הסריקה ארכה יותר מדי — נסה שוב (המיילים שנמצאו ייבאו בפעם הבאה)')
+          setGmailError('הסריקה ארכה יותר מדי — נסה שוב')
         } else {
           setGmailError(`שגיאת שרת (${res.status}) — נסה שוב`)
         }
@@ -140,45 +134,28 @@ export default function DocumentsPage() {
       if (createdDocs.length > 0) {
         setFilterType(null)
         setFilterTraveler(null)
-
-        // ── Fetch the new documents DIRECTLY by ID ──────────────────────────
-        // (Don't rely on the trip_id query which might have timing/cache issues)
         const { data: newDocs, error: newDocsErr } = await supabase
           .from('documents')
           .select('*')
           .in('id', createdDocs.map(d => d.id))
-
-        if (newDocsErr) {
-          console.error('[documents] Failed to fetch new docs by ID:', newDocsErr)
-        }
-
+        if (newDocsErr) console.error('[documents] Failed to fetch new docs by ID:', newDocsErr)
         if (newDocs && newDocs.length > 0) {
-          // Prepend new docs to the existing list (dedup by ID)
           setDocuments(prev => [
             ...newDocs,
             ...prev.filter(d => !newDocs.some((n: Document) => n.id === d.id)),
           ])
-          // Highlight them
           setNewDocIds(new Set(newDocs.map((d: Document) => d.id)))
           setTimeout(() => setNewDocIds(new Set()), 10000)
-          // Toast for each new document
           newDocs.forEach((doc: Document) => {
             toast.success(`נוסף: ${doc.name}`, { icon: '📄', duration: 5000 })
           })
-          // Scroll
           setTimeout(() => {
             newDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }, 200)
         } else {
-          // Documents reported as created but not found — do a full re-fetch
-          console.warn('[documents] Created docs not returned by direct ID query, doing full re-fetch')
           await fetchDocuments()
-          setTimeout(() => {
-            newDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }, 300)
         }
       } else {
-        // No new docs — just refresh the list
         await fetchDocuments()
       }
     } catch (err) {
@@ -189,116 +166,124 @@ export default function DocumentsPage() {
     }
   }, [currentTrip, fetchDocuments])
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm('אתה בטוח שאתה רוצה למחוק? המסמך וההוצאות שנוצרו ממנו יימחקו לצמיתות.')
-    if (!confirmed) return
-
-    const doc = documents.find(d => d.id === id)
-
-    // Step 1: Delete the document record FIRST (most important)
-    const { error } = await supabase.from('documents').delete().eq('id', id)
-    if (error) {
-      console.error('Document delete failed:', error)
-      toast.error('שגיאה במחיקת המסמך')
-      return
-    }
-
-    // Step 2: Clean up related expenses (best effort — don't block)
+  // ── Delete via server API (bypasses RLS) ─────────────────────────────────
+  const deleteDocumentsByIds = useCallback(async (ids: string[]): Promise<boolean> => {
     try {
-      await supabase.from('expenses').delete().eq('source', 'document').eq('notes', `doc:${id}`)
-      if (doc?.name) {
-        await supabase.from('expenses').delete().eq('source', 'document').eq('title', doc.name)
-      }
-    } catch (e) {
-      console.error('Expense cleanup error:', e)
-    }
-
-    // Step 3: Clean up storage file (best effort)
-    if (doc?.file_url) {
-      try {
-        const path = doc.file_url.split('/documents/')[1] || doc.file_url.split('/receipts/')[1]
-        if (path) {
-          const bucket = doc.file_url.includes('/documents/') ? 'documents' : 'receipts'
-          await supabase.storage.from(bucket).remove([decodeURIComponent(path)])
-        }
-      } catch (e) {
-        console.error('Storage delete error:', e)
-      }
-    }
-
-    toast.success('המסמך נמחק לצמיתות')
-    setDocuments(prev => prev.filter(d => d.id !== id))
-  }
-
-  const handleReprocess = async (id: string) => {
-    setReprocessing(id)
-    try {
-      const res = await fetch('/api/documents/reprocess', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: id }),
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) { toast.error('לא מחובר'); return false }
+      const res = await fetch('/api/documents/delete', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ ids }),
       })
       const json = await res.json()
-      if (!res.ok || json.error) {
-        toast.error('שגיאה בעיבוד מחדש: ' + (json.error || ''))
-      } else {
-        toast.success('המסמך עובד מחדש!')
-        fetchDocuments()
-      }
+      if (!res.ok) { toast.error(json.error || 'שגיאה במחיקה'); return false }
+      return true
     } catch {
-      toast.error('שגיאת רשת')
-    } finally {
-      setReprocessing(null)
+      toast.error('שגיאת רשת'); return false
+    }
+  }, [])
+
+  // ── Single delete ────────────────────────────────────────────────────────
+  const handleDelete = async (id: string) => {
+    const confirmed = window.confirm('למחוק את המסמך לצמיתות?')
+    if (!confirmed) return
+    const ok = await deleteDocumentsByIds([id])
+    if (ok) {
+      toast.success('המסמך נמחק')
+      setDocuments(prev => prev.filter(d => d.id !== id))
     }
   }
 
-  const handleReprocessAll = async () => {
-    const docsWithFile = documents.filter(d => d.file_url)
-    if (docsWithFile.length === 0) { toast.error('אין מסמכים לעיבוד'); return }
-
-    setReprocessingAll(true)
-    setReprocessProgress({ done: 0, total: docsWithFile.length })
-
-    let done = 0
-    for (const doc of docsWithFile) {
-      try {
-        await fetch('/api/documents/reprocess', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ documentId: doc.id }),
-        })
-      } catch {/* ignore individual errors */}
-      done++
-      setReprocessProgress({ done, total: docsWithFile.length })
+  // ── Bulk delete ──────────────────────────────────────────────────────────
+  const handleBulkDelete = async () => {
+    if (!selectedIds.size) return
+    const confirmed = window.confirm(`למחוק ${selectedIds.size} מסמכים לצמיתות?`)
+    if (!confirmed) return
+    setBulkDeleting(true)
+    const ids = Array.from(selectedIds)
+    const ok = await deleteDocumentsByIds(ids)
+    if (ok) {
+      toast.success(`נמחקו ${ids.length} מסמכים`)
+      setDocuments(prev => prev.filter(d => !ids.includes(d.id)))
+      setSelectedIds(new Set())
+      setSelectMode(false)
     }
-
-    setReprocessingAll(false)
-    setReprocessProgress(null)
-    toast.success(`${docsWithFile.length} מסמכים עובדו בהצלחה!`)
-    fetchDocuments()
+    setBulkDeleting(false)
   }
 
-  // ── Delete duplicate documents (same name + same valid_from) ───────────────
+  // ── Export selected (open file_url in new tab) ───────────────────────────
+  const handleExport = () => {
+    const selected = documents.filter(d => selectedIds.has(d.id) && d.file_url)
+    if (!selected.length) { toast('אין קבצים לייצוא בבחירה זו'); return }
+    selected.forEach(d => window.open(d.file_url!, '_blank'))
+    toast.success(`נפתחו ${selected.length} קבצים`)
+  }
+
+  // ── Toggle select ────────────────────────────────────────────────────────
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(d => d.id)))
+    }
+  }
+
+  // ── Delete duplicates ────────────────────────────────────────────────────
   const handleDeleteDuplicates = async () => {
-    // Sort oldest-first so we keep the first import and delete later duplicates
     const sorted = [...documents].sort(
       (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
     )
-    const seen   = new Set<string>()
+    const seen     = new Set<string>()
     const toDelete: string[] = []
     for (const doc of sorted) {
       const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
-      if (key === '|') continue          // skip docs with neither name nor date
+      if (key === '|') continue
       if (seen.has(key)) toDelete.push(doc.id)
       else seen.add(key)
     }
     if (toDelete.length === 0) { toast('אין כפילויות'); return }
     const confirmed = window.confirm(`נמצאו ${toDelete.length} כפילויות. למחוק?`)
     if (!confirmed) return
-    const { error } = await supabase.from('documents').delete().in('id', toDelete)
-    if (error) { toast.error('שגיאה במחיקה'); return }
-    toast.success(`נמחקו ${toDelete.length} כפילויות ✓`)
-    setDocuments(prev => prev.filter(d => !toDelete.includes(d.id)))
+    const ok = await deleteDocumentsByIds(toDelete)
+    if (ok) {
+      toast.success(`נמחקו ${toDelete.length} כפילויות ✓`)
+      setDocuments(prev => prev.filter(d => !toDelete.includes(d.id)))
+    }
+  }
+
+  const handleReprocessAll = async () => {
+    const docsWithFile = documents.filter(d => d.file_url)
+    if (docsWithFile.length === 0) { toast.error('אין מסמכים לעיבוד'); return }
+    setReprocessingAll(true)
+    setReprocessProgress({ done: 0, total: docsWithFile.length })
+    let done = 0
+    for (const doc of docsWithFile) {
+      try {
+        await fetch('/api/documents/reprocess', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ documentId: doc.id }),
+        })
+      } catch {/* ignore */}
+      done++
+      setReprocessProgress({ done, total: docsWithFile.length })
+    }
+    setReprocessingAll(false)
+    setReprocessProgress(null)
+    toast.success(`${docsWithFile.length} מסמכים עובדו בהצלחה!`)
+    fetchDocuments()
   }
 
   const filtered = documents.filter(d => {
@@ -307,31 +292,37 @@ export default function DocumentsPage() {
     return true
   })
 
-  // Pagination
-  const totalPages  = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
-  const safePage    = Math.min(currentPage, totalPages)
-  const paginated   = rowsPerPage === -1
-    ? filtered
-    : filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
-
-  // Group by doc_type (on current page only)
-  const grouped = paginated.reduce<Record<string, Document[]>>((acc, d) => {
+  // Group by doc_type
+  const grouped = filtered.reduce<Record<string, Document[]>>((acc, d) => {
     const key = d.doc_type
     if (!acc[key]) acc[key] = []
     acc[key].push(d)
     return acc
   }, {})
 
-  // ── Gmail card JSX (rendered regardless of loading state) ────────────────
+  // Duplicate count
+  const dupCount = (() => {
+    const seen = new Set<string>()
+    let count = 0
+    for (const doc of [...documents].sort(
+      (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
+    )) {
+      const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
+      if (key === '|') continue
+      if (seen.has(key)) count++
+      else seen.add(key)
+    }
+    return count
+  })()
+
+  // ── Gmail card ────────────────────────────────────────────────────────────
   const gmailCard = (
     <AnimatePresence mode="wait">
       {gmailConnections === null ? (
-        /* Still loading connections — show placeholder */
         <motion.div key="gmail-loading"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           className="h-16 bg-gray-100 rounded-2xl animate-pulse" />
       ) : gmailConnections.length === 0 ? (
-        /* Not connected */
         <motion.div key="not-connected"
           initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
@@ -348,7 +339,6 @@ export default function DocumentsPage() {
           </Link>
         </motion.div>
       ) : (
-        /* Connected */
         <motion.div key="connected"
           initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-l from-emerald-50 to-blue-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
@@ -399,35 +389,23 @@ export default function DocumentsPage() {
                   סרקנו {gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים לטיול זה
                 </p>
               )}
-
-              {/* Detailed breakdown — shows why emails were skipped */}
               {gmailResult.scanned > 0 && (
                 <div className="border-t border-gray-100 pt-1.5 space-y-0.5">
                   {(gmailResult.filteredLowConf ?? 0) > 0 && (
-                    <p className="text-gray-400">
-                      🤖 {gmailResult.filteredLowConf} מיילים שיווקיים / לא ברורים (AI)
-                    </p>
+                    <p className="text-gray-400">🤖 {gmailResult.filteredLowConf} מיילים שיווקיים / לא ברורים (AI)</p>
                   )}
                   {(gmailResult.filteredWrongDest ?? 0) > 0 && (
-                    <p className="text-gray-400">
-                      🗺️ {gmailResult.filteredWrongDest} הזמנות ליעד אחר
-                    </p>
+                    <p className="text-gray-400">🗺️ {gmailResult.filteredWrongDest} הזמנות ליעד אחר</p>
                   )}
                   {(gmailResult.filteredWrongDate ?? 0) > 0 && (
-                    <p className="text-gray-400">
-                      📅 {gmailResult.filteredWrongDate} הזמנות מחוץ לתאריכי הטיול
-                    </p>
+                    <p className="text-gray-400">📅 {gmailResult.filteredWrongDate} הזמנות מחוץ לתאריכי הטיול</p>
                   )}
                   {(gmailResult.filteredDuplicate ?? 0) > 0 && (
-                    <p className="text-gray-400">
-                      🔄 {gmailResult.filteredDuplicate} כבר קיימים במערכת
-                    </p>
+                    <p className="text-gray-400">🔄 {gmailResult.filteredDuplicate} כבר קיימים במערכת</p>
                   )}
                   {(gmailResult.failedDB ?? 0) > 0 && (
                     <div>
-                      <p className="text-red-400">
-                        ⚠️ {gmailResult.failedDB} שגיאות שמירה
-                      </p>
+                      <p className="text-red-400">⚠️ {gmailResult.failedDB} שגיאות שמירה</p>
                       {gmailResult.lastDbError && (
                         <p className="text-red-300 text-[10px] mt-0.5 font-mono break-all">
                           {gmailResult.lastDbError}
@@ -479,15 +457,17 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-32">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">כספת מסמכים</h1>
         <div className="flex items-center gap-2">
+          {/* View mode */}
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             {([
-              { mode: 'list' as const, icon: List, label: 'רשימה' },
+              { mode: 'list'  as const, icon: List,       label: 'רשימה'  },
               { mode: 'cards' as const, icon: CreditCard, label: 'כרטיסים' },
-              { mode: 'grid' as const, icon: LayoutGrid, label: 'רשת' },
+              { mode: 'grid'  as const, icon: LayoutGrid,  label: 'רשת'    },
             ]).map(({ mode, icon: Icon }) => (
               <button key={mode} onClick={() => setViewMode(mode)}
                 className={`p-1.5 rounded-md transition-all ${viewMode === mode ? 'bg-white shadow text-primary' : 'text-gray-400'}`}>
@@ -496,30 +476,29 @@ export default function DocumentsPage() {
             ))}
           </div>
 
-          {/* Delete duplicates button — shown only when duplicates exist */}
-          {(() => {
-            const seen = new Set<string>()
-            let dupCount = 0
-            for (const doc of [...documents].sort(
-              (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
-            )) {
-              const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
-              if (key === '|') continue
-              if (seen.has(key)) dupCount++
-              else seen.add(key)
-            }
-            return dupCount > 0 ? (
-              <button
-                onClick={handleDeleteDuplicates}
-                className="flex items-center gap-1.5 bg-red-50 text-red-500 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-transform"
-                title={`נמצאו ${dupCount} כפילויות`}>
-                <Trash2 className="w-4 h-4" />
-                {dupCount} כפולים
-              </button>
-            ) : null
-          })()}
+          {/* Multi-select toggle */}
+          <button
+            onClick={() => { setSelectMode(s => !s); setSelectedIds(new Set()) }}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-all ${
+              selectMode ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+            title="בחירה מרובה">
+            <CheckSquare className="w-4 h-4" />
+            {selectMode ? 'בטל' : 'בחר'}
+          </button>
 
-          {/* Reprocess all button */}
+          {/* Duplicate cleaner */}
+          {dupCount > 0 && (
+            <button
+              onClick={handleDeleteDuplicates}
+              className="flex items-center gap-1.5 bg-red-50 text-red-500 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-transform"
+              title={`נמצאו ${dupCount} כפילויות`}>
+              <Trash2 className="w-4 h-4" />
+              {dupCount} כפולים
+            </button>
+          )}
+
+          {/* Reprocess all */}
           <button
             onClick={handleReprocessAll}
             disabled={reprocessingAll || documents.filter(d => d.file_url).length === 0}
@@ -538,56 +517,52 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* ── Gmail Sync Card ──────────────────────────────────────────────── */}
+      {/* ── Gmail Sync Card ───────────────────────────────────────────────── */}
       {gmailCard}
 
-      {/* Filters */}
+      {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <span className="text-xs text-gray-500">סוג מסמך:</span>
-          </div>
-          {/* Rows per page selector */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-400">שורות:</span>
-            <select
-              value={rowsPerPage}
-              onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1) }}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:border-primary">
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={-1}>הכל</option>
-            </select>
-          </div>
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-gray-400" />
+          <span className="text-xs text-gray-500">סוג מסמך:</span>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          <button onClick={() => { setFilterType(null); setCurrentPage(1) }}
+          <button onClick={() => setFilterType(null)}
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${!filterType ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
             הכל
           </button>
           {DOC_TYPES.map(dt => (
-            <button key={dt} onClick={() => { setFilterType(filterType === dt ? null : dt); setCurrentPage(1) }}
+            <button key={dt} onClick={() => setFilterType(filterType === dt ? null : dt)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${filterType === dt ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
               {DOC_TYPE_META[dt].icon} {DOC_TYPE_META[dt].label}
             </button>
           ))}
         </div>
-
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           <span className="flex-shrink-0 text-xs text-gray-500 self-center">נוסע:</span>
           {[{ id: 'all', name: 'כולם' }, ...travelers].map(t => (
-            <button key={t.id} onClick={() => { setFilterTraveler(filterTraveler === t.id ? null : t.id as TravelerId); setCurrentPage(1) }}
+            <button key={t.id} onClick={() => setFilterTraveler(filterTraveler === t.id ? null : t.id as TravelerId)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${filterTraveler === t.id ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
               {t.name}
             </button>
           ))}
         </div>
+
+        {/* Select all row — shown only in select mode */}
+        {selectMode && filtered.length > 0 && (
+          <div className="flex items-center gap-3 bg-primary/5 rounded-xl px-3 py-2">
+            <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-primary font-medium">
+              {selectedIds.size === filtered.length
+                ? <CheckSquare className="w-4 h-4" />
+                : <Square className="w-4 h-4" />}
+              {selectedIds.size === filtered.length ? 'בטל הכל' : 'בחר הכל'}
+            </button>
+            <span className="text-xs text-gray-500">{selectedIds.size} נבחרו מתוך {filtered.length}</span>
+          </div>
+        )}
       </div>
 
-      {/* Documents grouped by type */}
+      {/* ── Documents grouped by type ─────────────────────────────────────── */}
       <div ref={newDocsRef} />
       {Object.keys(grouped).length === 0 ? (
         <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
@@ -613,8 +588,17 @@ export default function DocumentsPage() {
                 <div className="grid grid-cols-2 gap-2">
                   {docs.map(doc => (
                     <motion.div key={doc.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                      onClick={() => { if (doc.file_url) setViewerUrl(doc.file_url) }}
-                      className={`bg-white rounded-2xl p-3 shadow-sm active:scale-[0.97] transition-transform ${doc.file_url ? 'cursor-pointer' : ''}`}>
+                      onClick={(e) => selectMode ? toggleSelect(doc.id, e) : (doc.file_url && setViewerUrl(doc.file_url))}
+                      className={`bg-white rounded-2xl p-3 shadow-sm active:scale-[0.97] transition-transform relative ${
+                        doc.file_url || selectMode ? 'cursor-pointer' : ''
+                      } ${selectedIds.has(doc.id) ? 'ring-2 ring-primary bg-primary/5' : ''}`}>
+                      {selectMode && (
+                        <div className="absolute top-2 right-2">
+                          {selectedIds.has(doc.id)
+                            ? <CheckSquare className="w-4 h-4 text-primary" />
+                            : <Square className="w-4 h-4 text-gray-300" />}
+                        </div>
+                      )}
                       <div className="text-2xl mb-2">{meta.icon}</div>
                       <p className="text-xs font-bold truncate">{doc.name}</p>
                       <p className="text-[10px] text-gray-400 truncate">{getTravelerName(travelers, doc.traveler_id)}</p>
@@ -626,10 +610,12 @@ export default function DocumentsPage() {
                       <div className="flex justify-between items-center mt-2">
                         {doc.file_type === 'gmail' && <Mail className="w-3 h-3 text-orange-400" />}
                         {doc.file_url && <ExternalLink className="w-3 h-3 text-primary" />}
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                          className="text-gray-300 hover:text-red-400 active:scale-95">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        {!selectMode && (
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                            className="text-gray-300 hover:text-red-400 active:scale-95">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -639,8 +625,17 @@ export default function DocumentsPage() {
               {/* Cards view */}
               {viewMode === 'cards' && docs.map(doc => (
                 <motion.div key={doc.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  onClick={() => { if (doc.file_url) setViewerUrl(doc.file_url) }}
-                  className={`bg-gradient-to-bl from-white to-gray-50 rounded-2xl p-5 shadow-sm border border-gray-100 active:scale-[0.98] transition-transform ${doc.file_url ? 'cursor-pointer' : ''}`}>
+                  onClick={(e) => selectMode ? toggleSelect(doc.id, e) : (doc.file_url && setViewerUrl(doc.file_url))}
+                  className={`bg-gradient-to-bl from-white to-gray-50 rounded-2xl p-5 shadow-sm border active:scale-[0.98] transition-transform relative ${
+                    doc.file_url || selectMode ? 'cursor-pointer' : ''
+                  } ${selectedIds.has(doc.id) ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-gray-100'}`}>
+                  {selectMode && (
+                    <div className="absolute top-3 left-3">
+                      {selectedIds.has(doc.id)
+                        ? <CheckSquare className="w-5 h-5 text-primary" />
+                        : <Square className="w-5 h-5 text-gray-300" />}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{meta.icon}</span>
@@ -649,10 +644,12 @@ export default function DocumentsPage() {
                         <p className="text-xs text-gray-400">{getTravelerName(travelers, doc.traveler_id)}</p>
                       </div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                      className="p-2 text-gray-300 hover:text-red-400 active:scale-95">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!selectMode && (
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                        className="p-2 text-gray-300 hover:text-red-400 active:scale-95">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {doc.booking_ref && (
@@ -665,11 +662,6 @@ export default function DocumentsPage() {
                         {doc.flight_number}
                       </span>
                     )}
-                    {doc.doc_type === 'passport' && (doc.extracted_data as Record<string, unknown>)?.issuing_country ? (
-                      <span className="bg-green-50 text-green-600 text-[10px] px-2 py-0.5 rounded-full">
-                        {String((doc.extracted_data as Record<string, unknown>).issuing_country)}
-                      </span>
-                    ) : null}
                     {doc.valid_from && (
                       <span className="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">
                         {formatDateShort(doc.valid_from)}
@@ -689,20 +681,31 @@ export default function DocumentsPage() {
                 </motion.div>
               ))}
 
-              {/* List view (default) */}
+              {/* List view */}
               {viewMode === 'list' && docs.map(doc => (
                 <motion.div key={doc.id}
                   initial={{ opacity: 0, y: newDocIds.has(doc.id) ? -8 : 0 }}
                   animate={{ opacity: 1, y: 0 }}
-                  onClick={() => { if (doc.file_url) setViewerUrl(doc.file_url) }}
-                  className={`rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all ${doc.file_url ? 'cursor-pointer' : ''} ${
-                    newDocIds.has(doc.id)
-                      ? 'bg-emerald-50 border-2 border-emerald-300 ring-2 ring-emerald-100'
-                      : 'bg-white'
+                  onClick={(e) => selectMode ? toggleSelect(doc.id, e) : (doc.file_url && setViewerUrl(doc.file_url))}
+                  className={`rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all relative ${
+                    doc.file_url || selectMode ? 'cursor-pointer' : ''
+                  } ${
+                    selectedIds.has(doc.id)
+                      ? 'bg-primary/5 border-2 border-primary ring-2 ring-primary/10'
+                      : newDocIds.has(doc.id)
+                        ? 'bg-emerald-50 border-2 border-emerald-300 ring-2 ring-emerald-100'
+                        : 'bg-white'
                   }`}>
                   <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${newDocIds.has(doc.id) ? 'bg-emerald-100' : 'bg-gray-50'}`}>
-                      {meta.icon}
+                    {/* Checkbox / icon */}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
+                      selectedIds.has(doc.id) ? 'bg-primary/10' : newDocIds.has(doc.id) ? 'bg-emerald-100' : 'bg-gray-50'
+                    }`}>
+                      {selectMode
+                        ? (selectedIds.has(doc.id)
+                            ? <CheckSquare className="w-5 h-5 text-primary" />
+                            : <Square className="w-5 h-5 text-gray-300" />)
+                        : meta.icon}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -711,19 +714,12 @@ export default function DocumentsPage() {
                           <span className="flex-shrink-0 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {getTravelerName(travelers, doc.traveler_id)}
-                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">{getTravelerName(travelers, doc.traveler_id)}</p>
                       {doc.booking_ref && (
                         <p className="text-xs text-primary mt-1">
                           {doc.doc_type === 'passport' ? 'מספר דרכון' : 'הזמנה'}: {doc.booking_ref}
                         </p>
                       )}
-                      {doc.doc_type === 'passport' && (doc.extracted_data as Record<string, unknown>)?.issuing_country ? (
-                        <p className="text-xs text-green-600 mt-0.5">
-                          דרכון {String((doc.extracted_data as Record<string, unknown>).issuing_country)}
-                        </p>
-                      ) : null}
                       {doc.flight_number && (
                         <p className="text-xs text-blue-500 mt-0.5">טיסה: {doc.flight_number}</p>
                       )}
@@ -743,10 +739,12 @@ export default function DocumentsPage() {
                         </p>
                       )}
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                      className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all flex-shrink-0">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!selectMode && (
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
+                        className="p-2 text-gray-300 hover:text-red-400 active:scale-95 transition-all flex-shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -754,51 +752,38 @@ export default function DocumentsPage() {
           )
         })
       )}
-      {/* ── Pagination controls ─────────────────────────────────────────────── */}
-      {rowsPerPage !== -1 && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 pt-2 pb-4">
-          <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={safePage <= 1}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 disabled:opacity-30 active:scale-95 transition-all">
-            ‹ הקודם
-          </button>
-          <div className="flex gap-1">
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
-              .reduce<(number | '…')[]>((acc, p, i, arr) => {
-                if (i > 0 && (arr[i - 1] as number) + 1 < p) acc.push('…')
-                acc.push(p)
-                return acc
-              }, [])
-              .map((p, i) =>
-                p === '…' ? (
-                  <span key={`ellipsis-${i}`} className="px-2 py-1 text-xs text-gray-400">…</span>
-                ) : (
-                  <button
-                    key={p}
-                    onClick={() => setCurrentPage(p as number)}
-                    className={`w-8 h-8 rounded-xl text-xs font-medium transition-all active:scale-95 ${
-                      safePage === p
-                        ? 'bg-primary text-white'
-                        : 'bg-white border border-gray-200 text-gray-600'
-                    }`}>
-                    {p}
-                  </button>
-                ),
-              )}
-          </div>
-          <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={safePage >= totalPages}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 disabled:opacity-30 active:scale-95 transition-all">
-            הבא ›
-          </button>
-          <span className="text-xs text-gray-400">
-            {filtered.length} מסמכים
-          </span>
-        </div>
-      )}
+
+      {/* ── Bulk action bar (floating, shown when docs are selected) ───────── */}
+      <AnimatePresence>
+        {selectMode && selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0,   opacity: 1 }}
+            exit={{   y: 100, opacity: 0 }}
+            className="fixed bottom-20 left-4 right-4 z-50 bg-gray-900 text-white rounded-2xl p-3 flex items-center gap-2 shadow-2xl">
+            <span className="flex-1 text-sm font-semibold">{selectedIds.size} נבחרו</span>
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-all">
+              <Download className="w-4 h-4" /> ייצוא
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="flex items-center gap-1.5 bg-red-500 hover:bg-red-600 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-all disabled:opacity-50">
+              {bulkDeleting
+                ? <span className="animate-spin">⏳</span>
+                : <Trash2 className="w-4 h-4" />}
+              מחק
+            </button>
+            <button
+              onClick={() => { setSelectedIds(new Set()); setSelectMode(false) }}
+              className="p-2 text-white/60 hover:text-white active:scale-95">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <DocumentViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
     </div>
