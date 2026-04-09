@@ -129,15 +129,10 @@ function resolveTripCountry(destination: string): string | null {
 }
 
 /**
- * Decide if a Claude-parsed booking is relevant to the given trip.
- *
- * Rules (both must pass):
- *  1. Destination: if we know the trip country AND Claude extracted a destination,
- *     the extracted destination must match (any alias). If Claude gave no destination
- *     at all we rely solely on the confidence score.
- *  2. Dates: booking date must fall in [tripStart-180d, tripEnd+7d].
+ * Check if a Claude-parsed booking is relevant to the given trip.
+ * Returns 'ok' | 'wrong_dest' | 'wrong_date'
  */
-function isRelevantToTrip(booking: ParsedBooking, trip: TripRow): boolean {
+function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_dest' | 'wrong_date' {
   const tripCountry = resolveTripCountry(trip.destination)
 
   if (tripCountry) {
@@ -145,32 +140,39 @@ function isRelevantToTrip(booking: ParsedBooking, trip: TripRow): boolean {
     const city    = (booking.destination_city    || '').toLowerCase().trim()
     const country = (booking.destination_country || '').toLowerCase().trim()
 
-    // Only run the destination filter when Claude actually extracted something
     if (city || country) {
       const matchesAlias = (text: string) =>
-        text.length >= 3 &&              // ignore noise like "go", "la", "us"
+        text.length >= 3 &&
         aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
 
       const destMatch = matchesAlias(city) || matchesAlias(country)
 
       if (!destMatch) {
-        console.log(
-          `[gmailScanner/trip] ✗ "${booking.vendor}" — ` +
-          `destination "${city || '?'}/${country || '?'}" ≠ trip "${trip.destination}"`,
-        )
-        return false
+        // For flights, also check for return_date — it might be an outbound flight
+        // whose origin matches but whose destination is the trip destination
+        const isFlightType = booking.booking_type === 'flight'
+        if (isFlightType && (booking.return_date || booking.departure_date)) {
+          // If it's a flight and has valid travel dates, be lenient —
+          // Claude may have extracted origin city instead of destination city
+          // The date check below will still apply
+        } else {
+          console.log(
+            `[gmailScanner/trip] ✗ dest mismatch: "${booking.vendor}" ` +
+            `"${city}/${country}" ≠ "${trip.destination}"`,
+          )
+          return 'wrong_dest'
+        }
       }
     }
-    // If Claude extracted no destination, fall through (confidence filter is enough)
+    // No destination extracted → rely on confidence score only
   }
 
-  // ── Date window ────────────────────────────────────────────────────────────
-  // Allow bookings from 180 days before trip start to 7 days after trip end.
+  // ── Date window: 180 days before trip start → 7 days after trip end ───────
   const tripStart   = new Date(trip.start_date)
   const tripEnd     = new Date(trip.end_date)
   const windowStart = new Date(tripStart)
   windowStart.setDate(windowStart.getDate() - 180)
-  const windowEnd = new Date(tripEnd)
+  const windowEnd   = new Date(tripEnd)
   windowEnd.setDate(windowEnd.getDate() + 7)
 
   const bookingDateStr = booking.check_in || booking.departure_date
@@ -178,15 +180,15 @@ function isRelevantToTrip(booking: ParsedBooking, trip: TripRow): boolean {
     const bd = new Date(bookingDateStr)
     if (bd < windowStart || bd > windowEnd) {
       console.log(
-        `[gmailScanner/trip] ✗ "${booking.vendor}" — ` +
-        `date "${bookingDateStr}" outside [${windowStart.toISOString().slice(0, 10)}, ` +
+        `[gmailScanner/trip] ✗ date mismatch: "${booking.vendor}" ` +
+        `"${bookingDateStr}" outside [${windowStart.toISOString().slice(0, 10)}, ` +
         `${windowEnd.toISOString().slice(0, 10)}]`,
       )
-      return false
+      return 'wrong_date'
     }
   }
 
-  return true
+  return 'ok'
 }
 
 export interface ScanStats {
@@ -209,6 +211,12 @@ export interface TripScanStats extends ScanStats {
   destination:  string
   daysSearched: number
   createdDocs:  CreatedDoc[]   // list of every document actually saved
+  // Detailed breakdown — shown to user so they understand what happened
+  filteredLowConf:  number   // dropped: AI confidence < 0.4
+  filteredWrongDest: number  // dropped: destination didn't match trip
+  filteredWrongDate: number  // dropped: dates outside trip window
+  filteredDuplicate: number  // dropped: same booking_ref already in DB
+  failedDB:          number  // tried to save but DB insert failed
 }
 
 interface GmailConnection {
@@ -474,6 +482,8 @@ export async function scanTripGmail(
     tripId: t.id, tripName: t.name, destination: t.destination, daysSearched,
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
     createdDocs: [],
+    filteredLowConf: 0, filteredWrongDest: 0, filteredWrongDate: 0,
+    filteredDuplicate: 0, failedDB: 0,
   }
 
   const categoryMap: Record<string, string> = {
@@ -496,31 +506,47 @@ export async function scanTripGmail(
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
       // ── PASS 1: Fetch bodies + parse with Claude (text-only, no PDFs yet) ──
-      // This is fast (~5-8s for 20 emails in parallel).
-      // We avoid downloading PDFs until we know an email is relevant.
-      const pass1 = await Promise.allSettled(
+      // Fast (~5-10s for 20 emails in parallel). PDFs downloaded only for relevant ones.
+      type Pass1Item = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
+      const pass1Results = await Promise.allSettled(
         messages.map(async (msg) => {
           let body = ''
-          try { body = await getEmailBody(accessToken, msg.id) } catch { return null }
+          try { body = await getEmailBody(accessToken, msg.id) } catch { return { skip: 'fetch_error' as const } }
           const emailContent = body || msg.snippet
 
-          // Text-only parse — fast, no PDF needed yet
+          // Text-only parse — fast, no PDF yet
           const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
-          if (!parsedBooking || parsedBooking.confidence < 0.5) return null
-          if (!isRelevantToTrip(parsedBooking, t))              return null
+          if (!parsedBooking || parsedBooking.confidence < 0.4) {
+            return { skip: 'low_conf' as const, conf: parsedBooking?.confidence ?? 0 }
+          }
+
+          const relevance = checkRelevance(parsedBooking, t)
+          if (relevance !== 'ok') return { skip: relevance as 'wrong_dest' | 'wrong_date' }
 
           return { msg, parsedBooking, emailContent, rawHtml: body }
         }),
       )
 
-      // Collect emails that survived text-only filtering
-      type Pass1Item = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
+      // Tally filter reasons and collect survivors
       const relevant: Pass1Item[] = []
-      for (const r of pass1) {
-        if (r.status === 'fulfilled' && r.value !== null) relevant.push(r.value as Pass1Item)
+      for (const r of pass1Results) {
+        if (r.status !== 'fulfilled') continue
+        const v = r.value
+        if (!v || 'skip' in v) {
+          if (v && 'skip' in v) {
+            if      (v.skip === 'low_conf')    stats.filteredLowConf++
+            else if (v.skip === 'wrong_dest')  stats.filteredWrongDest++
+            else if (v.skip === 'wrong_date')  stats.filteredWrongDate++
+          }
+        } else {
+          relevant.push(v as Pass1Item)
+        }
       }
 
-      console.log(`[gmailScanner/trip] Pass 1 done: ${relevant.length}/${messages.length} relevant`)
+      console.log(
+        `[gmailScanner/trip] Pass 1: ${messages.length} scanned, ${relevant.length} relevant ` +
+        `(lowConf=${stats.filteredLowConf} wrongDest=${stats.filteredWrongDest} wrongDate=${stats.filteredWrongDate})`,
+      )
 
       // ── PASS 2: For relevant emails only, download PDF attachments ────────
       // Typically 1-5 emails, so this adds very little time.
@@ -573,7 +599,7 @@ export async function scanTripGmail(
               .eq('trip_id', tripId)
               .eq('booking_ref', parsedBooking.confirmation_number)
               .maybeSingle()
-            if (existingDoc) continue
+            if (existingDoc) { stats.filteredDuplicate++; continue }
           }
 
           const bookingTitle =
@@ -651,7 +677,8 @@ export async function scanTripGmail(
             .single()
 
           if (docError) {
-            console.error('[gmailScanner/trip] Document insert error:', docError)
+            console.error('[gmailScanner/trip] Document insert error:', docError.message, docError.details)
+            stats.failedDB++
           } else if (docRecord) {
             // ── Document saved ✅ — record it and increment counter ──────────
             stats.createdDocs.push({

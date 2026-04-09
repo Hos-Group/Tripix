@@ -31,9 +31,14 @@ export default function DocumentsPage() {
   const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string }[] | null>(null)
   const [gmailScanning,    setGmailScanning]    = useState(false)
   const [gmailResult,      setGmailResult]      = useState<{
-    scanned: number
-    created: number
-    createdDocs?: Array<{ id: string; name: string; doc_type: string }>
+    scanned:           number
+    created:           number
+    createdDocs?:      Array<{ id: string; name: string; doc_type: string }>
+    filteredLowConf?:  number
+    filteredWrongDest?: number
+    filteredWrongDate?: number
+    filteredDuplicate?: number
+    failedDB?:         number
   } | null>(null)
   const [gmailError,       setGmailError]       = useState<string | null>(null)
   const [newDocIds,        setNewDocIds]         = useState<Set<string>>(new Set())
@@ -118,9 +123,14 @@ export default function DocumentsPage() {
 
       const createdDocs = (json.createdDocs as Array<{ id: string; name: string; doc_type: string }>) || []
       setGmailResult({
-        scanned:     json.scanned as number,
-        created:     json.created as number,
+        scanned:           json.scanned           as number,
+        created:           json.created           as number,
         createdDocs,
+        filteredLowConf:   json.filteredLowConf   as number | undefined,
+        filteredWrongDest: json.filteredWrongDest as number | undefined,
+        filteredWrongDate: json.filteredWrongDate as number | undefined,
+        filteredDuplicate: json.filteredDuplicate as number | undefined,
+        failedDB:          json.failedDB          as number | undefined,
       })
 
       if (createdDocs.length > 0) {
@@ -327,14 +337,14 @@ export default function DocumentsPage() {
             </Link>
           </div>
           {gmailResult && (
-            <div className="bg-white/70 rounded-xl px-3 py-2 text-xs space-y-1.5">
+            <div className="bg-white/70 rounded-xl px-3 py-2.5 text-xs space-y-2">
               {gmailResult.created > 0 ? (
                 <>
                   <p className="text-emerald-700 font-semibold">
-                    ✅ נוצרו {gmailResult.created} מסמכים חדשים מתוך {gmailResult.scanned} מיילים
+                    ✅ נוצרו {gmailResult.created} מסמכים מתוך {gmailResult.scanned} מיילים
                   </p>
                   {gmailResult.createdDocs && gmailResult.createdDocs.length > 0 && (
-                    <ul className="space-y-1 mt-1">
+                    <ul className="space-y-1">
                       {gmailResult.createdDocs.map(doc => (
                         <li key={doc.id} className="flex items-center gap-1.5 text-gray-700">
                           <span className="text-base leading-none">
@@ -346,10 +356,45 @@ export default function DocumentsPage() {
                     </ul>
                   )}
                 </>
-              ) : (
-                <p className="text-gray-500">
-                  סרקנו {gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים
+              ) : gmailResult.scanned === 0 ? (
+                <p className="text-amber-600 font-medium">
+                  ⚠️ לא נמצאו מיילים תואמים — נסה שוב מאוחר יותר
                 </p>
+              ) : (
+                <p className="text-gray-600 font-medium">
+                  סרקנו {gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים לטיול זה
+                </p>
+              )}
+
+              {/* Detailed breakdown — shows why emails were skipped */}
+              {gmailResult.scanned > 0 && (
+                <div className="border-t border-gray-100 pt-1.5 space-y-0.5">
+                  {(gmailResult.filteredLowConf ?? 0) > 0 && (
+                    <p className="text-gray-400">
+                      🤖 {gmailResult.filteredLowConf} מיילים שיווקיים / לא ברורים (AI)
+                    </p>
+                  )}
+                  {(gmailResult.filteredWrongDest ?? 0) > 0 && (
+                    <p className="text-gray-400">
+                      🗺️ {gmailResult.filteredWrongDest} הזמנות ליעד אחר
+                    </p>
+                  )}
+                  {(gmailResult.filteredWrongDate ?? 0) > 0 && (
+                    <p className="text-gray-400">
+                      📅 {gmailResult.filteredWrongDate} הזמנות מחוץ לתאריכי הטיול
+                    </p>
+                  )}
+                  {(gmailResult.filteredDuplicate ?? 0) > 0 && (
+                    <p className="text-gray-400">
+                      🔄 {gmailResult.filteredDuplicate} כבר קיימים במערכת
+                    </p>
+                  )}
+                  {(gmailResult.failedDB ?? 0) > 0 && (
+                    <p className="text-red-400">
+                      ⚠️ {gmailResult.failedDB} שגיאות שמירה — בדוק לוגים
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
