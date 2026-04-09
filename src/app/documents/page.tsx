@@ -48,6 +48,8 @@ export default function DocumentsPage() {
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'grid'>('list')
   const [viewerUrl, setViewerUrl] = useState<string | null>(null)
+  const [rowsPerPage, setRowsPerPage] = useState<number>(20)
+  const [currentPage, setCurrentPage] = useState<number>(1)
 
   // ── Load Gmail connections ──────────────────────────────────────────────
   const loadGmailConnections = useCallback(async () => {
@@ -305,8 +307,15 @@ export default function DocumentsPage() {
     return true
   })
 
-  // Group by doc_type
-  const grouped = filtered.reduce<Record<string, Document[]>>((acc, d) => {
+  // Pagination
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
+  const safePage    = Math.min(currentPage, totalPages)
+  const paginated   = rowsPerPage === -1
+    ? filtered
+    : filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
+
+  // Group by doc_type (on current page only)
+  const grouped = paginated.reduce<Record<string, Document[]>>((acc, d) => {
     const key = d.doc_type
     if (!acc[key]) acc[key] = []
     acc[key].push(d)
@@ -534,17 +543,33 @@ export default function DocumentsPage() {
 
       {/* Filters */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <span className="text-xs text-gray-500">סוג מסמך:</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-400" />
+            <span className="text-xs text-gray-500">סוג מסמך:</span>
+          </div>
+          {/* Rows per page selector */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400">שורות:</span>
+            <select
+              value={rowsPerPage}
+              onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1) }}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:border-primary">
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={-1}>הכל</option>
+            </select>
+          </div>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          <button onClick={() => setFilterType(null)}
+          <button onClick={() => { setFilterType(null); setCurrentPage(1) }}
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${!filterType ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
             הכל
           </button>
           {DOC_TYPES.map(dt => (
-            <button key={dt} onClick={() => setFilterType(filterType === dt ? null : dt)}
+            <button key={dt} onClick={() => { setFilterType(filterType === dt ? null : dt); setCurrentPage(1) }}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${filterType === dt ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
               {DOC_TYPE_META[dt].icon} {DOC_TYPE_META[dt].label}
             </button>
@@ -554,7 +579,7 @@ export default function DocumentsPage() {
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           <span className="flex-shrink-0 text-xs text-gray-500 self-center">נוסע:</span>
           {[{ id: 'all', name: 'כולם' }, ...travelers].map(t => (
-            <button key={t.id} onClick={() => setFilterTraveler(filterTraveler === t.id ? null : t.id as TravelerId)}
+            <button key={t.id} onClick={() => { setFilterTraveler(filterTraveler === t.id ? null : t.id as TravelerId); setCurrentPage(1) }}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 ${filterTraveler === t.id ? 'bg-primary text-white' : 'bg-white text-gray-600'}`}>
               {t.name}
             </button>
@@ -729,6 +754,52 @@ export default function DocumentsPage() {
           )
         })
       )}
+      {/* ── Pagination controls ─────────────────────────────────────────────── */}
+      {rowsPerPage !== -1 && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2 pb-4">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 disabled:opacity-30 active:scale-95 transition-all">
+            ‹ הקודם
+          </button>
+          <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              .reduce<(number | '…')[]>((acc, p, i, arr) => {
+                if (i > 0 && (arr[i - 1] as number) + 1 < p) acc.push('…')
+                acc.push(p)
+                return acc
+              }, [])
+              .map((p, i) =>
+                p === '…' ? (
+                  <span key={`ellipsis-${i}`} className="px-2 py-1 text-xs text-gray-400">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setCurrentPage(p as number)}
+                    className={`w-8 h-8 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+                      safePage === p
+                        ? 'bg-primary text-white'
+                        : 'bg-white border border-gray-200 text-gray-600'
+                    }`}>
+                    {p}
+                  </button>
+                ),
+              )}
+          </div>
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-gray-200 text-gray-600 disabled:opacity-30 active:scale-95 transition-all">
+            הבא ›
+          </button>
+          <span className="text-xs text-gray-400">
+            {filtered.length} מסמכים
+          </span>
+        </div>
+      )}
+
       <DocumentViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
     </div>
   )

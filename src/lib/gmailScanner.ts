@@ -80,6 +80,39 @@ const COUNTRY_CITY_MAP: Record<string, string[]> = {
   brazil:        ['brazil', 'rio', 'gig', 'sao paulo', 'gru', 'salvador', 'ssa'],
 }
 
+// ── Hebrew first-name → Latin hints (for traveler matching + Gmail query) ────
+const HE_FIRST_NAME_HINTS: Record<string, string[]> = {
+  'אומר': ['omer', 'omar'],
+  'נועה': ['noa', 'noga'],
+  'שרה': ['sara', 'sarah'],
+  'יוסף': ['yosef', 'joseph'],
+  'דוד': ['david', 'dave'],
+  'יעל': ['yael'],
+  'איתי': ['itai', 'itay'],
+  'רון': ['ron'],
+  'תמר': ['tamar'],
+  'גל': ['gal'],
+  'יונתן': ['yonatan', 'jonathan'],
+  'נועם': ['noam'],
+  'מיכל': ['michal'],
+  'ליאור': ['lior'],
+  'שירה': ['shira'],
+  'עמית': ['amit'],
+  'אביב': ['aviv'],
+  'טל': ['tal'],
+  'עדי': ['adi'],
+  'לי': ['lee', 'li'],
+  'ניר': ['nir'],
+  'גלי': ['gali'],
+  'הלל': ['hillel'],
+  'אורן': ['oren'],
+  'רות': ['ruth'],
+  'אסף': ['assaf', 'asaf'],
+  'בן': ['ben'],
+  'ויקטוריה': ['victoria', 'vicky'],
+  'מאיה': ['maya', 'maia'],
+}
+
 /** Map Hebrew destination words → English country key */
 const HE_TO_COUNTRY: Record<string, string> = {
   'תאילנד': 'thailand', 'פוקט': 'thailand', 'בנגקוק': 'thailand',
@@ -126,6 +159,103 @@ function resolveTripCountry(destination: string): string | null {
     if (COUNTRY_CITY_MAP[key].some(alias => lower.includes(alias))) return key
   }
   return null
+}
+
+/**
+ * Soft traveler name check — logs only, never hard-rejects.
+ * Trip travelers are Hebrew; booking emails use Latin names.
+ * We use a hint table for common name mappings.
+ */
+function checkTravelerSoftMatch(
+  parsedNames:   string[],
+  tripTravelers: Array<{ id: string; name: string }>,
+): 'match' | 'no_names' | 'mismatch' {
+  if (!parsedNames.length || !tripTravelers.length) return 'no_names'
+  const parsedLower = parsedNames.join(' ').toLowerCase()
+  for (const t of tripTravelers) {
+    const hints = HE_FIRST_NAME_HINTS[t.name] || []
+    if (hints.some(h => parsedLower.includes(h))) return 'match'
+    // Also try the Hebrew name itself (in case email is in Hebrew)
+    if (parsedLower.includes(t.name)) return 'match'
+  }
+  const anyHintsAvailable = tripTravelers.some(t => HE_FIRST_NAME_HINTS[t.name])
+  return anyHintsAvailable ? 'mismatch' : 'no_names'
+}
+
+/**
+ * Build a Gmail search boost string from trip destination + traveler names.
+ * Additive only — emails are never excluded if they don't match.
+ */
+function buildTripGmailQuery(
+  trip:     Pick<TripRow, 'destination'>,
+  travelers: Array<{ id: string; name: string }>,
+): string {
+  const terms: string[] = []
+  // Destination aliases (no-space terms, max 5)
+  const countryKey = resolveTripCountry(trip.destination)
+  if (countryKey) {
+    const aliases = COUNTRY_CITY_MAP[countryKey]
+      .filter(a => a.length >= 3 && !/\s/.test(a))
+      .slice(0, 5)
+    terms.push(...aliases)
+  }
+  // Traveler name hints (max 2 travelers × 1 hint each)
+  for (const t of travelers.slice(0, 3)) {
+    const hint = (HE_FIRST_NAME_HINTS[t.name] || [])[0]
+    if (hint) terms.push(hint)
+  }
+  return Array.from(new Set(terms)).join(' OR ')
+}
+
+/**
+ * Extract candidate booking/confirmation URLs from email HTML.
+ * Returns up to 3 unique https URLs whose href or anchor text looks like a booking link.
+ */
+function extractBookingUrls(html: string): string[] {
+  const BOOKING_RE = /booking|ticket|confirmation|voucher|itinerary|manage|reservation|e-ticket|eticket/i
+  const LINK_RE    = /<a\s[^>]*href=["'](https?:[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+  const seen = new Set<string>()
+  const results: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = LINK_RE.exec(html)) !== null && results.length < 3) {
+    const href   = m[1].trim()
+    const anchor = m[2].replace(/<[^>]+>/g, '').trim()
+    if (seen.has(href)) continue
+    if (href.length > 500) continue
+    // Exclude tracking / unsubscribe / image links
+    if (/unsubscribe|optout|pixel|tracking|click\.|email\.|track\./i.test(href)) continue
+    if (BOOKING_RE.test(href) || BOOKING_RE.test(anchor)) {
+      seen.add(href)
+      results.push(href)
+    }
+  }
+  return results
+}
+
+/**
+ * Try to fetch a booking page URL and return its HTML body.
+ * Returns null on timeout, error, or non-HTML response.
+ */
+async function fetchBookingPage(url: string): Promise<string | null> {
+  try {
+    const controller = new AbortController()
+    const timer      = setTimeout(() => controller.abort(), 8000)
+    const res = await fetch(url, {
+      signal:   controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; Tripix/1.0)',
+        'Accept':     'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+    })
+    clearTimeout(timer)
+    if (!res.ok) return null
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('text/html')) return null
+    return await res.text()
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -425,11 +555,12 @@ export async function scanUserGmail(
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface TripRow {
-  id:         string
-  name:       string
+  id:          string
+  name:        string
   destination: string
-  start_date: string
-  end_date:   string
+  start_date:  string
+  end_date:    string
+  travelers:   Array<{ id: string; name: string }>
 }
 
 /**
@@ -452,13 +583,13 @@ export async function scanTripGmail(
   // ── 1. Load trip ──────────────────────────────────────────────────────────
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('id, name, destination, start_date, end_date')
+    .select('id, name, destination, start_date, end_date, travelers')
     .eq('id', tripId)
     .eq('user_id', userId)
     .single()
 
   if (tripError || !trip) throw new Error('טיול לא נמצא')
-  const t = trip as TripRow
+  const t = { ...trip, travelers: (trip.travelers as Array<{ id: string; name: string }>) || [] } as TripRow
 
   // ── 2. Load ALL Gmail connections ────────────────────────────────────────
   const { data: connections, error: connError } = await supabase
@@ -473,11 +604,13 @@ export async function scanTripGmail(
   // ── 3. Search always 365 days back — bookings are made months in advance ──
   const daysSearched = 365
 
-  // ── 4. No destination filtering in Gmail query ────────────────────────────
-  // Flight confirmation emails often use airport codes (BCN, HKT, BKK) rather
-  // than city names, so destination-based filtering misses them.
-  // We cast a wide net here and let Claude's confidence score filter relevance.
-  const destQuery = ''
+  // ── 4. Build a Gmail boost query from destination + traveler name hints ───
+  // This is ADDITIVE — emails that don't match are not excluded.
+  // searchBookingEmails wraps it as "(destQuery OR has:attachment)" so even
+  // emails without these keywords are found if they have an attachment.
+  const destQuery = buildTripGmailQuery(t, t.travelers)
+  console.log(`[gmailScanner/trip] Gmail boost query: "${destQuery}"`)
+
 
   const stats: TripScanStats = {
     tripId: t.id, tripName: t.name, destination: t.destination, daysSearched,
@@ -524,10 +657,15 @@ export async function scanTripGmail(
           const relevance = checkRelevance(parsedBooking, t)
           if (relevance !== 'ok') return { skip: relevance as 'wrong_dest' | 'wrong_date' }
 
+          // Soft traveler name check — log only, never blocks
+          const travelerMatch = checkTravelerSoftMatch(parsedBooking.traveler_names, t.travelers)
           console.log(
             `[gmailScanner/trip] ✓ RELEVANT: type=${parsedBooking.booking_type}` +
             ` vendor="${parsedBooking.vendor}" city="${parsedBooking.destination_city}"` +
-            ` country="${parsedBooking.destination_country}" conf=${parsedBooking.confidence}`,
+            ` conf=${parsedBooking.confidence} traveler=${travelerMatch}` +
+            (travelerMatch === 'mismatch'
+              ? ` [parsed: ${parsedBooking.traveler_names.join(',')}]`
+              : ''),
           )
           return { msg, parsedBooking, emailContent, rawHtml: body }
         }),
@@ -584,6 +722,28 @@ export async function scanTripGmail(
                 finalBooking = withPdf
               }
             } catch { /* keep text-only result */ }
+          }
+
+          // ── If no PDF: try extracting booking links from the email HTML ────
+          // Some airlines/hotels send a "View your booking" link instead of PDF.
+          // We fetch the page and re-parse for better data quality.
+          if (!pdfBase64 && rawHtml) {
+            const bookingUrls = extractBookingUrls(rawHtml)
+            for (const url of bookingUrls) {
+              try {
+                console.log(`[gmailScanner/trip] Fetching booking URL: ${url.slice(0, 80)}…`)
+                const pageHtml = await fetchBookingPage(url)
+                if (!pageHtml) continue
+                const urlBooking = await parseBookingEmail(pageHtml, msg.subject)
+                if (urlBooking && urlBooking.confidence > finalBooking.confidence) {
+                  console.log(
+                    `[gmailScanner/trip] URL parse improved: ${finalBooking.confidence} → ${urlBooking.confidence}`,
+                  )
+                  finalBooking = urlBooking
+                  break
+                }
+              } catch { /* ignore URL fetch errors */ }
+            }
           }
 
           return { msg, parsedBooking: finalBooking, emailContent, rawHtml, pdfBase64, pdfFilename }
