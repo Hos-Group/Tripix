@@ -8,7 +8,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Tripix — מנהל טיול חכם',
-  description: 'מערכת ניהול טיול חכמה לתאילנד',
+  description: 'מערכת לניהול נסיעות אוטומטי',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
