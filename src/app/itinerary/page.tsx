@@ -123,7 +123,7 @@ const LeafletMap = dynamic(() => import('@/components/TripMap'), { ssr: false,
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
       <div className="flex flex-col items-center gap-3">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <p className="text-sm text-gray-500">טוען מפה...</p>
+        <p className="text-sm text-gray-500">Loading map...</p>
       </div>
     </div>
   ),
@@ -140,7 +140,7 @@ export default function ItineraryPage() {
   const [loading,   setLoading]   = useState(true)
 
   const fmtDate = (d: string) => d
-    ? new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+    ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     : ''
 
   useEffect(() => {
@@ -257,15 +257,15 @@ export default function ItineraryPage() {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
-            <h1 className="text-base font-bold">לוח מסע</h1>
+            <h1 className="text-base font-bold">Trip Map</h1>
             {currentTrip && (
               <p className="text-xs opacity-60">{currentTrip.name}</p>
             )}
           </div>
           {/* Legend pill */}
           <div className="flex items-center gap-2 text-[10px] opacity-70">
-            <span>✈️ טיסה</span>
-            <span>🏨 מלון</span>
+            <span>✈️ Flight</span>
+            <span>🏨 Hotel</span>
           </div>
         </div>
       </div>
@@ -275,18 +275,18 @@ export default function ItineraryPage() {
         {loading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-100">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            <p className="text-sm text-gray-500">טוען נתוני טיול...</p>
+            <p className="text-sm text-gray-500">Loading trip data...</p>
           </div>
         ) : !currentTrip ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-50">
             <MapPin className="w-12 h-12 text-gray-300" />
-            <p className="text-gray-400">בחר טיול כדי לראות את המפה</p>
+            <p className="text-gray-400">Select a trip to view the map</p>
           </div>
         ) : !hasData ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-50">
             <div className="text-5xl mb-2">✈️</div>
-            <p className="text-gray-500 text-sm font-medium">אין מסמכי טיסה / מלון עדיין</p>
-            <p className="text-gray-400 text-xs">סרוק את Gmail כדי לייבא מסמכים</p>
+            <p className="text-gray-500 text-sm font-medium">No flight / hotel documents yet</p>
+            <p className="text-gray-400 text-xs">Scan Gmail to import documents</p>
           </div>
         ) : (
           <LeafletMap
