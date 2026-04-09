@@ -322,7 +322,7 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
       if (c.pickupCoords) {
         const icon = carRentalIcon('pickup', c.pickupSeqNum)
         const seqLine = c.pickupSeqNum
-          ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">תחנה #${c.pickupSeqNum}</div>`
+          ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">Stop #${c.pickupSeqNum}</div>`
           : ''
         const popup = L.popup({
           closeButton: false,
@@ -330,12 +330,12 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
           offset:      [0, -18],
           maxWidth:    220,
         }).setContent(`
-          <div dir="rtl" style="font-family:-apple-system,sans-serif;min-width:160px;">
+          <div style="font-family:-apple-system,sans-serif;min-width:160px;">
             ${seqLine}
-            <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🚗 איסוף רכב</div>
+            <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🚗 Car Pickup</div>
             ${companyLine}${carTypeLine}
             <div style="font-size:11px;color:#555;">
-              <span style="color:#059669;font-weight:600;">מיקום:</span> ${c.pickupLocation}
+              <span style="color:#059669;font-weight:600;">Location:</span> ${c.pickupLocation}
             </div>
             <div style="font-size:10px;color:#999;margin-top:3px;">${fmtDate(c.pickupDate)}</div>
           </div>
@@ -353,7 +353,7 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
         if (!sameAsPickup) {
           const icon = carRentalIcon('dropoff', c.dropoffSeqNum)
           const seqLine = c.dropoffSeqNum
-            ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">תחנה #${c.dropoffSeqNum}</div>`
+            ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">Stop #${c.dropoffSeqNum}</div>`
             : ''
           const popup = L.popup({
             closeButton: false,
@@ -361,12 +361,12 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
             offset:      [0, -18],
             maxWidth:    220,
           }).setContent(`
-            <div dir="rtl" style="font-family:-apple-system,sans-serif;min-width:160px;">
+            <div style="font-family:-apple-system,sans-serif;min-width:160px;">
               ${seqLine}
-              <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🚗 החזרת רכב</div>
+              <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🚗 Car Return</div>
               ${companyLine}${carTypeLine}
               <div style="font-size:11px;color:#555;">
-                <span style="color:#DC2626;font-weight:600;">מיקום:</span> ${c.dropoffLocation}
+                <span style="color:#DC2626;font-weight:600;">Location:</span> ${c.dropoffLocation}
               </div>
               <div style="font-size:10px;color:#999;margin-top:3px;">${fmtDate(c.dropoffDate)}</div>
             </div>
