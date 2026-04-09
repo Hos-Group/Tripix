@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw, Mail, Settings, ChevronRight } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -26,10 +26,58 @@ export default function DocumentsPage() {
   const [reprocessing,     setReprocessing]     = useState<string | null>(null)
   const [reprocessingAll,  setReprocessingAll]  = useState(false)
   const [reprocessProgress, setReprocessProgress] = useState<{ done: number; total: number } | null>(null)
+
+  // ── Gmail sync state ────────────────────────────────────────────────────
+  const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string }[]>([])
+  const [gmailLoading,     setGmailLoading]     = useState(true)
+  const [gmailScanning,    setGmailScanning]    = useState(false)
+  const [gmailResult,      setGmailResult]      = useState<{ scanned: number; created: number } | null>(null)
+  const [gmailError,       setGmailError]       = useState<string | null>(null)
   const [filterType, setFilterType] = useState<DocType | null>(null)
   const [filterTraveler, setFilterTraveler] = useState<TravelerId | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'grid'>('list')
   const [viewerUrl, setViewerUrl] = useState<string | null>(null)
+
+  // ── Load Gmail connections ──────────────────────────────────────────────
+  const loadGmailConnections = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setGmailLoading(false); return }
+    const { data } = await supabase
+      .from('gmail_connections')
+      .select('id, gmail_address')
+      .eq('user_id', user.id)
+      .order('gmail_address')
+    setGmailConnections(data || [])
+    setGmailLoading(false)
+  }, [])
+
+  useEffect(() => { loadGmailConnections() }, [loadGmailConnections])
+
+  // ── Scan Gmail for this trip ─────────────────────────────────────────────
+  const handleGmailScan = useCallback(async () => {
+    if (!currentTrip) return
+    setGmailScanning(true)
+    setGmailResult(null)
+    setGmailError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) { setGmailError('לא מחובר'); return }
+      const res = await fetch('/api/gmail/scan-trip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ trip_id: currentTrip.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setGmailError(json.error || 'שגיאה בסריקה'); return }
+      setGmailResult({ scanned: json.scanned, created: json.created })
+      if (json.created > 0) fetchDocuments()
+    } catch {
+      setGmailError('שגיאת רשת — נסה שוב')
+    } finally {
+      setGmailScanning(false)
+    }
+  }, [currentTrip])
 
   const fetchDocuments = useCallback(async () => {
     if (!currentTrip) { setDocuments([]); setLoading(false); return }
@@ -202,6 +250,86 @@ export default function DocumentsPage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Gmail Sync Card ──────────────────────────────────────────────── */}
+      {!gmailLoading && (
+        <AnimatePresence mode="wait">
+          {gmailConnections.length === 0 ? (
+            /* Not connected */
+            <motion.div key="not-connected"
+              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-l from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+                <Mail className="w-5 h-5 text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800">משוך מסמכים מ-Gmail</p>
+                <p className="text-xs text-gray-500 mt-0.5">חבר את המייל שלך ונביא הזמנות אוטומטית</p>
+              </div>
+              <Link href="/settings"
+                className="flex items-center gap-1 bg-primary text-white rounded-xl px-3 py-2 text-xs font-semibold active:scale-95 flex-shrink-0">
+                <Settings className="w-3.5 h-3.5" /> חבר
+              </Link>
+            </motion.div>
+          ) : (
+            /* Connected — show scan card */
+            <motion.div key="connected"
+              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-l from-emerald-50 to-blue-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
+
+              {/* Header row */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
+                  <Mail className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">Gmail מחובר</p>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {gmailConnections.map(c => (
+                      <span key={c.id} className="text-[10px] bg-white/80 text-gray-500 px-2 py-0.5 rounded-full border border-gray-100" dir="ltr">
+                        {c.gmail_address}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Link href="/settings" className="text-gray-300 hover:text-gray-500 active:scale-95 flex-shrink-0">
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
+
+              {/* Result / Error */}
+              {gmailResult && (
+                <div className="bg-white/70 rounded-xl px-3 py-2 text-xs text-emerald-700">
+                  {gmailResult.created > 0
+                    ? `✅ נוצרו ${gmailResult.created} מסמכים חדשים מתוך ${gmailResult.scanned} מיילים`
+                    : `סרקנו ${gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים`}
+                </div>
+              )}
+              {gmailError && (
+                <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2">{gmailError}</p>
+              )}
+
+              {/* Scan button */}
+              <button
+                onClick={handleGmailScan}
+                disabled={gmailScanning || !currentTrip}
+                className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-2.5 text-sm font-semibold active:scale-95 transition-all disabled:opacity-50">
+                {gmailScanning ? (
+                  <><span className="animate-spin">⏳</span> סורק מיילים...</>
+                ) : (
+                  <><Mail className="w-4 h-4" /> משוך מסמכים מ-Gmail לטיול זה</>
+                )}
+              </button>
+
+              {!gmailScanning && (
+                <p className="text-[10px] text-gray-400 text-center">
+                  מחפש אישורי הזמנה מכל חשבונות Gmail המחוברים · {gmailConnections.length} חשבון{gmailConnections.length > 1 ? 'ות' : ''}
+                </p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Filters */}
       <div className="space-y-2">
