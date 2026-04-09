@@ -104,11 +104,12 @@ export async function searchBookingEmails(
   // ── Subject keywords for booking confirmations ───────────────────────────
   // Single words (not quoted) so partial matches work across all languages/formats
   const subjectTerms = [
-    // English
-    'confirmation', 'reservation', 'itinerary', 'e-ticket', 'eticket',
+    // English — booking confirmations
+    'confirmation', 'confirmed', 'reservation', 'itinerary', 'e-ticket', 'eticket',
     'voucher', 'receipt', 'invoice', 'boarding', 'check-in', 'checkin',
+    'booking', 'order', 'ticket', 'payment',
     // Hebrew
-    'אישור', 'הזמנה', 'כרטיס', 'טיסה', 'קבלה', 'חשבונית',
+    'אישור', 'הזמנה', 'כרטיס', 'טיסה', 'קבלה', 'חשבונית', 'תשלום',
   ].join(' OR ')
 
   // ── Known booking / travel sender domains ────────────────────────────────
@@ -130,6 +131,10 @@ export async function searchBookingEmails(
     'klook.com', 'viator.com', 'getyourguide.com',
     // Multi-platform
     'trip.com', 'kiwi.com', 'almosafer.com',
+    // Hotels direct
+    'marriott.com', 'hilton.com', 'ihg.com', 'hyatt.com',
+    // Car rental
+    'hertz.com', 'avis.com', 'sixt.com', 'europcar.com',
   ].map(d => `from:${d}`).join(' OR ')
 
   const queryParts = [

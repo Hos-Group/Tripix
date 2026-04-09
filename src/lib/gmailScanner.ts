@@ -305,24 +305,11 @@ export async function scanTripGmail(
   // ── 3. Search always 365 days back — bookings are made months in advance ──
   const daysSearched = 365
 
-  // ── 4. Build destination keywords with English transliterations ───────────
-  const destParts = t.destination
-    .toLowerCase().replace(/[,،]/g, ' ').split(/\s+/)
-    .filter(w => w.length > 2).slice(0, 6)
-  // Map common Hebrew destination names to English equivalents
-  const heToEn: Record<string, string[]> = {
-    'תאילנד': ['thailand', 'thai'], 'פוקט': ['phuket'],
-    'בנגקוק': ['bangkok', 'bkk'],   'קוסמוי': ['samui'],
-    'קוסאמוי': ['samui', 'koh samui'], 'צ\'אנג': ['chiang mai'],
-    'ישראל': ['israel'], 'פריז': ['paris'], 'לונדון': ['london'],
-    'ניו': ['new york'], 'יורק': ['new york'], 'ברצלונה': ['barcelona'],
-    'רומא': ['rome', 'roma'], 'אמסטרדם': ['amsterdam'],
-  }
-  const extraTerms: string[] = [...destParts]
-  for (const [heb, eng] of Object.entries(heToEn)) {
-    if (t.destination.includes(heb)) extraTerms.push(...eng)
-  }
-  const destQuery = extraTerms.length ? extraTerms.join(' OR ') : ''
+  // ── 4. No destination filtering in Gmail query ────────────────────────────
+  // Flight confirmation emails often use airport codes (BCN, HKT, BKK) rather
+  // than city names, so destination-based filtering misses them.
+  // We cast a wide net here and let Claude's confidence score filter relevance.
+  const destQuery = ''
 
   const stats: TripScanStats = {
     tripId: t.id, tripName: t.name, destination: t.destination, daysSearched,
@@ -344,8 +331,8 @@ export async function scanTripGmail(
   for (const conn of connections as GmailConnection[]) {
     try {
       const accessToken = await getValidToken(supabase, conn)
-      // Limit to 8 emails — processed in parallel, so speed is ~equal to 1 email
-      const messages = await searchBookingEmails(accessToken, daysSearched, 8, destQuery)
+      // Fetch up to 20 emails — parallel processing keeps total time ~equal to 1 email
+      const messages = await searchBookingEmails(accessToken, daysSearched, 20, destQuery)
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
