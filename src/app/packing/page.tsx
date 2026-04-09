@@ -293,11 +293,24 @@ const TRIP_TYPE_OPTIONS: { value: TripType; label: string; icon: string }[] = [
   { value: 'general', label: 'כללי', icon: '🧳' },
 ]
 
+// ─── Wizard questions ─────────────────────────────────────────────────────────
+
+const WIZARD_TYPES: { value: TripType; label: string; icon: string; desc: string; bg: string }[] = [
+  { value: 'beach',    label: 'ים / חוף',           icon: '🏖️', desc: 'חוף ים, בריכה, שנורקל',     bg: 'from-cyan-400 to-blue-500' },
+  { value: 'city',     label: 'עיר / תרבות',        icon: '🏙️', desc: 'טיסה, מוזיאונים, מסעדות',   bg: 'from-purple-400 to-indigo-500' },
+  { value: 'trekking', label: 'הרים / טבע',         icon: '🏔️', desc: 'טרקים, קמפינג, טיבע',       bg: 'from-green-400 to-emerald-600' },
+  { value: 'skiing',   label: 'סקי / שלג',           icon: '⛷️', desc: 'פיסטות, אפרס-סקי, חורף',   bg: 'from-blue-300 to-sky-600' },
+  { value: 'business', label: 'עסקים',              icon: '💼', desc: 'כנסים, פגישות, עבודה',      bg: 'from-slate-500 to-gray-700' },
+  { value: 'desert',   label: 'מדבר / מזרח תיכון', icon: '🏜️', desc: 'חום, חול, אתרים עתיקים',   bg: 'from-amber-400 to-orange-600' },
+  { value: 'general',  label: 'כללי / מעורב',       icon: '🧳', desc: 'טיסה מעורבת, רשימה בסיסית', bg: 'from-gray-400 to-gray-600' },
+]
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PackingPage() {
   const { currentTrip } = useTrip()
   const [tripType, setTripType] = useState<TripType>('general')
+  const [showWizard, setShowWizard] = useState(false)
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
   const [customItems, setCustomItems] = useState<{ id: string; text: string; category: string }[]>([])
@@ -305,20 +318,36 @@ export default function PackingPage() {
   const [newItemCategory, setNewItemCategory] = useState('docs')
   const [showAddForm, setShowAddForm] = useState(false)
 
-  const storageKey = currentTrip ? `tripix_packing_v2_${currentTrip.id}` : 'tripix_packing_v2_default'
-  const typeKey = currentTrip ? `tripix_packing_type_${currentTrip.id}` : 'tripix_packing_type_default'
+  const storageKey  = currentTrip ? `tripix_packing_v2_${currentTrip.id}` : 'tripix_packing_v2_default'
+  const typeKey     = currentTrip ? `tripix_packing_type_${currentTrip.id}` : 'tripix_packing_type_default'
+  const wizardKey   = currentTrip ? `tripix_packing_wizard_${currentTrip.id}` : 'tripix_packing_wizard_default'
 
-  // Auto-detect trip type when trip changes
+  // Auto-detect trip type when trip changes — show wizard if not yet answered
   useEffect(() => {
     if (!currentTrip) return
-    const saved = localStorage.getItem(typeKey)
-    if (saved && TRIP_TYPE_OPTIONS.find(o => o.value === saved)) {
-      setTripType(saved as TripType)
+    const savedType   = localStorage.getItem(typeKey)
+    const wizardDone  = localStorage.getItem(wizardKey)
+
+    if (savedType && TRIP_TYPE_OPTIONS.find(o => o.value === savedType)) {
+      setTripType(savedType as TripType)
+      setShowWizard(false)
+    } else if (!wizardDone) {
+      // Pre-fill detection but show wizard for confirmation
+      const detected = detectTripType(currentTrip.destination || '', currentTrip.name || '')
+      setTripType(detected)
+      setShowWizard(true)
     } else {
       const detected = detectTripType(currentTrip.destination || '', currentTrip.name || '')
       setTripType(detected)
     }
-  }, [currentTrip, typeKey])
+  }, [currentTrip, typeKey, wizardKey])
+
+  const selectWizardType = (type: TripType) => {
+    setTripType(type)
+    setShowWizard(false)
+    localStorage.setItem(typeKey, type)
+    localStorage.setItem(wizardKey, '1')
+  }
 
   // Load checked items from localStorage
   useEffect(() => {
@@ -414,6 +443,52 @@ export default function PackingPage() {
       next.delete(id)
       return next
     })
+  }
+
+  // ── Wizard overlay ──────────────────────────────────────────────────────────
+  if (showWizard) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col"
+           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}>
+        <div className="px-4 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="active:scale-95 transition-transform">
+              <ChevronLeft className="w-5 h-5 text-gray-500" />
+            </Link>
+            <h1 className="text-xl font-bold">רשימת אריזה</h1>
+          </div>
+
+          {/* Question */}
+          <div className="text-center pt-2">
+            <div className="text-4xl mb-3">🧳</div>
+            <h2 className="text-2xl font-bold text-gray-800">מה סוג הטיול?</h2>
+            <p className="text-sm text-gray-400 mt-1">
+              {currentTrip ? currentTrip.destination : 'בחר סוג כדי לקבל רשימה מותאמת'}
+            </p>
+          </div>
+
+          {/* Type cards */}
+          <div className="grid grid-cols-2 gap-3">
+            {WIZARD_TYPES.map(wt => (
+              <button
+                key={wt.value}
+                onClick={() => selectWizardType(wt.value)}
+                className={`bg-gradient-to-br ${wt.bg} rounded-2xl p-4 text-white text-right active:scale-[0.97] transition-all shadow-md flex flex-col gap-1`}
+              >
+                <span className="text-3xl">{wt.icon}</span>
+                <span className="font-bold text-sm leading-tight">{wt.label}</span>
+                <span className="text-[11px] opacity-80 leading-tight">{wt.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          <p className="text-center text-xs text-gray-400">
+            תמיד ניתן לשנות אחר כך
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -54,17 +54,11 @@ export default function ToolsPage() {
     setRatesLoading(true)
     setRatesError(false)
     try {
-      // Fetch ILS-based rates → 1 ILS = X foreign currency
-      // Then invert so UI shows "1 USD = Y ILS"
-      const res = await fetch('https://api.frankfurter.app/latest?from=ILS')
+      // Call our server-side proxy to avoid CORS and get more currencies
+      const res = await fetch('/api/rates/all')
       if (!res.ok) throw new Error('failed')
       const data = await res.json() as { rates: Record<string, number> }
-      // Invert: 1 foreignCcy = 1 / rate[foreignCcy] ILS
-      const inverted: Record<string, number> = {}
-      for (const [ccy, r] of Object.entries(data.rates)) {
-        if (r > 0) inverted[ccy] = 1 / r
-      }
-      setRates(inverted)
+      setRates(data.rates)
       setLastUpdated(new Date())
     } catch {
       setRatesError(true)

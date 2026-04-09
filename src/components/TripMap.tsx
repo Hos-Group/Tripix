@@ -191,7 +191,7 @@ function carRentalIcon(kind: 'pickup' | 'dropoff', seqNum?: number) {
 // ── Format helpers ──────────────────────────────────────────────────────────
 function fmtDate(d: string) {
   if (!d) return ''
-  return new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' })
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -236,12 +236,12 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
     for (const f of flights) {
       const icon = flightIcon(f.type as 'departure' | 'arrival', f.isConnection, f.seqNum)
 
-      const typeLabel = f.type === 'departure' ? `🛫 המראה — ${f.depCity}` : `🛬 נחיתה — ${f.arrCity}`
+      const typeLabel = f.type === 'departure' ? `🛫 Departure — ${f.depCity}` : `🛬 Arrival — ${f.arrCity}`
       const connBadge = f.isConnection
-        ? `<div style="background:#F59E0B;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-bottom:4px;font-weight:600;">🔀 קונקשין</div>`
+        ? `<div style="background:#F59E0B;color:white;font-size:10px;padding:2px 6px;border-radius:4px;margin-bottom:4px;font-weight:600;">🔀 Connection</div>`
         : ''
       const seqLine = f.seqNum
-        ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">תחנה #${f.seqNum}</div>`
+        ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">Stop #${f.seqNum}</div>`
         : ''
 
       const popup = L.popup({
@@ -250,15 +250,15 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
         offset:      [0, -18],
         maxWidth:    200,
       }).setContent(`
-        <div dir="rtl" style="font-family:-apple-system,sans-serif;min-width:160px;">
+        <div style="font-family:-apple-system,sans-serif;min-width:160px;">
           ${connBadge}
           ${seqLine}
           <div style="font-size:13px;font-weight:700;margin-bottom:2px;">${f.flightNo}</div>
           <div style="font-size:11px;color:#555;margin-bottom:4px;">${f.airline}</div>
           <div style="font-size:12px;font-weight:600;color:#1D4ED8;">${typeLabel}</div>
           <div style="font-size:11px;color:#555;margin-top:2px;">${f.depCity} → ${f.arrCity}</div>
-          ${f.depTime ? `<div style="font-size:11px;color:#777;margin-top:2px;">🕐 המראה: ${f.depTime}</div>` : ''}
-          ${f.arrTime ? `<div style="font-size:11px;color:#777;">🕐 נחיתה: ${f.arrTime}</div>` : ''}
+          ${f.depTime ? `<div style="font-size:11px;color:#777;margin-top:2px;">🕐 Dep: ${f.depTime}</div>` : ''}
+          ${f.arrTime ? `<div style="font-size:11px;color:#777;">🕐 Arr: ${f.arrTime}</div>` : ''}
           <div style="font-size:10px;color:#999;margin-top:3px;">${fmtDate(f.date)}</div>
         </div>
       `)
@@ -273,7 +273,7 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
     for (const h of hotels) {
       const icon = hotelIcon(h.seqNum)
       const seqLine = h.seqNum
-        ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">תחנה #${h.seqNum}</div>`
+        ? `<div style="font-size:10px;color:#6B7280;font-weight:600;margin-bottom:2px;">Stop #${h.seqNum}</div>`
         : ''
 
       const popup = L.popup({
@@ -282,16 +282,16 @@ export default function TripMap({ flights, paths, hotels, carRentals }: Props) {
         offset:      [0, -18],
         maxWidth:    200,
       }).setContent(`
-        <div dir="rtl" style="font-family:-apple-system,sans-serif;min-width:160px;">
+        <div style="font-family:-apple-system,sans-serif;min-width:160px;">
           ${seqLine}
           <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🏨 ${h.name}</div>
           <div style="font-size:11px;color:#555;">
-            <span style="color:#059669;font-weight:600;">צ׳ק אין:</span> ${fmtDate(h.checkIn)}
+            <span style="color:#059669;font-weight:600;">Check-in:</span> ${fmtDate(h.checkIn)}
           </div>
           <div style="font-size:11px;color:#555;margin-top:1px;">
-            <span style="color:#DC2626;font-weight:600;">צ׳ק אאוט:</span> ${fmtDate(h.checkOut)}
+            <span style="color:#DC2626;font-weight:600;">Check-out:</span> ${fmtDate(h.checkOut)}
           </div>
-          ${h.nights > 0 ? `<div style="font-size:11px;color:#777;margin-top:3px;">🌙 ${h.nights} לילות</div>` : ''}
+          ${h.nights > 0 ? `<div style="font-size:11px;color:#777;margin-top:3px;">🌙 ${h.nights} nights</div>` : ''}
         </div>
       `)
 
