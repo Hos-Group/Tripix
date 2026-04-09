@@ -68,7 +68,7 @@ export default function NewTripPage() {
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState<TripTypeItem | null>(null)
   const [destination, setDestination] = useState('')   // country key e.g. "Thailand"
-  const [selectedCity, setSelectedCity] = useState('')   // city name in Hebrew
+  const [selectedCities, setSelectedCities] = useState<string[]>([])   // multiple cities
   const [customCityInput, setCustomCityInput] = useState('') // manual city input
   const [destSearch, setDestSearch] = useState('')
   const [showDestList, setShowDestList] = useState(false)
@@ -98,11 +98,17 @@ export default function NewTripPage() {
       return
     }
 
-    // Combine city + country for display, e.g. "בנגקוק, תאילנד"
-    const destDisplay = selectedCity
-      ? `${selectedCity}, ${filteredDests.find(d => d.name === destination)?.nameHe || destination}`
-      : (filteredDests.find(d => d.name === destination)?.nameHe || destination)
-    const tripName = name.trim() || `טיול ל${selectedCity || filteredDests.find(d => d.name === destination)?.nameHe || destination}`
+    // Build all cities including any custom input
+    const allCities = customCityInput.trim()
+      ? [...selectedCities.filter(c => c !== customCityInput), customCityInput.trim()]
+      : selectedCities
+
+    // Combine first city + country for display, e.g. "בנגקוק, תאילנד"
+    const countryHe = filteredDests.find(d => d.name === destination)?.nameHe || destination
+    const destDisplay = allCities.length > 0
+      ? `${allCities[0]}, ${countryHe}`
+      : countryHe
+    const tripName = name.trim() || `טיול ל${allCities.length > 0 ? allCities[0] : countryHe}`
 
     setSaving(true)
     try {
@@ -112,6 +118,7 @@ export default function NewTripPage() {
       const insertData: Record<string, unknown> = {
         name: tripName,
         destination: destDisplay,
+        cities: allCities,
         start_date: startDate,
         end_date: endDate,
         budget_ils: budget ? parseFloat(budget) : null,
@@ -264,7 +271,7 @@ export default function NewTripPage() {
                     onChange={(e) => {
                       setDestSearch(e.target.value)
                       setDestination('')
-                      setSelectedCity('')
+                      setSelectedCities([])
                       setCustomCityInput('')
                       setShowDestList(true)
                     }}
@@ -279,7 +286,7 @@ export default function NewTripPage() {
                           key={d.id}
                           onClick={() => {
                             setDestination(d.name)
-                            setSelectedCity('')
+                            setSelectedCities([])
                             setCustomCityInput('')
                             setDestSearch('')
                             setShowDestList(false)
@@ -297,7 +304,7 @@ export default function NewTripPage() {
                   )}
                 </div>
 
-                {/* City chips + manual input — shown after country is selected */}
+                {/* Multi-city picker — shown after country is selected */}
                 {destination && (
                   <AnimatePresence>
                     <motion.div
@@ -306,42 +313,78 @@ export default function NewTripPage() {
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-2"
                     >
-                      <p className="text-xs text-gray-500 font-medium">🏙️ בחרו עיר (אופציונלי)</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-500 font-medium">🏙️ ערים שתבקרו</p>
+                        {selectedCities.length > 0 && (
+                          <p className="text-[10px] text-primary font-medium">{selectedCities.length} נבחרו</p>
+                        )}
+                      </div>
 
-                      {/* Known cities chips */}
+                      {/* Known cities chips — multi-select */}
                       {getDestinationCities(destination).length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {getDestinationCities(destination).map(city => (
-                            <button
-                              key={city}
-                              onClick={() => {
-                                const toggled = selectedCity === city && !customCityInput ? '' : city
-                                setSelectedCity(toggled)
-                                setCustomCityInput('')
-                              }}
-                              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
-                                selectedCity === city && !customCityInput
-                                  ? 'bg-primary text-white border-primary shadow-sm'
-                                  : 'bg-gray-50 text-gray-600 border-gray-200'
-                              }`}
-                            >
-                              {city}
-                            </button>
-                          ))}
+                          {getDestinationCities(destination).map(city => {
+                            const isSelected = selectedCities.includes(city)
+                            return (
+                              <button
+                                key={city}
+                                onClick={() => {
+                                  setSelectedCities(prev =>
+                                    isSelected ? prev.filter(c => c !== city) : [...prev, city]
+                                  )
+                                }}
+                                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
+                                  isSelected
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                                }`}
+                              >
+                                {isSelected ? '✓ ' : ''}{city}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Selected cities display */}
+                      {selectedCities.length > 0 && (
+                        <div className="bg-primary/5 rounded-xl px-3 py-2 text-xs text-primary font-medium">
+                          מסלול: {selectedCities.join(' → ')}
                         </div>
                       )}
 
                       {/* Manual city input */}
-                      <input
-                        type="text"
-                        value={customCityInput}
-                        onChange={(e) => {
-                          setCustomCityInput(e.target.value)
-                          setSelectedCity(e.target.value)
-                        }}
-                        placeholder="לא מצאתם? הזינו עיר ידנית..."
-                        className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={customCityInput}
+                          onChange={(e) => setCustomCityInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && customCityInput.trim()) {
+                              setSelectedCities(prev =>
+                                prev.includes(customCityInput.trim()) ? prev : [...prev, customCityInput.trim()]
+                              )
+                              setCustomCityInput('')
+                            }
+                          }}
+                          placeholder="הוסיפו עיר ידנית..."
+                          className="flex-1 bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        {customCityInput.trim() && (
+                          <button
+                            onClick={() => {
+                              if (!selectedCities.includes(customCityInput.trim())) {
+                                setSelectedCities(prev => [...prev, customCityInput.trim()])
+                              }
+                              setCustomCityInput('')
+                            }}
+                            className="bg-primary text-white rounded-xl px-3 text-xs font-bold active:scale-95"
+                          >
+                            הוסף
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-400">הוסיפו עיר ולחצו Enter או &quot;הוסף&quot; — ניתן לבחור מספר ערים</p>
                     </motion.div>
                   </AnimatePresence>
                 )}
@@ -453,7 +496,7 @@ export default function NewTripPage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder={`ברירת מחדל: "טיול ל${selectedCity || destination || 'יעד'}"`}
+                    placeholder={`ברירת מחדל: "טיול ל${selectedCities[0] || destination || 'יעד'}"`}
                     className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none mt-1 focus:ring-2 focus:ring-primary/20"
                   />
                 </div>

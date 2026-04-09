@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useTrip } from '@/contexts/TripContext'
 import DateRangePicker from '@/components/DateRangePicker'
-import { searchDestinations } from '@/lib/destinations'
+import { searchDestinations, getDestinationCities } from '@/lib/destinations'
 
 export default function EditTripPage() {
   const router   = useRouter()
@@ -23,8 +23,11 @@ export default function EditTripPage() {
   const [budget,     setBudget]     = useState('')
   const [currency,   setCurrency]   = useState('ILS')
   const [travelers,  setTravelers]  = useState<{ id: string; name: string }[]>([])
+  const [cities,     setCities]     = useState<string[]>([])
+  const [cityInput,  setCityInput]  = useState('')
   const [loading,    setLoading]    = useState(true)
   const [saving,     setSaving]     = useState(false)
+  const [countryKey, setCountryKey] = useState('')   // for city suggestions
 
   // Destination autocomplete
   const [destSearch,    setDestSearch]    = useState('')
@@ -56,6 +59,7 @@ export default function EditTripPage() {
       setCurrency(storedCurrency)
       const travs = (data.travelers as { id: string; name: string }[] | null) || []
       setTravelers(travs.length > 0 ? travs : [{ id: 'traveler_1', name: '' }])
+      setCities((data.cities as string[] | null) || [])
       setLoading(false)
     }
     load()
@@ -75,6 +79,7 @@ export default function EditTripPage() {
         .update({
           name: name.trim() || destination,
           destination,
+          cities,
           start_date: startDate,
           end_date:   endDate,
           budget_ils: budget ? parseFloat(budget) : null,
@@ -156,6 +161,7 @@ export default function EditTripPage() {
                     onMouseDown={() => {
                       setDest(d.nameHe)
                       setDestSearch(d.nameHe)
+                      setCountryKey(d.name)
                       setShowDestList(false)
                     }}
                     className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center"
@@ -167,10 +173,87 @@ export default function EditTripPage() {
               </div>
             )}
           </div>
-          {/* Allow manual edit when no autocomplete match */}
           <p className="text-[11px] text-gray-400">
             לא מצאתם? ערכו ידנית — הקלידו את שם היעד ישירות בשדה
           </p>
+        </div>
+
+        {/* Cities */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-sm text-gray-700">🏙️ ערים שתבקרו</h3>
+            {cities.length > 0 && (
+              <span className="text-[10px] text-primary font-medium">{cities.length} ערים</span>
+            )}
+          </div>
+
+          {/* Suggested cities from country */}
+          {countryKey && getDestinationCities(countryKey).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {getDestinationCities(countryKey).map(city => {
+                const isSelected = cities.includes(city)
+                return (
+                  <button
+                    key={city}
+                    onClick={() => setCities(prev =>
+                      isSelected ? prev.filter(c => c !== city) : [...prev, city]
+                    )}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-sm'
+                        : 'bg-gray-50 text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    {isSelected ? '✓ ' : ''}{city}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Current cities list */}
+          {cities.length > 0 && (
+            <div className="bg-primary/5 rounded-xl px-3 py-2 space-y-1.5">
+              {cities.map((city, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-xs text-primary font-medium">{city}</span>
+                  <button
+                    onClick={() => setCities(prev => prev.filter((_, idx) => idx !== i))}
+                    className="text-[10px] text-red-400 active:scale-90 px-1"
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add custom city */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={cityInput}
+              onChange={e => setCityInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && cityInput.trim()) {
+                  if (!cities.includes(cityInput.trim())) setCities(prev => [...prev, cityInput.trim()])
+                  setCityInput('')
+                }
+              }}
+              placeholder="הוסיפו עיר..."
+              className="flex-1 bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            {cityInput.trim() && (
+              <button
+                onClick={() => {
+                  if (!cities.includes(cityInput.trim())) setCities(prev => [...prev, cityInput.trim()])
+                  setCityInput('')
+                }}
+                className="bg-primary text-white rounded-xl px-3 text-xs font-bold active:scale-95"
+              >
+                הוסף
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-gray-400">הערים ישפרו את זיהוי המיילים המשויכים לטיול הזה</p>
         </div>
 
         {/* Dates */}
