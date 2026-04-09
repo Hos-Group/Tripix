@@ -39,6 +39,7 @@ export default function DocumentsPage() {
     filteredWrongDate?: number
     filteredDuplicate?: number
     failedDB?:         number
+    lastDbError?:      string
   } | null>(null)
   const [gmailError,       setGmailError]       = useState<string | null>(null)
   const [newDocIds,        setNewDocIds]         = useState<Set<string>>(new Set())
@@ -131,6 +132,7 @@ export default function DocumentsPage() {
         filteredWrongDate: json.filteredWrongDate as number | undefined,
         filteredDuplicate: json.filteredDuplicate as number | undefined,
         failedDB:          json.failedDB          as number | undefined,
+        lastDbError:       json.lastDbError       as string | undefined,
       })
 
       if (createdDocs.length > 0) {
@@ -390,9 +392,16 @@ export default function DocumentsPage() {
                     </p>
                   )}
                   {(gmailResult.failedDB ?? 0) > 0 && (
-                    <p className="text-red-400">
-                      ⚠️ {gmailResult.failedDB} שגיאות שמירה — בדוק לוגים
-                    </p>
+                    <div>
+                      <p className="text-red-400">
+                        ⚠️ {gmailResult.failedDB} שגיאות שמירה
+                      </p>
+                      {gmailResult.lastDbError && (
+                        <p className="text-red-300 text-[10px] mt-0.5 font-mono break-all">
+                          {gmailResult.lastDbError}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

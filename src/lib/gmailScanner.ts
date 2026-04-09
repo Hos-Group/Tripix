@@ -140,7 +140,8 @@ function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_de
     const city    = (booking.destination_city    || '').toLowerCase().trim()
     const country = (booking.destination_country || '').toLowerCase().trim()
 
-    if (city || country) {
+    if (city.length >= 3 || country.length >= 3) {
+      // At least one of city/country was extracted — check if it matches trip destination
       const matchesAlias = (text: string) =>
         text.length >= 3 &&
         aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
@@ -148,23 +149,14 @@ function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_de
       const destMatch = matchesAlias(city) || matchesAlias(country)
 
       if (!destMatch) {
-        // For flights, also check for return_date — it might be an outbound flight
-        // whose origin matches but whose destination is the trip destination
-        const isFlightType = booking.booking_type === 'flight'
-        if (isFlightType && (booking.return_date || booking.departure_date)) {
-          // If it's a flight and has valid travel dates, be lenient —
-          // Claude may have extracted origin city instead of destination city
-          // The date check below will still apply
-        } else {
-          console.log(
-            `[gmailScanner/trip] ✗ dest mismatch: "${booking.vendor}" ` +
-            `"${city}/${country}" ≠ "${trip.destination}"`,
-          )
-          return 'wrong_dest'
-        }
+        console.log(
+          `[gmailScanner/trip] ✗ dest mismatch: "${booking.vendor}" ` +
+          `city="${city}" country="${country}" ≠ trip="${trip.destination}"`,
+        )
+        return 'wrong_dest'
       }
     }
-    // No destination extracted → rely on confidence score only
+    // Destination not extracted (city+country both empty/short) → trust confidence score
   }
 
   // ── Date window: 180 days before trip start → 7 days after trip end ───────
@@ -212,11 +204,12 @@ export interface TripScanStats extends ScanStats {
   daysSearched: number
   createdDocs:  CreatedDoc[]   // list of every document actually saved
   // Detailed breakdown — shown to user so they understand what happened
-  filteredLowConf:  number   // dropped: AI confidence < 0.4
-  filteredWrongDest: number  // dropped: destination didn't match trip
-  filteredWrongDate: number  // dropped: dates outside trip window
-  filteredDuplicate: number  // dropped: same booking_ref already in DB
-  failedDB:          number  // tried to save but DB insert failed
+  filteredLowConf:   number   // dropped: AI confidence < 0.4
+  filteredWrongDest: number   // dropped: destination didn't match trip
+  filteredWrongDate: number   // dropped: dates outside trip window
+  filteredDuplicate: number   // dropped: same booking_ref already in DB
+  failedDB:          number   // tried to save but DB insert failed
+  lastDbError?:      string   // last DB error message for debugging
 }
 
 interface GmailConnection {
@@ -523,6 +516,11 @@ export async function scanTripGmail(
           const relevance = checkRelevance(parsedBooking, t)
           if (relevance !== 'ok') return { skip: relevance as 'wrong_dest' | 'wrong_date' }
 
+          console.log(
+            `[gmailScanner/trip] ✓ RELEVANT: type=${parsedBooking.booking_type}` +
+            ` vendor="${parsedBooking.vendor}" city="${parsedBooking.destination_city}"` +
+            ` country="${parsedBooking.destination_country}" conf=${parsedBooking.confidence}`,
+          )
           return { msg, parsedBooking, emailContent, rawHtml: body }
         }),
       )
@@ -677,8 +675,12 @@ export async function scanTripGmail(
             .single()
 
           if (docError) {
-            console.error('[gmailScanner/trip] Document insert error:', docError.message, docError.details)
+            const errMsg = `${docError.message}${docError.details ? ` — ${docError.details}` : ''}${docError.code ? ` (${docError.code})` : ''}`
+            console.error('[gmailScanner/trip] Document insert error:', errMsg, '\nPayload:', {
+              trip_id: tripId, name: bookingTitle, doc_type: docTypeMap[parsedBooking.booking_type] || 'other',
+            })
             stats.failedDB++
+            stats.lastDbError = errMsg
           } else if (docRecord) {
             // ── Document saved ✅ — record it and increment counter ──────────
             stats.createdDocs.push({
