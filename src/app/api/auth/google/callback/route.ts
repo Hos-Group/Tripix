@@ -49,6 +49,14 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code  = searchParams.get('code')
   const error = searchParams.get('error')
+  const state = searchParams.get('state') || ''
+
+  // Decode the state payload we set in /api/auth/google
+  let stateToken = ''
+  try {
+    const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'))
+    stateToken = decoded?.token || ''
+  } catch { /* state might be missing or malformed */ }
 
   const appUrl     = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const failUrl    = `${appUrl}/settings?gmail=error`
@@ -111,41 +119,64 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(failUrl)
   }
 
-  // ── Identify the Tripix user from the session cookie ─────────────────────
-  // The browser should already have a Supabase session cookie set.
-  // We use the service role client + the JWT from the cookie to resolve user.
   const supabase = adminClient()
-
-  // Try to read the Supabase session token from the cookie
-  const cookieHeader = req.headers.get('cookie') || ''
-  const sbTokenMatch = cookieHeader.match(/sb-[^=]+-auth-token=([^;]+)/)
   let userId: string | null = null
 
-  if (sbTokenMatch) {
+  // ── 1. Try the token from OAuth state (most reliable — works on iOS PWA) ──
+  if (stateToken) {
     try {
-      const cookieValue = decodeURIComponent(sbTokenMatch[1])
-      // Cookie may be JSON array ["access_token","refresh_token"] or just the token string
-      let accessToken: string
-      try {
-        const parsed = JSON.parse(cookieValue)
-        accessToken = Array.isArray(parsed) ? parsed[0] : (parsed.access_token || cookieValue)
-      } catch {
-        accessToken = cookieValue
-      }
-      const { data: { user } } = await supabase.auth.getUser(accessToken)
+      const { data: { user } } = await supabase.auth.getUser(stateToken)
       userId = user?.id || null
+      if (userId) console.log('[google/callback] User identified via state token')
     } catch (err) {
-      console.warn('[google/callback] Could not parse session cookie:', err)
+      console.warn('[google/callback] State token invalid:', err)
     }
   }
 
-  // Fallback: look up user by their primary email matching the Gmail address
+  // ── 2. Fallback: try session cookie (works in desktop browsers) ───────────
+  if (!userId) {
+    const cookieHeader = req.headers.get('cookie') || ''
+    // Supabase may split large tokens into chunks (.0, .1 …) — join them first
+    const chunkKeys = cookieHeader.match(/sb-[^=]+-auth-token\.\d+=/g) || []
+    let accessToken = ''
+    if (chunkKeys.length > 0) {
+      // Multi-chunk token: collect chunks in order
+      const sorted = chunkKeys.sort()
+      for (const key of sorted) {
+        const rx = new RegExp(key.replace('.', '\\.') + '([^;]+)')
+        const m = cookieHeader.match(rx)
+        if (m) accessToken += decodeURIComponent(m[1])
+      }
+    } else {
+      // Single-cookie token
+      const m = cookieHeader.match(/sb-[^=]+-auth-token=([^;]+)/)
+      if (m) {
+        const raw = decodeURIComponent(m[1])
+        try {
+          const parsed = JSON.parse(raw)
+          accessToken = Array.isArray(parsed) ? parsed[0] : (parsed.access_token || raw)
+        } catch { accessToken = raw }
+      }
+    }
+    if (accessToken) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser(accessToken)
+        userId = user?.id || null
+        if (userId) console.log('[google/callback] User identified via cookie')
+      } catch (err) {
+        console.warn('[google/callback] Cookie token invalid:', err)
+      }
+    }
+  }
+
+  // ── 3. Last fallback: match by email ─────────────────────────────────────
   if (!userId) {
     const { data: userList } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
     const match = userList?.users?.find(
       u => u.email?.toLowerCase() === userInfo.email.toLowerCase()
     )
     userId = match?.id || null
+    if (userId) console.log('[google/callback] User identified via email match')
   }
 
   if (!userId) {

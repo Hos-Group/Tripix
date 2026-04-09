@@ -49,13 +49,23 @@ function isInIframe(): boolean {
   try { return window.self !== window.top } catch { return true }
 }
 
-/** Build the full absolute OAuth URL so it can be opened externally */
-function buildOAuthUrl(hint?: string): string {
+/** Build the full absolute OAuth URL — includes the Supabase access token
+ *  in the URL so the callback can identify the user on iOS / PWA / new-tab
+ *  flows where session cookies are not forwarded. */
+async function buildOAuthUrl(hint?: string): Promise<string> {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
-  const path = hint
-    ? `/api/auth/google?hint=${encodeURIComponent(hint)}`
-    : '/api/auth/google'
-  return base + path
+  // Attach the current session token so the server can carry it through OAuth state
+  let token = ''
+  try {
+    const { supabase: sb } = await import('@/lib/supabase')
+    const { data: { session } } = await sb.auth.getSession()
+    token = session?.access_token || ''
+  } catch { /* ignore */ }
+  const params = new URLSearchParams()
+  if (hint)  params.set('hint',  hint)
+  if (token) params.set('token', token)
+  const qs = params.toString()
+  return `${base}/api/auth/google${qs ? '?' + qs : ''}`
 }
 
 export default function GmailConnect({ userId }: GmailConnectProps) {
@@ -98,8 +108,8 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   }, [showAddPanel])
 
   // ── Redirect to Google OAuth (with optional email hint) ───────────────────
-  const startOAuth = (hint?: string) => {
-    const url = buildOAuthUrl(hint)
+  const startOAuth = async (hint?: string) => {
+    const url = await buildOAuthUrl(hint)
     if (isInIframe()) {
       // Cannot do OAuth inside an iframe — open in the real browser instead
       window.open(url, '_blank', 'noopener')

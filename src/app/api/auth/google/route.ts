@@ -26,8 +26,13 @@ export async function GET(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const redirectUri = `${appUrl}/api/auth/google/callback`
 
-  // Optional email hint — pre-selects the account on Google's chooser
-  const hint = req.nextUrl.searchParams.get('hint')?.trim() || ''
+  const hint  = req.nextUrl.searchParams.get('hint')?.trim()  || ''
+  // Supabase access token passed from client — carry it through the OAuth round-trip
+  // so the callback can identify the user even when cookies are missing (iOS PWA, new-tab)
+  const token = req.nextUrl.searchParams.get('token')?.trim() || ''
+
+  // Encode state as base64url JSON: { token, hint }
+  const statePayload = Buffer.from(JSON.stringify({ token, hint })).toString('base64url')
 
   const params = new URLSearchParams({
     client_id:     clientId,
@@ -36,9 +41,9 @@ export async function GET(req: NextRequest) {
     scope:         'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email',
     access_type:   'offline',
     prompt:        'consent',
+    state:         statePayload,
   })
 
-  // login_hint tells Google to skip the account chooser (or pre-select the account)
   if (hint) params.set('login_hint', hint)
 
   return NextResponse.redirect(
