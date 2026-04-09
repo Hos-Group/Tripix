@@ -124,22 +124,48 @@ export default function DocumentsPage() {
       })
 
       if (createdDocs.length > 0) {
-        // Clear any active filters so new documents are always visible
         setFilterType(null)
         setFilterTraveler(null)
-        // Mark new doc IDs for highlighting
-        setNewDocIds(new Set(createdDocs.map(d => d.id)))
-        // Clear highlight after 8 seconds
-        setTimeout(() => setNewDocIds(new Set()), 8000)
-      }
 
-      await fetchDocuments() // refresh to show new documents
+        // ── Fetch the new documents DIRECTLY by ID ──────────────────────────
+        // (Don't rely on the trip_id query which might have timing/cache issues)
+        const { data: newDocs, error: newDocsErr } = await supabase
+          .from('documents')
+          .select('*')
+          .in('id', createdDocs.map(d => d.id))
 
-      // Scroll to new documents section after render
-      if (createdDocs.length > 0) {
-        setTimeout(() => {
-          newDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 300)
+        if (newDocsErr) {
+          console.error('[documents] Failed to fetch new docs by ID:', newDocsErr)
+        }
+
+        if (newDocs && newDocs.length > 0) {
+          // Prepend new docs to the existing list (dedup by ID)
+          setDocuments(prev => [
+            ...newDocs,
+            ...prev.filter(d => !newDocs.some((n: Document) => n.id === d.id)),
+          ])
+          // Highlight them
+          setNewDocIds(new Set(newDocs.map((d: Document) => d.id)))
+          setTimeout(() => setNewDocIds(new Set()), 10000)
+          // Toast for each new document
+          newDocs.forEach((doc: Document) => {
+            toast.success(`נוסף: ${doc.name}`, { icon: '📄', duration: 5000 })
+          })
+          // Scroll
+          setTimeout(() => {
+            newDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 200)
+        } else {
+          // Documents reported as created but not found — do a full re-fetch
+          console.warn('[documents] Created docs not returned by direct ID query, doing full re-fetch')
+          await fetchDocuments()
+          setTimeout(() => {
+            newDocsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 300)
+        }
+      } else {
+        // No new docs — just refresh the list
+        await fetchDocuments()
       }
     } catch (err) {
       console.error('[gmail scan] network error:', err)
