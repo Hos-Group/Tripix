@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Loader2, ScanFace } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { signIn } from '@/lib/auth'
+import { Analytics, identifyUser } from '@/lib/analytics'
 
 const REMEMBER_KEY = 'tripix_remember'
 const BIOMETRIC_KEY = 'tripix_biometric'
@@ -43,7 +44,7 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      await signIn(email, password)
+      const session = await signIn(email, password)
 
       // Save remember me
       if (rememberMe) {
@@ -51,6 +52,11 @@ export default function LoginPage() {
       } else {
         localStorage.removeItem(REMEMBER_KEY)
       }
+
+      if (session?.user?.id) {
+        identifyUser(session.user.id, { email: email.toLowerCase().trim() })
+      }
+      Analytics.signedIn('email')
 
       toast.success('התחברת בהצלחה!')
       router.push('/dashboard')

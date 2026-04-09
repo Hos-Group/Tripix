@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { signIn, signOut } from '@/lib/auth'
+import { Analytics, identifyUser } from '@/lib/analytics'
 
 export default function SignupPage() {
   const [name, setName]         = useState('')
@@ -68,7 +69,13 @@ export default function SignupPage() {
       await signOut().catch(() => {})
 
       // ── Step 3: Sign in immediately (no email confirmation needed) ───────────
-      await signIn(email.toLowerCase().trim(), password)
+      const session = await signIn(email.toLowerCase().trim(), password)
+
+      // Track signup
+      if (session?.user?.id) {
+        identifyUser(session.user.id, { email: email.toLowerCase().trim(), name: name.trim() })
+      }
+      Analytics.signedUp('email')
 
       toast.success('ברוך הבא לטריפיקס! 🎉')
       router.push('/onboarding')

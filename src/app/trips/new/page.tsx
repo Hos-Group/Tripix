@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTrip } from '@/contexts/TripContext'
 import { searchDestinations, getDestinationCities } from '@/lib/destinations'
 import DateRangePicker from '@/components/DateRangePicker'
+import { Analytics } from '@/lib/analytics'
 
 const TRIP_TYPES = [
   {
@@ -133,6 +134,7 @@ export default function NewTripPage() {
 
       await refreshTrips()
       if (data?.id) setCurrentTripId(data.id)
+      Analytics.tripCreated(destDisplay, selectedType?.id || 'unknown')
       toast.success('הטיול נוצר! 🚀')
       router.push('/dashboard')
     } catch (err) {

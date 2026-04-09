@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import { Analytics } from '@vercel/analytics/react'
 import BottomNav from '@/components/layout/BottomNav'
 import GlobalHeader from '@/components/layout/GlobalHeader'
 import Providers from '@/components/Providers'
@@ -51,6 +52,7 @@ export default function RootLayout({
           </main>
           <BottomNav />
           <TourGuideWrapper />
+          <Analytics />
           <Toaster
             position="top-center"
             toastOptions={{
