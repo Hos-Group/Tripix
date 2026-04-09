@@ -130,32 +130,44 @@ function resolveTripCountry(destination: string): string | null {
 
 /**
  * Decide if a Claude-parsed booking is relevant to the given trip.
- * Returns true if destination matches AND booking dates are within window.
+ *
+ * Rules (both must pass):
+ *  1. Destination: if we know the trip country AND Claude extracted a destination,
+ *     the extracted destination must match (any alias). If Claude gave no destination
+ *     at all we rely solely on the confidence score.
+ *  2. Dates: booking date must fall in [tripStart-180d, tripEnd+7d].
  */
 function isRelevantToTrip(booking: ParsedBooking, trip: TripRow): boolean {
   const tripCountry = resolveTripCountry(trip.destination)
 
   if (tripCountry) {
     const aliases = COUNTRY_CITY_MAP[tripCountry]
-    const city    = (booking.destination_city    || '').toLowerCase()
-    const country = (booking.destination_country || '').toLowerCase()
+    const city    = (booking.destination_city    || '').toLowerCase().trim()
+    const country = (booking.destination_country || '').toLowerCase().trim()
 
-    const destMatch =
-      aliases.some(a => city.includes(a) || a.includes(city.replace(/\s+/g, ''))) ||
-      aliases.some(a => country.includes(a) || a.includes(country))
+    // Only run the destination filter when Claude actually extracted something
+    if (city || country) {
+      const matchesAlias = (text: string) =>
+        text.length >= 3 &&              // ignore noise like "go", "la", "us"
+        aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
 
-    if (!destMatch && city && country) {
-      console.log(
-        `[gmailScanner/trip] Skipping "${booking.vendor}" — destination "${city}/${country}" `+
-        `doesn't match trip to "${trip.destination}"`,
-      )
-      return false
+      const destMatch = matchesAlias(city) || matchesAlias(country)
+
+      if (!destMatch) {
+        console.log(
+          `[gmailScanner/trip] ✗ "${booking.vendor}" — ` +
+          `destination "${city || '?'}/${country || '?'}" ≠ trip "${trip.destination}"`,
+        )
+        return false
+      }
     }
+    // If Claude extracted no destination, fall through (confidence filter is enough)
   }
 
-  // Date window: allow bookings from 180 days before trip start to 7 days after trip end
-  const tripStart = new Date(trip.start_date)
-  const tripEnd   = new Date(trip.end_date)
+  // ── Date window ────────────────────────────────────────────────────────────
+  // Allow bookings from 180 days before trip start to 7 days after trip end.
+  const tripStart   = new Date(trip.start_date)
+  const tripEnd     = new Date(trip.end_date)
   const windowStart = new Date(tripStart)
   windowStart.setDate(windowStart.getDate() - 180)
   const windowEnd = new Date(tripEnd)
@@ -166,8 +178,9 @@ function isRelevantToTrip(booking: ParsedBooking, trip: TripRow): boolean {
     const bd = new Date(bookingDateStr)
     if (bd < windowStart || bd > windowEnd) {
       console.log(
-        `[gmailScanner/trip] Skipping "${booking.vendor}" — date "${bookingDateStr}" `+
-        `outside window [${windowStart.toISOString().slice(0,10)}, ${windowEnd.toISOString().slice(0,10)}]`,
+        `[gmailScanner/trip] ✗ "${booking.vendor}" — ` +
+        `date "${bookingDateStr}" outside [${windowStart.toISOString().slice(0, 10)}, ` +
+        `${windowEnd.toISOString().slice(0, 10)}]`,
       )
       return false
     }
