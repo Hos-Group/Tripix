@@ -291,16 +291,27 @@ export async function scanTripGmail(
     throw new Error('לא נמצא חיבור Gmail — יש לחבר Gmail תחילה')
   }
 
-  // ── 3. Compute search range ───────────────────────────────────────────────
-  const tripStartMs  = new Date(t.start_date).getTime()
-  const daysToStart  = Math.ceil((Date.now() - tripStartMs) / 86400000)
-  const daysSearched = Math.min(daysToStart + 90, 365)
+  // ── 3. Search always 365 days back — bookings are made months in advance ──
+  const daysSearched = 365
 
-  // ── 4. Build destination search keywords ─────────────────────────────────
+  // ── 4. Build destination keywords with English transliterations ───────────
   const destParts = t.destination
     .toLowerCase().replace(/[,،]/g, ' ').split(/\s+/)
-    .filter(w => w.length > 2).slice(0, 4)
-  const destQuery = destParts.length ? `(${destParts.join(' OR ')})` : ''
+    .filter(w => w.length > 2).slice(0, 6)
+  // Map common Hebrew destination names to English equivalents
+  const heToEn: Record<string, string[]> = {
+    'תאילנד': ['thailand', 'thai'], 'פוקט': ['phuket'],
+    'בנגקוק': ['bangkok', 'bkk'],   'קוסמוי': ['samui'],
+    'קוסאמוי': ['samui', 'koh samui'], 'צ\'אנג': ['chiang mai'],
+    'ישראל': ['israel'], 'פריז': ['paris'], 'לונדון': ['london'],
+    'ניו': ['new york'], 'יורק': ['new york'], 'ברצלונה': ['barcelona'],
+    'רומא': ['rome', 'roma'], 'אמסטרדם': ['amsterdam'],
+  }
+  const extraTerms: string[] = [...destParts]
+  for (const [heb, eng] of Object.entries(heToEn)) {
+    if (t.destination.includes(heb)) extraTerms.push(...eng)
+  }
+  const destQuery = extraTerms.length ? extraTerms.join(' OR ') : ''
 
   const stats: TripScanStats = {
     tripId: t.id, tripName: t.name, destination: t.destination, daysSearched,
@@ -373,10 +384,11 @@ export async function scanTripGmail(
             const { data: expense } = await supabase.from('expenses').insert({
               trip_id: tripId, user_id: userId, title: expenseTitle,
               amount: parsedBooking.amount || 0, currency: parsedBooking.currency || 'ILS',
+              amount_ils: parsedBooking.amount || 0,
               category: categoryMap[parsedBooking.booking_type] || 'other',
-              date: parsedBooking.check_in || parsedBooking.departure_date || t.start_date,
+              expense_date: parsedBooking.check_in || parsedBooking.departure_date || t.start_date,
               notes: `מספר אישור: ${parsedBooking.confirmation_number}\nייובא מ-Gmail: ${msg.from}`,
-              source: 'gmail_trip_import', email_ingest_id: ingestRecord.id,
+              source: 'document', is_paid: true,
             }).select('id').single()
 
             if (expense) {

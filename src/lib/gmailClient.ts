@@ -101,11 +101,28 @@ export async function searchBookingEmails(
   maxResults   = 50,
   extraQuery   = '',
 ): Promise<GmailMessage[]> {
+  // Broad subject filter — catches booking.com / Airbnb / airlines / hotels
+  // intentionally wide so Claude can do the real filtering
+  const subjectTerms = [
+    'confirmation', 'reservation', 'booking', 'itinerary', 'voucher',
+    'e-ticket', 'eticket', 'receipt', 'invoice', 'check-in', 'checkin',
+    'הזמנה', 'אישור', 'כרטיס', 'חשבונית',
+  ].join(' OR ')
+
+  // Known booking sender domains
+  const senderDomains = [
+    'booking.com', 'airbnb.com', 'expedia.com', 'hotels.com', 'agoda.com',
+    'klook.com', 'viator.com', 'kayak.com', 'skyscanner.com', 'wizzair.com',
+    'ryanair.com', 'easyjet.com', 'flydubai.com', 'emirates.com', 'elal.co.il',
+    'arkia.com', 'isrotel.com', 'almosafer.com', 'trip.com', 'kiwi.com',
+  ].map(d => `from:${d}`).join(' OR ')
+
   const queryParts = [
-    'subject:(booking confirmation OR reservation OR hotel OR flight OR order confirmation OR הזמנה OR אישור)',
+    `(subject:(${subjectTerms}) OR (${senderDomains}))`,
     `newer_than:${daysBack}d`,
   ]
-  if (extraQuery.trim()) queryParts.push(extraQuery.trim())
+  // Destination keywords are now optional (OR not AND) to avoid over-filtering
+  if (extraQuery.trim()) queryParts.push(`(${extraQuery.trim()} OR has:attachment)`)
   const query = queryParts.join(' ')
 
   const listUrl = new URL('https://gmail.googleapis.com/gmail/v1/users/me/messages')
