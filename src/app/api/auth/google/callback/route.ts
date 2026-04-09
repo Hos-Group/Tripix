@@ -187,22 +187,46 @@ export async function GET(req: NextRequest) {
   // ── Calculate token expiry ────────────────────────────────────────────────
   const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-  // ── Upsert gmail_connections row ──────────────────────────────────────────
-  const { error: dbError } = await supabase
+  // ── Save gmail_connections row (update if exists, insert if not) ─────────
+  const gmailAddress = userInfo.email.toLowerCase()
+  const rowData = {
+    user_id:       userId,
+    gmail_address: gmailAddress,
+    access_token:  tokens.access_token,
+    refresh_token: tokens.refresh_token || null,
+    token_expiry:  expiryDate,
+  }
+
+  // Check if a row already exists for this user+email combo
+  const { data: existing } = await supabase
     .from('gmail_connections')
-    .upsert(
-      {
-        user_id:       userId,
-        gmail_address: userInfo.email.toLowerCase(),
+    .select('id')
+    .eq('user_id', userId)
+    .eq('gmail_address', gmailAddress)
+    .maybeSingle()
+
+  let dbError
+  if (existing?.id) {
+    // Row exists → update tokens
+    const { error } = await supabase
+      .from('gmail_connections')
+      .update({
         access_token:  tokens.access_token,
         refresh_token: tokens.refresh_token || null,
         token_expiry:  expiryDate,
-      },
-      { onConflict: 'user_id,gmail_address' },
-    )
+      })
+      .eq('id', existing.id)
+    dbError = error
+  } else {
+    // No row → insert fresh
+    const { error } = await supabase
+      .from('gmail_connections')
+      .insert(rowData)
+    dbError = error
+  }
 
   if (dbError) {
-    console.error('[google/callback] DB upsert error:', dbError)
+    console.error('[google/callback] DB save error:', dbError)
     return NextResponse.redirect(failUrl)
   }
 
