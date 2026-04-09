@@ -864,33 +864,62 @@ export async function scanTripGmail(
         stats.parsed++
 
         try {
-          // Compute booking title first — used for both dedup and DB insert
-          const bookingTitle =
+          const isFlight = parsedBooking.booking_type === 'flight'
+
+          // ── Primary passenger name (first in traveler_names list) ─────────
+          // Used to differentiate per-person tickets (same flight, diff passenger).
+          const firstPassenger = (parsedBooking.traveler_names?.[0] || '').trim()
+
+          // ── Booking title ─────────────────────────────────────────────────
+          // For flights: append passenger name so each traveler's ticket gets
+          // its own document (e.g. "EL AL LY008 – Omer Halevy").
+          // For hotels/activities: keep plain title (one booking per reservation).
+          const baseTitle =
             parsedBooking.hotel_name ||
             (parsedBooking.airline && parsedBooking.flight_number
               ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
             parsedBooking.vendor || msg.subject.slice(0, 60)
 
+          const bookingTitle = isFlight && firstPassenger
+            ? `${baseTitle} – ${firstPassenger}`
+            : baseTitle
+
           const dedupDate = parsedBooking.check_in || parsedBooking.departure_date
 
           // ── Deduplication 1: same booking_ref ─────────────────────────────
+          // For flights: airlines issue one booking ref per GROUP booking but
+          // separate tickets per passenger → include passenger name in the key.
+          // For hotels/activities: booking_ref alone is the unique key.
           if (parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {
-            const { data: existingByRef } = await supabase
+            const refQuery = supabase
               .from('documents')
               .select('id')
               .eq('trip_id', tripId)
               .eq('booking_ref', parsedBooking.confirmation_number)
-              .maybeSingle()
+
+            if (isFlight && firstPassenger) {
+              // Same ref + same passenger → true duplicate (e.g. 2 confirmation emails)
+              // Different passenger → different ticket → allow
+              refQuery.eq('name', bookingTitle)
+            }
+
+            const { data: existingByRef } = await refQuery.maybeSingle()
             if (existingByRef) {
-              console.log(`[gmailScanner/trip] skip dup by ref: "${bookingTitle}" ref=${parsedBooking.confirmation_number}`)
+              console.log(
+                `[gmailScanner/trip] skip dup by ref${isFlight ? '+passenger' : ''}: ` +
+                `"${bookingTitle}" ref=${parsedBooking.confirmation_number}`,
+              )
               stats.filteredDuplicate++; continue
             }
           }
 
-          // ── Deduplication 2: same name + same check-in/departure date ─────
+          // ── Deduplication 2: same document name + same date ───────────────
           // Booking.com / airlines send 10+ emails per booking (confirmation,
-          // payment, modification, reminder…). Without this check, each email
-          // would create a separate document for the same reservation.
+          // payment, modification, reminder…). Without this check each email
+          // creates a separate document for the same reservation.
+          // Since bookingTitle now includes passenger name for flights, three
+          // tickets on the same flight will have three different titles and
+          // pass through correctly.
           if (bookingTitle && dedupDate) {
             const { data: existingByName } = await supabase
               .from('documents')
@@ -905,14 +934,20 @@ export async function scanTripGmail(
             }
           }
 
-          const safeId = msg.id.replace(/[^a-zA-Z0-9]/g, '')
+          // safeId: unique per-email, ensures different passengers' files don't collide
+          const safeId     = msg.id.replace(/[^a-zA-Z0-9]/g, '')
+          // safePassenger: sanitized passenger token for storage filenames
+          const safePassenger = firstPassenger
+            ? `-${firstPassenger.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}`
+            : ''
+
           let fileUrl: string | null = null
           let fileType = 'gmail'
 
           // ── 1. Prefer PDF attachment — save as actual PDF file ────────────
           if (pdfBase64) {
             try {
-              const pdfName   = pdfFilename || `booking-${safeId}.pdf`
+              const pdfName   = pdfFilename || `booking-${safeId}${safePassenger}.pdf`
               const filePath  = `${tripId}/${pdfName}`
               const pdfBuffer = Buffer.from(pdfBase64, 'base64')
               const { error: pdfErr } = await supabase.storage
@@ -935,7 +970,7 @@ export async function scanTripGmail(
           // ── 2. Fallback: save email body as HTML snapshot ─────────────────
           if (!fileUrl && rawHtml) {
             try {
-              const filePath = `${tripId}/email-${safeId}.html`
+              const filePath = `${tripId}/email-${safeId}${safePassenger}.html`
               const htmlFile = buildEmailHtml(rawHtml, bookingTitle || msg.subject)
               const blob     = Buffer.from(htmlFile, 'utf-8')
               const { error: uploadErr } = await supabase.storage
