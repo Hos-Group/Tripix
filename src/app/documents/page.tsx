@@ -240,29 +240,6 @@ export default function DocumentsPage() {
     }
   }
 
-  // ── Delete duplicates ────────────────────────────────────────────────────
-  const handleDeleteDuplicates = async () => {
-    const sorted = [...documents].sort(
-      (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
-    )
-    const seen     = new Set<string>()
-    const toDelete: string[] = []
-    for (const doc of sorted) {
-      const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
-      if (key === '|') continue
-      if (seen.has(key)) toDelete.push(doc.id)
-      else seen.add(key)
-    }
-    if (toDelete.length === 0) { toast('אין כפילויות'); return }
-    const confirmed = window.confirm(`נמצאו ${toDelete.length} כפילויות. למחוק?`)
-    if (!confirmed) return
-    const ok = await deleteDocumentsByIds(toDelete)
-    if (ok) {
-      toast.success(`נמחקו ${toDelete.length} כפילויות ✓`)
-      setDocuments(prev => prev.filter(d => !toDelete.includes(d.id)))
-    }
-  }
-
   const handleReprocessAll = async () => {
     const docsWithFile = documents.filter(d => d.file_url)
     if (docsWithFile.length === 0) { toast.error('אין מסמכים לעיבוד'); return }
@@ -299,21 +276,6 @@ export default function DocumentsPage() {
     acc[key].push(d)
     return acc
   }, {})
-
-  // Duplicate count
-  const dupCount = (() => {
-    const seen = new Set<string>()
-    let count = 0
-    for (const doc of [...documents].sort(
-      (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
-    )) {
-      const key = `${(doc.name || '').toLowerCase().trim()}|${doc.valid_from || ''}`
-      if (key === '|') continue
-      if (seen.has(key)) count++
-      else seen.add(key)
-    }
-    return count
-  })()
 
   // ── Gmail card ────────────────────────────────────────────────────────────
   const gmailCard = (
@@ -486,17 +448,6 @@ export default function DocumentsPage() {
             <CheckSquare className="w-4 h-4" />
             {selectMode ? 'בטל' : 'בחר'}
           </button>
-
-          {/* Duplicate cleaner */}
-          {dupCount > 0 && (
-            <button
-              onClick={handleDeleteDuplicates}
-              className="flex items-center gap-1.5 bg-red-50 text-red-500 rounded-xl px-3 py-2 text-sm font-medium active:scale-95 transition-transform"
-              title={`נמצאו ${dupCount} כפילויות`}>
-              <Trash2 className="w-4 h-4" />
-              {dupCount} כפולים
-            </button>
-          )}
 
           {/* Reprocess all */}
           <button

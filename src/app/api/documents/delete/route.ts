@@ -45,24 +45,45 @@ export async function POST(req: NextRequest) {
     .in('id', ids)
 
   if (fetchErr || !docs) {
+    console.error('[documents/delete] Fetch error:', fetchErr)
     return NextResponse.json({ error: 'Could not fetch documents' }, { status: 500 })
+  }
+
+  if (!docs.length) {
+    return NextResponse.json({ deleted: 0 })
   }
 
   // Verify each doc belongs to a trip owned by this user
   const tripIds = Array.from(new Set(docs.map(d => d.trip_id).filter(Boolean)))
-  const { data: userTrips } = await supabase
-    .from('trips')
-    .select('id')
-    .eq('user_id', user.id)
-    .in('id', tripIds)
 
-  const ownedTripIds = new Set((userTrips || []).map(t => t.id))
-  const authorizedIds = docs
-    .filter(d => d.trip_id && ownedTripIds.has(d.trip_id))
-    .map(d => d.id)
+  let authorizedIds: string[]
 
-  if (!authorizedIds.length) {
-    return NextResponse.json({ error: 'No authorized documents found' }, { status: 403 })
+  if (tripIds.length === 0) {
+    // Docs have no trip_id — allow deletion for any authenticated user
+    authorizedIds = docs.map(d => d.id)
+  } else {
+    const { data: userTrips, error: tripsErr } = await supabase
+      .from('trips')
+      .select('id')
+      .eq('user_id', user.id)
+      .in('id', tripIds)
+
+    if (tripsErr) {
+      console.error('[documents/delete] Trips ownership check error:', tripsErr)
+      return NextResponse.json({ error: 'Ownership check failed' }, { status: 500 })
+    }
+
+    const ownedTripIds = new Set((userTrips || []).map(t => t.id))
+
+    // Authorize docs whose trip is owned by this user, OR docs with no trip_id
+    authorizedIds = docs
+      .filter(d => !d.trip_id || ownedTripIds.has(d.trip_id))
+      .map(d => d.id)
+
+    if (!authorizedIds.length) {
+      console.warn(`[documents/delete] User ${user.id} tried to delete docs ${ids.join(',')} but owns none of trips ${tripIds.join(',')}`)
+      return NextResponse.json({ error: 'No authorized documents found' }, { status: 403 })
+    }
   }
 
   // ── Delete document records ───────────────────────────────────────────────
