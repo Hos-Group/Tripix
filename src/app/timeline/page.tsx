@@ -133,31 +133,6 @@ function buildDays(
           })
         }
 
-        // Handle connections/segments
-        const stops = ext?.stops || ext?.segments
-        if (Array.isArray(stops)) {
-          for (const seg of stops) {
-            const segDepDate = seg?.departure_date || seg?.dep_date as string | undefined
-            if (segDepDate === dateStr) {
-              const segDepCity  = seg?.departure_city || seg?.dep_city || ''
-              const segArrCity  = seg?.arrival_city   || seg?.arr_city || ''
-              const segDepTime  = seg?.departure_time || seg?.dep_time || ''
-              const segArrTime  = seg?.arrival_time   || seg?.arr_time || ''
-              const segFlight   = seg?.flight_number  || ''
-              const segTimeLabel = segDepTime && segArrTime ? `${segDepTime} → ${segArrTime}` : segDepTime
-              docEvents.push({
-                type:     'flight',
-                title:    segDepCity && segArrCity ? `${segDepCity} → ${segArrCity}` : (segFlight || 'קונקשיין'),
-                subtitle: [segFlight, segTimeLabel].filter(Boolean).join(' · ') || undefined,
-                icon:     '🔄',
-                color:    '#2563eb',
-                bgColor:  '#eff6ff',
-                docId:    doc.id,
-                time:     segDepTime || undefined,
-              })
-            }
-          }
-        }
       }
 
       // ── Car rental events (detected via extracted_data fields) ─────────
@@ -236,19 +211,6 @@ function buildDays(
             bgColor:  '#fef2f2',
             docId:    doc.id,
             time:     checkOutTime,
-          })
-        } else if (checkIn && checkOut && dateStr > checkIn && dateStr < checkOut) {
-          const nightNum    = differenceInDays(parseISO(dateStr), parseISO(checkIn))
-          const NIGHT_NAMES = ['', 'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שביעי', 'שמיני', 'תשיעי', 'עשירי']
-          const nightLabel  = nightNum <= 10 ? `לילה ${NIGHT_NAMES[nightNum]}` : `לילה ${nightNum}`
-          docEvents.push({
-            type:     'hotel_stay',
-            title:    hotelName,
-            subtitle: `${nightLabel} מתוך ${totalNights}${roomType ? ` · ${roomType}` : ''}`,
-            icon:     '🌙',
-            color:    '#16a34a',
-            bgColor:  '#f0fdf4',
-            docId:    doc.id,
           })
         }
       }

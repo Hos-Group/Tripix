@@ -59,7 +59,12 @@ export default function EditTripPage() {
       setCurrency(storedCurrency)
       const travs = (data.travelers as { id: string; name: string }[] | null) || []
       setTravelers(travs.length > 0 ? travs : [{ id: 'traveler_1', name: '' }])
-      setCities((data.cities as string[] | null) || [])
+      try {
+        const parsed = JSON.parse(data.notes || '{}')
+        setCities(Array.isArray(parsed?.cities) ? parsed.cities : [])
+      } catch {
+        setCities([])
+      }
       setLoading(false)
     }
     load()
@@ -79,7 +84,7 @@ export default function EditTripPage() {
         .update({
           name: name.trim() || destination,
           destination,
-          cities,
+          notes: JSON.stringify({ type: null, cities }),
           start_date: startDate,
           end_date:   endDate,
           budget_ils: budget ? parseFloat(budget) : null,

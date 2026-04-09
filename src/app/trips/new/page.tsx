@@ -118,14 +118,13 @@ export default function NewTripPage() {
       const insertData: Record<string, unknown> = {
         name: tripName,
         destination: destDisplay,
-        cities: allCities,
         start_date: startDate,
         end_date: endDate,
         budget_ils: budget ? parseFloat(budget) : null,
         travelers: travelers
           .filter(t => t.name.trim())
           .map(t => ({ id: t.id, name: t.name.trim() })),
-        notes: selectedType?.id || '',
+        notes: JSON.stringify({ type: selectedType?.id || null, cities: allCities }),
       }
       if (user?.id) insertData.user_id = user.id
 

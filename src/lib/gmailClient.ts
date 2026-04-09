@@ -115,26 +115,34 @@ export async function searchBookingEmails(
   // ── Known booking / travel sender domains ────────────────────────────────
   // Claude filters marketing vs confirmations — we cast a wide net here
   const senderDomains = [
-    // OTAs & hotels
+    // OTAs & meta-search
     'booking.com', 'airbnb.com', 'expedia.com', 'hotels.com', 'agoda.com',
+    'priceline.com', 'tripadvisor.com', 'kayak.com', 'skyscanner.com',
+    // Israeli hotels/agencies
     'isrotel.co.il', 'danhotels.com', 'fattal.co.il', 'atlas.co.il',
+    'traveltalm.co.il', 'diesenhaus.com', 'superhotel.co.il',
     // Israeli airlines
-    'elal.co.il', 'arkia.com', 'israir.co.il',
+    'elal.co.il', 'elal.com', 'arkia.com', 'israir.co.il',
     // International airlines
     'ryanair.com', 'easyjet.com', 'wizzair.com', 'flydubai.com',
     'emirates.com', 'united.com', 'delta.com', 'lufthansa.com', 'klm.com',
     'britishairways.com', 'airfrance.com', 'turkishairlines.com',
     'etihadairways.com', 'singaporeair.com', 'thaiairways.com',
-    // Ride-hailing
+    'bangkokair.com', 'lionair.co.th', 'airasia.com',
+    'pegasusairlines.com', 'sunexpress.com', 'tui.com',
+    // Ride-hailing / transfers
     'uber.com', 'gett.com', 'bolt.eu', 'lyft.com', 'yango.com',
     // Tours / activities
     'klook.com', 'viator.com', 'getyourguide.com',
     // Multi-platform
-    'trip.com', 'kiwi.com', 'almosafer.com',
+    'trip.com', 'kiwi.com', 'almosafer.com', 'last.co.il',
     // Hotels direct
     'marriott.com', 'hilton.com', 'ihg.com', 'hyatt.com',
+    'accor.com', 'radissonhotels.com', 'bestwestern.com', 'wyndham.com',
     // Car rental
-    'hertz.com', 'avis.com', 'sixt.com', 'europcar.com',
+    'hertz.com', 'avis.com', 'sixt.com', 'europcar.com', 'budget.com', 'enterprise.com',
+    // Insurance
+    'harel.co.il', 'phoenix.co.il', 'migdal.co.il',
   ].map(d => `from:${d}`).join(' OR ')
 
   const queryParts = [

@@ -442,14 +442,28 @@ export interface CreatedDoc {
   doc_type: string
 }
 
+/** A borderline email shown to the user for manual confirmation */
+export interface PendingReviewItem {
+  ingestId:       string   // email_ingests.id — used when user confirms
+  gmailMessageId: string
+  subject:        string
+  from:           string
+  date:           string
+  summary:        string
+  bookingType:    string
+  vendor:         string
+  confidence:     number
+}
+
 export interface TripScanStats extends ScanStats {
   tripId:       string
   tripName:     string
   destination:  string
   daysSearched: number
-  createdDocs:  CreatedDoc[]   // list of every document actually saved
+  createdDocs:  CreatedDoc[]           // list of every document actually saved
+  pendingReview: PendingReviewItem[]   // borderline emails awaiting user confirmation
   // Detailed breakdown — shown to user so they understand what happened
-  filteredLowConf:   number   // dropped: AI confidence < 0.4
+  filteredLowConf:   number   // dropped: AI confidence < 0.35
   filteredWrongDest: number   // dropped: destination didn't match trip
   filteredWrongDate: number   // dropped: dates outside trip window
   filteredDuplicate: number   // dropped: same booking_ref already in DB
@@ -722,7 +736,7 @@ export async function scanTripGmail(
   const stats: TripScanStats = {
     tripId: t.id, tripName: t.name, destination: t.destination, daysSearched,
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
-    createdDocs: [],
+    createdDocs: [], pendingReview: [],
     filteredLowConf: 0, filteredWrongDest: 0, filteredWrongDate: 0,
     filteredDuplicate: 0, failedDB: 0,
   }
@@ -741,8 +755,8 @@ export async function scanTripGmail(
   for (const conn of connections as GmailConnection[]) {
     try {
       const accessToken = await getValidToken(supabase, conn)
-      // Fetch up to 20 emails — parallel processing keeps total time ~equal to 1 email
-      const messages = await searchBookingEmails(accessToken, daysSearched, 20, destQuery)
+      // Fetch up to 50 emails — parallel processing keeps total time manageable
+      const messages = await searchBookingEmails(accessToken, daysSearched, 50, destQuery)
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
@@ -772,7 +786,13 @@ export async function scanTripGmail(
 
       // ── PASS 1: Fetch bodies + parse with Claude (text-only, no PDFs yet) ──
       // Fast (~5-10s for 20 emails in parallel). PDFs downloaded only for relevant ones.
-      type Pass1Item = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
+      //
+      // Confidence tiers:
+      //   < 0.35  → filteredLowConf (marketing / clearly not a booking)
+      //   0.35–0.7 → borderline: save to email_ingests as 'pending_review', ask user
+      //   ≥ 0.7   → auto-import (pass to Phase 2 for PDF download)
+      type Pass1Item       = { msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string; rawHtml: string }
+      type BorderlineItem  = { skip: 'borderline'; msg: typeof messages[0]; parsedBooking: ParsedBooking; emailContent: string }
       const pass1Results = await Promise.allSettled(
         newMessages.map(async (msg) => {
           let body = ''
@@ -781,14 +801,23 @@ export async function scanTripGmail(
 
           // Text-only parse — fast, no PDF yet
           const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
-          if (!parsedBooking || parsedBooking.confidence < 0.4) {
+          if (!parsedBooking || parsedBooking.confidence < 0.35) {
             return { skip: 'low_conf' as const, conf: parsedBooking?.confidence ?? 0 }
           }
 
           const relevance = checkRelevance(parsedBooking, t)
           if (relevance !== 'ok') return { skip: relevance as 'wrong_dest' | 'wrong_date' }
 
-          // Soft traveler name check — log only, never blocks
+          // Borderline confidence — queue for user confirmation
+          if (parsedBooking.confidence < 0.7) {
+            console.log(
+              `[gmailScanner/trip] ⚠ BORDERLINE: type=${parsedBooking.booking_type}` +
+              ` vendor="${parsedBooking.vendor}" conf=${parsedBooking.confidence} → pending_review`,
+            )
+            return { skip: 'borderline' as const, msg, parsedBooking, emailContent } as BorderlineItem
+          }
+
+          // High confidence — auto-import
           const travelerMatch = checkTravelerSoftMatch(parsedBooking.traveler_names, t.travelers)
           console.log(
             `[gmailScanner/trip] ✓ RELEVANT: type=${parsedBooking.booking_type}` +
@@ -802,16 +831,18 @@ export async function scanTripGmail(
         }),
       )
 
-      // Tally filter reasons and collect survivors
-      const relevant: Pass1Item[] = []
+      // Tally filter reasons and collect survivors / borderline items
+      const relevant:  Pass1Item[]      = []
+      const borderline: BorderlineItem[] = []
       for (const r of pass1Results) {
         if (r.status !== 'fulfilled') continue
         const v = r.value
         if (!v || 'skip' in v) {
           if (v && 'skip' in v) {
-            if      (v.skip === 'low_conf')    stats.filteredLowConf++
-            else if (v.skip === 'wrong_dest')  stats.filteredWrongDest++
-            else if (v.skip === 'wrong_date')  stats.filteredWrongDate++
+            if      (v.skip === 'low_conf')   stats.filteredLowConf++
+            else if (v.skip === 'wrong_dest') stats.filteredWrongDest++
+            else if (v.skip === 'wrong_date') stats.filteredWrongDate++
+            else if (v.skip === 'borderline') borderline.push(v as BorderlineItem)
           }
         } else {
           relevant.push(v as Pass1Item)
@@ -819,7 +850,8 @@ export async function scanTripGmail(
       }
 
       console.log(
-        `[gmailScanner/trip] Pass 1: ${messages.length} scanned, ${relevant.length} relevant ` +
+        `[gmailScanner/trip] Pass 1: ${messages.length} scanned, ${relevant.length} high-conf, ` +
+        `${borderline.length} borderline ` +
         `(lowConf=${stats.filteredLowConf} wrongDest=${stats.filteredWrongDest} wrongDate=${stats.filteredWrongDate})`,
       )
 
@@ -909,6 +941,25 @@ export async function scanTripGmail(
             : baseTitle
 
           const dedupDate = parsedBooking.check_in || parsedBooking.departure_date
+
+          // ── Deduplication 0: same Gmail message ID ────────────────────────
+          // Most reliable dedup — each email has a unique Gmail message ID.
+          // We store it as "GMID:<id>" prefix in the document notes field.
+          // This ensures re-scanning never re-imports the same email even if
+          // the AI extracts different names or booking refs on different runs.
+          {
+            const gmidKey = `GMID:${msg.id}`
+            const { data: existingByGmid } = await supabase
+              .from('documents')
+              .select('id')
+              .eq('trip_id', tripId)
+              .like('notes', `${gmidKey}%`)
+              .maybeSingle()
+            if (existingByGmid) {
+              console.log(`[gmailScanner/trip] skip dup by Gmail-ID: ${msg.id}`)
+              stats.filteredDuplicate++; continue
+            }
+          }
 
           // ── Deduplication 1: same booking_ref ─────────────────────────────
           // For flights: airlines issue one booking ref per GROUP booking but
@@ -1026,7 +1077,7 @@ export async function scanTripGmail(
               valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
               valid_until:    parsedBooking.check_out || parsedBooking.return_date   || null,
               flight_number:  parsedBooking.flight_number || null,
-              notes:          `ייובא מ-Gmail\nשולח: ${msg.from}\n${parsedBooking.summary || ''}`,
+              notes:          `GMID:${msg.id}\nייובא מ-Gmail\nשולח: ${msg.from}\n${parsedBooking.summary || ''}`,
               extracted_data: parsedBooking as unknown as Record<string, unknown>,
             })
             .select('id')
@@ -1085,6 +1136,52 @@ export async function scanTripGmail(
           })
         } catch (err) {
           console.error(`[gmailScanner/trip] DB write error for ${msg.id}:`, err)
+        }
+      }
+
+      // ── PASS 3: Save borderline items as pending_review ───────────────────
+      // These are emails with confidence 0.35–0.7 that match the trip destination
+      // and date window. We save them to email_ingests and surface them to the user
+      // so they can decide whether to add them manually.
+      for (const { msg, parsedBooking, emailContent } of borderline) {
+        try {
+          const rawText = htmlToText(emailContent).slice(0, 10000)
+          const { data: ingestRecord, error: ingestError } = await supabase
+            .from('email_ingests')
+            .insert({
+              user_id:          userId,
+              from_address:     msg.from,
+              subject:          msg.subject,
+              raw_text:         rawText,
+              parsed_data:      parsedBooking,
+              trip_id:          tripId,
+              match_score:      Math.round(parsedBooking.confidence * 100),
+              match_reason:     'ממתין לאישור משתמש',
+              status:           'pending_review',
+              source:           'gmail_trip_import',
+              gmail_message_id: msg.id,
+            })
+            .select('id')
+            .single()
+
+          if (!ingestError && ingestRecord) {
+            stats.pendingReview.push({
+              ingestId:       ingestRecord.id,
+              gmailMessageId: msg.id,
+              subject:        msg.subject,
+              from:           msg.from,
+              date:           msg.date,
+              summary:        parsedBooking.summary || `${parsedBooking.vendor} — ${parsedBooking.booking_type}`,
+              bookingType:    parsedBooking.booking_type,
+              vendor:         parsedBooking.vendor,
+              confidence:     parsedBooking.confidence,
+            })
+            console.log(`[gmailScanner/trip] Saved pending_review: "${msg.subject}" (${parsedBooking.confidence})`)
+          } else if (ingestError) {
+            console.warn('[gmailScanner/trip] pending_review insert error:', ingestError.message)
+          }
+        } catch (err) {
+          console.error(`[gmailScanner/trip] Error saving pending_review for ${msg.id}:`, err)
         }
       }
     } catch (err) {

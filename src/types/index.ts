@@ -12,7 +12,6 @@ export interface Trip {
   end_date: string
   budget_ils: number | null
   travelers: { id: string; name: string }[]
-  cities: string[] | null       // cities/stops within the destination country
   notes: string | null
   created_at: string
 }

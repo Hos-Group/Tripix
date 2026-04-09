@@ -55,7 +55,13 @@ export default function TripsPage() {
       friends: '👥 חברים',
       couple: '💕 זוגי',
     }
-    return types[notes] || null
+    // Support both old format ("family") and new JSON format ({"type":"family","cities":[...]})
+    try {
+      const parsed = JSON.parse(notes)
+      return types[parsed?.type] || null
+    } catch {
+      return types[notes] || null
+    }
   }
 
   const TRIP_GRADIENTS = [
