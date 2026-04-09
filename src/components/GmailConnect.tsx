@@ -44,10 +44,18 @@ function GoogleLogo({ className }: { className?: string }) {
   )
 }
 
-/** Detect if running inside an iframe (Claude Preview, WebView, etc.) */
-function isInIframe(): boolean {
-  try { return window.self !== window.top } catch { return true }
+/** Detect if running in a restricted context where OAuth redirects won't work:
+ *  - Inside an iframe (Claude Preview, WebView)
+ *  - On localhost (dev preview server)
+ *  In these cases we show a direct link to the production app instead. */
+function isRestrictedContext(): boolean {
+  if (typeof window === 'undefined') return false
+  try { if (window.self !== window.top) return true } catch { return true }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') return true
+  return false
 }
+
+const PROD_URL = 'https://tripix-ruby.vercel.app'
 
 /** Build the full absolute OAuth URL — includes the Supabase access token
  *  in the URL so the callback can identify the user on iOS / PWA / new-tab
@@ -110,8 +118,8 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   // ── Redirect to Google OAuth (with optional email hint) ───────────────────
   const startOAuth = async (hint?: string) => {
     const url = await buildOAuthUrl(hint)
-    if (isInIframe()) {
-      // Cannot do OAuth inside an iframe — open in the real browser instead
+    // In restricted contexts (localhost / iframe), open in real browser
+    if (isRestrictedContext()) {
       window.open(url, '_blank', 'noopener')
     } else {
       window.location.href = url
@@ -183,27 +191,29 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
   }
 
   const hasConnections = connections.length > 0
-  const inIframe = typeof window !== 'undefined' && isInIframe()
+  const restricted = typeof window !== 'undefined' && isRestrictedContext()
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4" dir="rtl">
 
-      {/* ── Iframe/Preview warning ── */}
-      {inIframe && (
+      {/* ── Restricted context banner (iframe / localhost) ── */}
+      {restricted && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-          <p className="text-xs font-bold text-amber-800">🔒 חיבור Gmail דורש דפדפן אמיתי</p>
-          <p className="text-[11px] text-amber-700 leading-relaxed">
-            OAuth של Google לא עובד בתוך iframe או תצוגת Preview.
-            לחץ על הכפתור כדי לפתוח את האפליקציה בדפדפן ולחבר את המייל.
+          <p className="text-sm font-bold text-amber-800">🔒 פתח באפליקציה האמיתית לחיבור Gmail</p>
+          <p className="text-xs text-amber-700 leading-relaxed">
+            חיבור Google לא עובד בסביבת Preview. לחץ על הכפתור כדי לפתוח את Tripix בדפדפן ולחבר את המייל שם.
           </p>
           <a
-            href={`${typeof window !== 'undefined' ? window.location.origin : ''}/settings`}
+            href={`${PROD_URL}/settings`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full bg-amber-600 text-white rounded-xl py-2.5 text-sm font-semibold active:scale-95 transition-all"
+            className="flex items-center justify-center gap-2 w-full bg-primary text-white rounded-xl py-3 text-sm font-bold active:scale-95 transition-all"
           >
-            🌐 פתח בדפדפן וחבר Gmail
+            🌐 פתח Tripix וחבר Gmail
           </a>
+          <p className="text-[11px] text-amber-600 text-center">
+            tripix-ruby.vercel.app → הגדרות → סנכרון מייל
+          </p>
         </div>
       )}
       {/* Header */}
