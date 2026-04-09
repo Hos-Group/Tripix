@@ -101,29 +101,25 @@ export async function searchBookingEmails(
   maxResults   = 50,
   extraQuery   = '',
 ): Promise<GmailMessage[]> {
-  // ── Subject terms that signal a real booking confirmation (not marketing) ──
-  // Deliberately precise — "confirmation", "reservation", "itinerary" are
-  // transactional; generic "booking" or "deal" are often promotional.
+  // ── Subject keywords for booking confirmations ───────────────────────────
+  // Single words (not quoted) so partial matches work across all languages/formats
   const subjectTerms = [
-    // English — transactional signals
-    '"booking confirmation"', '"reservation confirmation"', '"order confirmation"',
-    '"itinerary"', '"e-ticket"', '"eticket"', '"boarding pass"',
-    '"your trip"', '"your stay"', '"your reservation"', '"your booking"',
-    '"check-in"', '"voucher"', '"receipt"', '"invoice"',
-    '"trip confirmation"', '"ride receipt"', '"ride confirmation"',
+    // English
+    'confirmation', 'reservation', 'itinerary', 'e-ticket', 'eticket',
+    'voucher', 'receipt', 'invoice', 'boarding', 'check-in', 'checkin',
     // Hebrew
-    '"אישור הזמנה"', '"אישור הטיסה"', '"כרטיס טיסה"', '"אישור מלון"',
-    '"פרטי הנסיעה"', '"אישור הנסיעה"', '"קבלה"', '"חשבונית"',
+    'אישור', 'הזמנה', 'כרטיס', 'טיסה', 'קבלה', 'חשבונית',
   ].join(' OR ')
 
-  // ── Transactional sender domains (airlines, hotels, ride-hailing, OTAs) ──
-  // NOT marketing arms — these send booking confirmations by default
+  // ── Known booking / travel sender domains ────────────────────────────────
+  // Claude filters marketing vs confirmations — we cast a wide net here
   const senderDomains = [
-    // Hotels / OTAs
+    // OTAs & hotels
     'booking.com', 'airbnb.com', 'expedia.com', 'hotels.com', 'agoda.com',
     'isrotel.co.il', 'danhotels.com', 'fattal.co.il', 'atlas.co.il',
-    // Flights
+    // Israeli airlines
     'elal.co.il', 'arkia.com', 'israir.co.il',
+    // International airlines
     'ryanair.com', 'easyjet.com', 'wizzair.com', 'flydubai.com',
     'emirates.com', 'united.com', 'delta.com', 'lufthansa.com', 'klm.com',
     'britishairways.com', 'airfrance.com', 'turkishairlines.com',
@@ -137,13 +133,12 @@ export async function searchBookingEmails(
   ].map(d => `from:${d}`).join(' OR ')
 
   const queryParts = [
-    // Must match either a precise confirmation subject OR come from a known booking domain
+    // Subject keyword OR known travel domain — wide net, Claude does the filtering
     `(subject:(${subjectTerms}) OR (${senderDomains}))`,
-    // Exclude Gmail's "Promotions" and "Social" categories — marketing lives there
-    '-category:promotions',
-    '-category:social',
     `newer_than:${daysBack}d`,
+    // NOTE: NOT excluding -category:promotions — some airlines/hotels land there
   ]
+  // Destination terms are truly optional — just boost relevance, don't block
   if (extraQuery.trim()) queryParts.push(`(${extraQuery.trim()} OR has:attachment)`)
   const query = queryParts.join(' ')
 

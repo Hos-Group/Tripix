@@ -352,24 +352,24 @@ export async function scanTripGmail(
       // ── Process ALL emails in parallel (fetch body + Claude parse simultaneously)
       const parsed = await Promise.allSettled(
         messages.map(async (msg) => {
-          // Fetch email body (skip PDF downloads — too slow)
+          // Fetch email body (skip PDF downloads to stay fast)
           let body = ''
           try { body = await getEmailBody(accessToken, msg.id) } catch { return null }
           stats.scannedEmailOnly++
           const emailContent = body || msg.snippet
 
-          // Parse with Claude (haiku only for speed)
+          // Parse with Claude — real confirmation or marketing?
           const parsedBooking = await parseBookingEmail(emailContent, msg.subject)
           if (!parsedBooking || parsedBooking.confidence < 0.5) return null
 
-          return { msg, parsedBooking, emailContent }
+          return { msg, parsedBooking, emailContent, rawHtml: body }
         }),
       )
 
       // ── Write successful parses to DB ─────────────────────────────────────
       for (const result of parsed) {
         if (result.status !== 'fulfilled' || !result.value) continue
-        const { msg, parsedBooking, emailContent } = result.value
+        const { msg, parsedBooking, emailContent, rawHtml } = result.value
         stats.parsed++
 
         try {
@@ -390,6 +390,31 @@ export async function scanTripGmail(
               ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
             parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
 
+          // ── Upload email body as HTML file (viewable from the documents page) ──
+          let fileUrl: string | null = null
+          if (rawHtml) {
+            try {
+              const safeId   = msg.id.replace(/[^a-zA-Z0-9]/g, '')
+              const filePath = `${tripId}/email-${safeId}.html`
+              // Wrap in minimal HTML page so it renders nicely
+              const htmlFile = `<!DOCTYPE html><html dir="auto"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${bookingTitle || msg.subject}</title></head><body>${rawHtml}</body></html>`
+              const blob     = Buffer.from(htmlFile, 'utf-8')
+              const { error: uploadErr } = await supabase.storage
+                .from('documents')
+                .upload(filePath, blob, { contentType: 'text/html', upsert: true })
+              if (uploadErr) {
+                console.warn('[gmailScanner/trip] HTML upload error:', uploadErr.message)
+              } else {
+                const { data: urlData } = supabase.storage
+                  .from('documents')
+                  .getPublicUrl(filePath)
+                fileUrl = urlData?.publicUrl || null
+              }
+            } catch (uploadEx) {
+              console.warn('[gmailScanner/trip] HTML upload exception:', uploadEx)
+            }
+          }
+
           // ── Create a Document record so it shows in the documents page ──
           const { data: docRecord, error: docError } = await supabase
             .from('documents')
@@ -397,7 +422,8 @@ export async function scanTripGmail(
               trip_id:        tripId,
               name:           bookingTitle,
               doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
-              file_type:      'gmail',          // identifies this as a Gmail import
+              file_type:      'gmail',
+              file_url:       fileUrl,   // HTML snapshot — tap to view full email
               booking_ref:    parsedBooking.confirmation_number !== 'N/A'
                                 ? parsedBooking.confirmation_number : null,
               valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,

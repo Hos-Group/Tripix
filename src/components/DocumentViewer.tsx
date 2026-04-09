@@ -50,8 +50,9 @@ export default function DocumentViewer({
   if (!url) return null
 
   const ext = url.split('?')[0].toLowerCase()
-  const isPdf  = ext.endsWith('.pdf') || url.includes('application/pdf') || url.includes('%2F') && url.includes('pdf')
+  const isPdf   = ext.endsWith('.pdf') || url.includes('application/pdf') || url.includes('%2F') && url.includes('pdf')
   const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(ext)
+  const isHtml  = ext.endsWith('.html') || ext.endsWith('.htm')
 
   // PDF via Google Docs viewer if direct iframe fails
   const pdfSrc = pdfError
@@ -95,13 +96,13 @@ export default function DocumentViewer({
           <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0">
             {/* Doc-type badge */}
             <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0 text-lg">
-              {docType ? (DOC_ICONS[docType] || '📄') : isPdf ? '📄' : '🖼️'}
+              {docType ? (DOC_ICONS[docType] || '📄') : isPdf ? '📄' : isHtml ? '📧' : '🖼️'}
             </div>
 
             {/* Title / subtitle */}
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-semibold truncate">
-                {title || (isPdf ? 'מסמך PDF' : isImage ? 'תמונה' : 'קובץ')}
+                {title || (isPdf ? 'מסמך PDF' : isHtml ? 'אישור מ-Gmail' : isImage ? 'תמונה' : 'קובץ')}
               </p>
               {subtitle && (
                 <p className="text-white/50 text-xs truncate">{subtitle}</p>
@@ -138,7 +139,28 @@ export default function DocumentViewer({
               </div>
             )}
 
-            {isPdf ? (
+            {isHtml ? (
+              /* Gmail email HTML snapshot */
+              <>
+                <iframe
+                  src={url}
+                  className="w-full h-full border-0 rounded-2xl bg-white"
+                  title="תוכן המייל"
+                  sandbox="allow-same-origin"
+                  onLoad={() => setContentLoaded(true)}
+                  style={{ opacity: contentLoaded ? 1 : 0, transition: 'opacity 0.3s' }}
+                />
+                {contentLoaded && (
+                  <button
+                    onClick={handleDownload}
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white text-xs px-4 py-2 rounded-full border border-white/20 active:scale-95"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    פתח בדפדפן
+                  </button>
+                )}
+              </>
+            ) : isPdf ? (
               <>
                 <iframe
                   src={pdfSrc}

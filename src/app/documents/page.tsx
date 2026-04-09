@@ -582,10 +582,11 @@ export default function DocumentsPage() {
                       </div>
                       {doc.file_type === 'gmail' && (
                         <p className="text-[10px] text-orange-500 mt-1.5 flex items-center gap-1">
-                          <Mail className="w-3 h-3" /> ייובא מ-Gmail
+                          <Mail className="w-3 h-3" />
+                          {doc.file_url ? 'Gmail — לחץ לצפייה במייל' : 'ייובא מ-Gmail'}
                         </p>
                       )}
-                      {doc.file_url && (
+                      {doc.file_url && doc.file_type !== 'gmail' && (
                         <p className="text-[10px] text-primary mt-1.5 flex items-center gap-1">
                           <ExternalLink className="w-3 h-3" /> לחץ לצפייה במסמך
                         </p>
