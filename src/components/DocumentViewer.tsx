@@ -146,9 +146,14 @@ export default function DocumentViewer({
                   src={url}
                   className="w-full h-full border-0 rounded-2xl bg-white"
                   title="תוכן המייל"
-                  sandbox="allow-same-origin"
+                  // allow-scripts   → email CSS animations / layout scripts work
+                  // allow-popups    → links open in new tab (not inside iframe)
+                  // allow-same-origin → allows the HTML file to be read normally
+                  // allow-forms     → some email trackers / feedback buttons
+                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  referrerPolicy="no-referrer"
                   onLoad={() => setContentLoaded(true)}
-                  style={{ opacity: contentLoaded ? 1 : 0, transition: 'opacity 0.3s' }}
+                  style={{ opacity: contentLoaded ? 1 : 0, transition: 'opacity 0.3s', background: '#fff' }}
                 />
                 {contentLoaded && (
                   <button

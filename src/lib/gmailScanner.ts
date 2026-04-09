@@ -237,6 +237,84 @@ function buildTripGmailQuery(
 }
 
 /**
+ * Build a self-contained HTML file from a raw email body.
+ *
+ * Handles two cases:
+ *  a) rawHtml is already a full document (has <html>/<DOCTYPE>) →
+ *     inject <base target="_blank"> + viewport override into <head>
+ *     so links open in new tab and it scales on mobile.
+ *  b) rawHtml is an HTML fragment (just table/div email body) →
+ *     wrap it in a minimal but correct HTML shell with proper meta tags,
+ *     a CSS reset and font normalisation so it renders cleanly.
+ */
+function buildEmailHtml(rawHtml: string, title: string): string {
+  const isFullDoc = /<html[\s>]/i.test(rawHtml) || /<!doctype/i.test(rawHtml)
+
+  if (isFullDoc) {
+    // ── Inject into existing document ────────────────────────────────────
+    let html = rawHtml
+
+    // Ensure UTF-8 charset (some emails omit it)
+    if (!/<meta[^>]+charset/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i, '<head$1>\n<meta charset="utf-8">')
+    }
+
+    // Ensure viewport (so it scales on mobile inside the iframe)
+    if (!/<meta[^>]+viewport/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i,
+        '<head$1>\n<meta name="viewport" content="width=device-width, initial-scale=1">')
+    }
+
+    // Inject <base target="_blank"> so all links open in new tab (not inside iframe)
+    if (!/<base/i.test(html)) {
+      html = html.replace(/<head([^>]*)>/i, '<head$1>\n<base target="_blank">')
+    }
+
+    // Inject responsive image + table overrides so emails don't overflow horizontally
+    const responsiveCss = `
+<style id="tripix-responsive">
+  body{max-width:100%!important;overflow-x:hidden!important;}
+  img{max-width:100%!important;height:auto!important;}
+  table{max-width:100%!important;}
+  *{word-break:break-word;}
+</style>`
+    html = html.replace('</head>', `${responsiveCss}\n</head>`)
+
+    return html
+  }
+
+  // ── Wrap bare HTML fragment ───────────────────────────────────────────
+  return `<!DOCTYPE html>
+<html dir="auto" lang="he">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_blank">
+  <title>${title.replace(/</g, '&lt;')}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px; line-height: 1.5;
+      background: #ffffff; color: #1a1a1a;
+      max-width: 100%; overflow-x: hidden;
+    }
+    body { padding: 16px; }
+    img  { max-width: 100%; height: auto; display: block; }
+    a    { color: #1a73e8; }
+    table { border-collapse: collapse; max-width: 100%; width: 100%; }
+    td, th { padding: 4px 8px; }
+    p { margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+${rawHtml}
+</body>
+</html>`
+}
+
+/**
  * Extract candidate booking/confirmation URLs from email HTML.
  * Returns up to 3 unique https URLs whose href or anchor text looks like a booking link.
  */
@@ -858,11 +936,11 @@ export async function scanTripGmail(
           if (!fileUrl && rawHtml) {
             try {
               const filePath = `${tripId}/email-${safeId}.html`
-              const htmlFile = `<!DOCTYPE html><html dir="auto"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${bookingTitle || msg.subject}</title></head><body>${rawHtml}</body></html>`
+              const htmlFile = buildEmailHtml(rawHtml, bookingTitle || msg.subject)
               const blob     = Buffer.from(htmlFile, 'utf-8')
               const { error: uploadErr } = await supabase.storage
                 .from('documents')
-                .upload(filePath, blob, { contentType: 'text/html', upsert: true })
+                .upload(filePath, blob, { contentType: 'text/html; charset=utf-8', upsert: true })
               if (uploadErr) {
                 console.warn('[gmailScanner/trip] HTML upload error:', uploadErr.message)
               } else {
