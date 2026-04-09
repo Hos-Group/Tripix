@@ -10,9 +10,10 @@
  * - Swipe-down gesture to close (framer-motion drag)
  * - Optional title, subtitle and doc-type badge in header
  * - Google Docs fallback for PDFs that block iframe embedding
+ * - HTML emails: fetched and rendered via srcdoc (bypasses Supabase Content-Disposition: attachment)
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Download, ExternalLink, FileText, Image as ImageIcon, Loader2 } from 'lucide-react'
 
@@ -45,14 +46,30 @@ export default function DocumentViewer({
 }: DocumentViewerProps) {
   const [contentLoaded, setContentLoaded] = useState(false)
   const [pdfError,      setPdfError]      = useState(false)
+  // For HTML emails: fetch the raw HTML and inject via srcdoc so Supabase's
+  // Content-Disposition: attachment header doesn't break rendering.
+  const [htmlSrcdoc,   setHtmlSrcdoc]    = useState<string | null>(null)
+  const [htmlFetching, setHtmlFetching]  = useState(false)
   const constraintsRef = useRef(null)
 
-  if (!url) return null
-
-  const ext = url.split('?')[0].toLowerCase()
-  const isPdf   = ext.endsWith('.pdf') || url.includes('application/pdf') || url.includes('%2F') && url.includes('pdf')
+  const ext = url?.split('?')[0].toLowerCase() ?? ''
+  const isPdf   = ext.endsWith('.pdf') || (url?.includes('application/pdf') ?? false)
   const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(ext)
   const isHtml  = ext.endsWith('.html') || ext.endsWith('.htm')
+
+  // Fetch HTML content when an HTML email is opened
+  useEffect(() => {
+    if (!url || !isHtml) return
+    setHtmlSrcdoc(null)
+    setContentLoaded(false)
+    setHtmlFetching(true)
+    fetch(url)
+      .then(r => r.text())
+      .then(html => { setHtmlSrcdoc(html); setHtmlFetching(false) })
+      .catch(() => { setHtmlFetching(false) })
+  }, [url, isHtml])
+
+  if (!url) return null
 
   // PDF via Google Docs viewer if direct iframe fails
   const pdfSrc = pdfError
@@ -140,21 +157,27 @@ export default function DocumentViewer({
             )}
 
             {isHtml ? (
-              /* Gmail email HTML snapshot */
+              /* Gmail email HTML snapshot — rendered via srcdoc so Supabase's
+                 Content-Disposition: attachment doesn't prevent rendering      */
               <>
-                <iframe
-                  src={url}
-                  className="w-full h-full border-0 rounded-2xl bg-white"
-                  title="תוכן המייל"
-                  // allow-scripts   → email CSS animations / layout scripts work
-                  // allow-popups    → links open in new tab (not inside iframe)
-                  // allow-same-origin → allows the HTML file to be read normally
-                  // allow-forms     → some email trackers / feedback buttons
-                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                  referrerPolicy="no-referrer"
-                  onLoad={() => setContentLoaded(true)}
-                  style={{ opacity: contentLoaded ? 1 : 0, transition: 'opacity 0.3s', background: '#fff' }}
-                />
+                {htmlFetching && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+                    <Loader2 className="w-8 h-8 text-white/40 animate-spin" />
+                    <p className="text-white/40 text-xs">טוען מייל...</p>
+                  </div>
+                )}
+                {htmlSrcdoc && (
+                  <iframe
+                    key={url}
+                    srcDoc={htmlSrcdoc}
+                    className="w-full h-full border-0 rounded-2xl"
+                    title="תוכן המייל"
+                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                    referrerPolicy="no-referrer"
+                    onLoad={() => setContentLoaded(true)}
+                    style={{ opacity: contentLoaded ? 1 : 0, transition: 'opacity 0.3s', background: '#ffffff' }}
+                  />
+                )}
                 {contentLoaded && (
                   <button
                     onClick={handleDownload}
