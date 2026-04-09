@@ -162,9 +162,31 @@ function resolveTripCountry(destination: string): string | null {
 }
 
 /**
+ * Extract all searchable name tokens from a traveler's name.
+ * The name field is in English/Latin (e.g. "OMER HALEVY" or "Omer Halevy").
+ * Also tries HE_FIRST_NAME_HINTS in case the name is stored in Hebrew.
+ */
+function travelerNameTokens(traveler: { name: string }): string[] {
+  const tokens: string[] = []
+  const name = traveler.name.trim()
+  if (!name) return tokens
+
+  // Try Hebrew hints first (backward compat)
+  const heHints = HE_FIRST_NAME_HINTS[name]
+  if (heHints) {
+    tokens.push(...heHints)
+  } else {
+    // Name is in Latin — split by spaces and use each word (≥ 2 chars)
+    const parts = name.toLowerCase().split(/\s+/).filter(p => p.length >= 2)
+    tokens.push(...parts)
+  }
+  return Array.from(new Set(tokens))
+}
+
+/**
  * Soft traveler name check — logs only, never hard-rejects.
- * Trip travelers are Hebrew; booking emails use Latin names.
- * We use a hint table for common name mappings.
+ * Handles both Hebrew-stored names (via HE_FIRST_NAME_HINTS) and
+ * Latin-stored names (direct match on name parts).
  */
 function checkTravelerSoftMatch(
   parsedNames:   string[],
@@ -173,25 +195,28 @@ function checkTravelerSoftMatch(
   if (!parsedNames.length || !tripTravelers.length) return 'no_names'
   const parsedLower = parsedNames.join(' ').toLowerCase()
   for (const t of tripTravelers) {
-    const hints = HE_FIRST_NAME_HINTS[t.name] || []
-    if (hints.some(h => parsedLower.includes(h))) return 'match'
-    // Also try the Hebrew name itself (in case email is in Hebrew)
-    if (parsedLower.includes(t.name)) return 'match'
+    const tokens = travelerNameTokens(t)
+    if (tokens.some(tok => parsedLower.includes(tok))) return 'match'
   }
-  const anyHintsAvailable = tripTravelers.some(t => HE_FIRST_NAME_HINTS[t.name])
-  return anyHintsAvailable ? 'mismatch' : 'no_names'
+  const anyTokensAvailable = tripTravelers.some(t => travelerNameTokens(t).length > 0)
+  return anyTokensAvailable ? 'mismatch' : 'no_names'
 }
 
 /**
  * Build a Gmail search boost string from trip destination + traveler names.
  * Additive only — emails are never excluded if they don't match.
+ *
+ * Traveler names are stored in Latin (e.g. "Omer Halevy") — we use the first
+ * name token (e.g. "omer") as a Gmail search term so emails addressed to any
+ * trip participant are found even when they have different surnames.
  */
 function buildTripGmailQuery(
-  trip:     Pick<TripRow, 'destination'>,
+  trip:      Pick<TripRow, 'destination'>,
   travelers: Array<{ id: string; name: string }>,
 ): string {
   const terms: string[] = []
-  // Destination aliases (no-space terms, max 5)
+
+  // ── Destination aliases (single-word, max 5) ─────────────────────────────
   const countryKey = resolveTripCountry(trip.destination)
   if (countryKey) {
     const aliases = COUNTRY_CITY_MAP[countryKey]
@@ -199,11 +224,15 @@ function buildTripGmailQuery(
       .slice(0, 5)
     terms.push(...aliases)
   }
-  // Traveler name hints (max 2 travelers × 1 hint each)
-  for (const t of travelers.slice(0, 3)) {
-    const hint = (HE_FIRST_NAME_HINTS[t.name] || [])[0]
-    if (hint) terms.push(hint)
+
+  // ── Traveler name tokens (first name of each traveler) ───────────────────
+  // We use the first token only (first name) since Gmail search is partial.
+  // E.g. "OMER HALEVY" → "omer", "NOA COHEN" → "noa"
+  for (const t of travelers.slice(0, 5)) {
+    const tokens = travelerNameTokens(t)
+    if (tokens.length > 0) terms.push(tokens[0])   // first name only → avoids false positives
   }
+
   return Array.from(new Set(terms)).join(' OR ')
 }
 
