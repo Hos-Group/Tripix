@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Menu, X, User, AlertTriangle, Wallet, Luggage, ArrowLeftRight, Settings, LogOut, Cloud, Plane, Users, Sparkles, Map, Camera, Globe, PlusCircle, FolderOpen } from 'lucide-react'
+import { Menu, X, User, AlertTriangle, Wallet, Luggage, ArrowLeftRight, Settings, LogOut, Cloud, Plane, Users, Sparkles, Map, Globe, PlusCircle, FolderOpen } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -22,7 +22,6 @@ export default function HamburgerMenu() {
   const tripTools = [
     { href: '/assistant', label: 'עוזר AI חכם', icon: Sparkles, color: 'text-indigo-500' },
     { href: '/itinerary', label: 'לוח מסע', icon: Map, color: 'text-teal-500' },
-    { href: '/memories', label: 'זיכרונות טיול', icon: Camera, color: 'text-purple-500' },
     { href: '/budget', label: 'מעקב תקציב', icon: Wallet, color: 'text-green-600' },
     { href: '/packing', label: 'רשימת אריזה', icon: Luggage, color: 'text-amber-500' },
     { href: '/weather', label: 'מזג אוויר', icon: Cloud, color: 'text-sky-500' },

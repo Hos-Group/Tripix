@@ -1,21 +1,47 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Calculator, RefreshCw, ChevronLeft, ArrowLeftRight } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Calculator, RefreshCw, ChevronLeft, ArrowLeftRight, TrendingUp } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { CURRENCIES, CURRENCY_SYMBOL, Currency } from '@/types'
 
 const TIP_PRESETS = [5, 10, 15, 20]
 
+// Major world currencies to show in the rates board (all vs ILS)
+const MAJOR_CURRENCIES = [
+  { code: 'USD', flag: '🇺🇸', name: 'דולר אמריקאי' },
+  { code: 'EUR', flag: '🇪🇺', name: 'אירו' },
+  { code: 'GBP', flag: '🇬🇧', name: 'לירה שטרלינג' },
+  { code: 'JPY', flag: '🇯🇵', name: 'ין יפני' },
+  { code: 'THB', flag: '🇹🇭', name: 'בהט תאילנדי' },
+  { code: 'AED', flag: '🇦🇪', name: 'דירהם אמיראתי' },
+  { code: 'SGD', flag: '🇸🇬', name: 'דולר סינגפורי' },
+  { code: 'TRY', flag: '🇹🇷', name: 'לירה טורקית' },
+  { code: 'CHF', flag: '🇨🇭', name: 'פרנק שוויצרי' },
+  { code: 'CAD', flag: '🇨🇦', name: 'דולר קנדי' },
+  { code: 'AUD', flag: '🇦🇺', name: 'דולר אוסטרלי' },
+  { code: 'INR', flag: '🇮🇳', name: 'רופי הודי' },
+  { code: 'EGP', flag: '🇪🇬', name: 'לירה מצרית' },
+  { code: 'IDR', flag: '🇮🇩', name: 'רופיה אינדונזית' },
+]
+
+type TabType = 'rates' | 'converter' | 'tip'
+
 export default function ToolsPage() {
-  const [tab, setTab] = useState<'converter' | 'tip'>('converter')
+  const [tab, setTab] = useState<TabType>('rates')
+
+  // Live rates
+  const [rates, setRates]           = useState<Record<string, number>>({})
+  const [ratesLoading, setRatesLoading] = useState(false)
+  const [ratesError, setRatesError] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   // Currency converter
-  const [amount, setAmount] = useState('100')
+  const [amount, setAmount]         = useState('100')
   const [fromCurrency, setFromCurrency] = useState<Currency>('THB')
   const [toCurrency, setToCurrency] = useState<Currency>('ILS')
-  const [rate, setRate] = useState<number | null>(null)
+  const [rate, setRate]             = useState<number | null>(null)
   const [loadingRate, setLoadingRate] = useState(false)
 
   // Tip calculator
@@ -23,11 +49,38 @@ export default function ToolsPage() {
   const [tipPercent, setTipPercent] = useState(10)
   const [tipCurrency, setTipCurrency] = useState<Currency>('THB')
 
-  useEffect(() => {
-    fetchRate()
-  }, [fromCurrency, toCurrency]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Fetch all major currency rates vs ILS ──────────────────────────────
+  const fetchAllRates = useCallback(async () => {
+    setRatesLoading(true)
+    setRatesError(false)
+    try {
+      // Fetch ILS-based rates → 1 ILS = X foreign currency
+      // Then invert so UI shows "1 USD = Y ILS"
+      const res = await fetch('https://api.frankfurter.app/latest?from=ILS')
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json() as { rates: Record<string, number> }
+      // Invert: 1 foreignCcy = 1 / rate[foreignCcy] ILS
+      const inverted: Record<string, number> = {}
+      for (const [ccy, r] of Object.entries(data.rates)) {
+        if (r > 0) inverted[ccy] = 1 / r
+      }
+      setRates(inverted)
+      setLastUpdated(new Date())
+    } catch {
+      setRatesError(true)
+    }
+    setRatesLoading(false)
+  }, [])
 
-  const fetchRate = async () => {
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    fetchAllRates()
+    const timer = setInterval(fetchAllRates, 60_000)
+    return () => clearInterval(timer)
+  }, [fetchAllRates])
+
+  // ── Fetch single pair rate for converter ──────────────────────────────
+  const fetchRate = useCallback(async () => {
     setLoadingRate(true)
     try {
       const res = await fetch(`https://api.frankfurter.app/latest?from=${fromCurrency}&to=${toCurrency}`)
@@ -36,17 +89,18 @@ export default function ToolsPage() {
         setRate(data.rates?.[toCurrency] || null)
       }
     } catch {
-      // Fallback rates
-      const rates: Record<string, Record<string, number>> = {
+      const fallback: Record<string, Record<string, number>> = {
         THB: { ILS: 0.105, USD: 0.028, EUR: 0.026 },
         ILS: { THB: 9.52, USD: 0.27, EUR: 0.25 },
         USD: { ILS: 3.70, THB: 35.5, EUR: 0.93 },
         EUR: { ILS: 4.00, THB: 38.2, USD: 1.08 },
       }
-      setRate(rates[fromCurrency]?.[toCurrency] || 1)
+      setRate(fallback[fromCurrency]?.[toCurrency] || 1)
     }
     setLoadingRate(false)
-  }
+  }, [fromCurrency, toCurrency])
+
+  useEffect(() => { fetchRate() }, [fetchRate])
 
   const swap = () => {
     setFromCurrency(toCurrency)
@@ -54,8 +108,11 @@ export default function ToolsPage() {
   }
 
   const convertedAmount = rate && amount ? (parseFloat(amount) * rate) : 0
-  const tipAmount = billAmount ? (parseFloat(billAmount) * tipPercent / 100) : 0
-  const totalWithTip = billAmount ? parseFloat(billAmount) + tipAmount : 0
+  const tipAmount       = billAmount ? (parseFloat(billAmount) * tipPercent / 100) : 0
+  const totalWithTip    = billAmount ? parseFloat(billAmount) + tipAmount : 0
+
+  const fmtTime = (d: Date) =>
+    d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   return (
     <div className="space-y-4">
@@ -69,17 +126,79 @@ export default function ToolsPage() {
       {/* Tabs */}
       <div className="flex bg-gray-100 rounded-xl p-1">
         {[
-          { id: 'converter' as const, label: 'המרת מטבע', icon: ArrowLeftRight },
-          { id: 'tip' as const, label: 'מחשבון טיפ', icon: Calculator },
+          { id: 'rates'     as const, label: 'שערי מטבע', icon: TrendingUp },
+          { id: 'converter' as const, label: 'המרה',       icon: ArrowLeftRight },
+          { id: 'tip'       as const, label: 'טיפ',        icon: Calculator },
         ].map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium transition-all ${tab === id ? 'bg-white shadow text-primary' : 'text-gray-500'}`}>
-            <Icon className="w-4 h-4" /> {label}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all ${tab === id ? 'bg-white shadow text-primary' : 'text-gray-500'}`}>
+            <Icon className="w-3.5 h-3.5" /> {label}
           </button>
         ))}
       </div>
 
-      {/* Currency Converter */}
+      {/* ── Live Rates Board ── */}
+      {tab === 'rates' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+          {/* Header row */}
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-gray-400">
+              {lastUpdated ? `עודכן: ${fmtTime(lastUpdated)}` : 'טוען...'}
+            </p>
+            <button onClick={fetchAllRates} disabled={ratesLoading}
+              className="flex items-center gap-1 text-xs text-primary active:scale-95 transition-transform">
+              <RefreshCw className={`w-3.5 h-3.5 ${ratesLoading ? 'animate-spin' : ''}`} />
+              רענן
+            </button>
+          </div>
+
+          {ratesError && (
+            <div className="bg-red-50 text-red-500 text-xs text-center p-3 rounded-xl">
+              שגיאה בטעינת הנתונים — בדוק חיבור אינטרנט
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            {/* Column headers */}
+            <div className="flex items-center px-4 py-2 bg-gray-50 border-b border-gray-100">
+              <span className="flex-1 text-[10px] text-gray-400 font-medium">מטבע</span>
+              <span className="text-[10px] text-gray-400 font-medium">1 יחידה = ₪</span>
+            </div>
+
+            {MAJOR_CURRENCIES.map(({ code, flag, name }, idx) => {
+              const r = rates[code]
+              const isEven = idx % 2 === 0
+              return (
+                <div key={code}
+                  className={`flex items-center px-4 py-3 ${isEven ? '' : 'bg-gray-50/50'} ${idx < MAJOR_CURRENCIES.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                  <div className="flex items-center gap-3 flex-1">
+                    <span className="text-xl">{flag}</span>
+                    <div>
+                      <p className="text-sm font-bold">{code}</p>
+                      <p className="text-[10px] text-gray-400">{name}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    {ratesLoading && !r ? (
+                      <div className="w-14 h-4 bg-gray-200 rounded animate-pulse" />
+                    ) : r ? (
+                      <p className="text-sm font-bold text-gray-800" dir="ltr">
+                        ₪{r < 0.01 ? r.toFixed(5) : r < 1 ? r.toFixed(4) : r.toFixed(3)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-300">—</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <p className="text-[10px] text-gray-300 text-center">מקור: Frankfurter · מתעדכן כל דקה</p>
+        </motion.div>
+      )}
+
+      {/* ── Currency Converter ── */}
       {tab === 'converter' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
@@ -129,7 +248,7 @@ export default function ToolsPage() {
         </motion.div>
       )}
 
-      {/* Tip Calculator */}
+      {/* ── Tip Calculator ── */}
       {tab === 'tip' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
