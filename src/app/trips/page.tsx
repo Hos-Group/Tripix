@@ -102,14 +102,20 @@ export default function TripsPage() {
 
         {/* Empty state */}
         {trips.length === 0 && (
-          <div className="text-center py-16">
+          <div className="text-center py-12">
             <Plane className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-400 mb-4">עדיין אין טיולים</p>
-            <Link href="/trips/new"
-              className="inline-flex items-center gap-1 text-white rounded-xl px-6 py-3 text-sm font-medium active:scale-95"
-              style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
-              <Plus className="w-4 h-4" /> צור טיול ראשון
-            </Link>
+            <div className="flex flex-col gap-3 items-center">
+              <Link href="/trips/new"
+                className="inline-flex items-center gap-1 text-white rounded-2xl px-6 py-3 text-sm font-medium active:scale-95"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+                <Plus className="w-4 h-4" /> צור טיול ראשון
+              </Link>
+              <Link href="/quiz"
+                className="inline-flex items-center gap-1.5 rounded-2xl px-5 py-2.5 text-sm font-medium border border-violet-200 text-violet-600 bg-violet-50 active:scale-95 transition-transform">
+                🌍 לא יודע לאן? השאלון שלנו יעזור
+              </Link>
+            </div>
           </div>
         )}
 

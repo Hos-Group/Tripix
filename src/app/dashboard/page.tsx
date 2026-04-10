@@ -228,6 +228,10 @@ export default function DashboardPage() {
             <Plus className="w-5 h-5" />
             צור טיול ראשון
           </Link>
+          <Link href="/quiz"
+            className="w-full mt-3 border border-violet-200 bg-violet-50 text-violet-600 rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
+            🌍 לא יודע לאן לטוס? קבל המלצה אישית
+          </Link>
           <div className="grid grid-cols-3 gap-3 mt-8">
             {[
               { emoji: '💰', label: 'מעקב הוצאות' },

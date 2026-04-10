@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Plane, ChevronLeft, Users, User, Baby, Heart, Plus, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -65,6 +65,7 @@ export default function NewTripPage() {
   const { user } = useAuth()
   const { refreshTrips, setCurrentTripId } = useTrip()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [step, setStep] = useState(1)
   const [selectedType, setSelectedType] = useState<TripTypeItem | null>(null)
@@ -73,6 +74,19 @@ export default function NewTripPage() {
   const [customCityInput, setCustomCityInput] = useState('') // manual city input
   const [destSearch, setDestSearch] = useState('')
   const [showDestList, setShowDestList] = useState(false)
+
+  // Pre-fill destination from quiz (?dest=בנגקוק, תאילנד)
+  useEffect(() => {
+    const destParam = searchParams.get('dest')
+    if (destParam) {
+      const parts = destParam.split(',').map(p => p.trim())
+      const city    = parts[0] || ''
+      const country = parts[1] || ''
+      if (country) setDestination(country)
+      if (city)    setSelectedCities([city])
+      setDestSearch(destParam)
+    }
+  }, [])
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
