@@ -1,299 +1,496 @@
 'use client'
 
 /**
- * /quiz — "לאן לטוס?" — Travel destination quiz
- * 6 short questions → 3 personalized destination recommendations
+ * /quiz — "לאן לטוס?" — Tripix Travel Recommendation Engine
+ * 5 focused questions + seasonal scoring → top 4 personalized destinations
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, RotateCcw, Plane, MapPin, Clock, ThumbsUp } from 'lucide-react'
+import { ChevronLeft, RotateCcw, Plane, Star } from 'lucide-react'
 import Link from 'next/link'
 
-// ── Quiz data ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Season detection
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface Answer {
-  id: string
-  label: string
-  emoji: string
-  tags: string[]
+type Season = 'winter' | 'spring' | 'summer' | 'autumn'
+
+function getCurrentSeason(): Season {
+  const m = new Date().getMonth() + 1 // 1-12
+  if (m === 12 || m <= 2) return 'winter'
+  if (m <= 5)             return 'spring'
+  if (m <= 8)             return 'summer'
+  return 'autumn'
 }
 
-interface Question {
-  id: string
-  text: string
-  sub?: string
-  answers: Answer[]
+const SEASON_LABEL: Record<Season, string> = {
+  winter: 'חורף ❄️',
+  spring: 'אביב 🌸',
+  summer: 'קיץ ☀️',
+  autumn: 'סתיו 🍂',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quiz questions — 5 focused, no sub-text needed
+// ─────────────────────────────────────────────────────────────────────────────
+
+type AnswerTag =
+  | 'backpacker' | 'comfort' | 'premium' | 'luxury'
+  | 'short' | 'week' | 'long'
+  | 'beach' | 'city' | 'adventure' | 'ski'
+  | 'solo' | 'couple' | 'friends' | 'family'
+  | 'near' | 'medium' | 'far'
+
+interface Answer { id: string; label: string; emoji: string; tags: AnswerTag[] }
+interface Question { id: string; text: string; answers: Answer[] }
 
 const QUESTIONS: Question[] = [
   {
     id: 'budget',
-    text: 'מה התקציב שלך?',
-    sub: 'עלות כוללת לאדם כולל טיסה',
+    text: 'רמת החופשה?',
     answers: [
-      { id: 'low',      label: 'חסכוני',        emoji: '💸', tags: ['budget-low'] },
-      { id: 'mid',      label: 'בינוני',         emoji: '💳', tags: ['budget-mid'] },
-      { id: 'high',     label: 'פרמיום',         emoji: '💎', tags: ['budget-high'] },
-      { id: 'any',      label: 'לא משנה',        emoji: '🤷', tags: ['budget-low','budget-mid','budget-high'] },
+      { id: 'backpacker', label: 'Backpacker',  emoji: '🎒', tags: ['backpacker'] },
+      { id: 'comfort',    label: 'Comfort',     emoji: '😊', tags: ['comfort'] },
+      { id: 'premium',    label: 'Premium',     emoji: '✨', tags: ['premium'] },
+      { id: 'luxury',     label: 'Luxury',      emoji: '👑', tags: ['luxury'] },
     ],
   },
   {
     id: 'duration',
-    text: 'כמה זמן?',
-    sub: 'משך הטיול הרצוי',
+    text: 'כמה ימים?',
     answers: [
-      { id: 'short',    label: '3–5 ימים',       emoji: '🏃', tags: ['short'] },
-      { id: 'week',     label: 'שבוע',            emoji: '📅', tags: ['week'] },
-      { id: 'long',     label: '2 שבועות+',       emoji: '🌍', tags: ['long'] },
-      { id: 'any',      label: 'גמיש',            emoji: '🎲', tags: ['short','week','long'] },
-    ],
-  },
-  {
-    id: 'climate',
-    text: 'איזה אקלים אתה אוהב?',
-    answers: [
-      { id: 'tropical', label: 'חמים ולח',        emoji: '🌴', tags: ['tropical'] },
-      { id: 'warm',     label: 'חמים ויבש',       emoji: '☀️', tags: ['warm'] },
-      { id: 'mild',     label: 'נעים ומתון',      emoji: '🌤', tags: ['mild'] },
-      { id: 'cold',     label: 'קריר / שלג',      emoji: '❄️', tags: ['cold'] },
+      { id: 'short', label: 'סיטי בריק  4–5', emoji: '⚡', tags: ['short'] },
+      { id: 'week',  label: 'שבוע',           emoji: '📅', tags: ['week'] },
+      { id: 'long',  label: '10–14 יום',      emoji: '🌍', tags: ['long'] },
     ],
   },
   {
     id: 'vibe',
     text: 'מה הסגנון שלך?',
     answers: [
-      { id: 'beach',    label: 'חוף ים ורגיעה',   emoji: '🏖️', tags: ['beach'] },
-      { id: 'city',     label: 'עיר ותרבות',       emoji: '🏙️', tags: ['city','culture'] },
-      { id: 'adventure',label: 'הרפתקאות וטבע',   emoji: '🧗', tags: ['adventure','nature'] },
-      { id: 'food',     label: 'אוכל ולילות',      emoji: '🍜', tags: ['food','nightlife'] },
+      { id: 'beach',     label: 'חוף ורגיעה',      emoji: '🏖️', tags: ['beach'] },
+      { id: 'city',      label: 'עיר, תרבות, אוכל', emoji: '🏙️', tags: ['city'] },
+      { id: 'adventure', label: 'הרפתקה וטבע',      emoji: '🧗', tags: ['adventure'] },
+      { id: 'ski',       label: 'סקי ושלג',          emoji: '⛷️', tags: ['ski'] },
     ],
   },
   {
     id: 'with',
-    text: 'עם מי אתה טס?',
+    text: 'עם מי?',
     answers: [
-      { id: 'solo',     label: 'לבד',             emoji: '🎒', tags: ['solo'] },
-      { id: 'couple',   label: 'עם בן/בת זוג',    emoji: '❤️', tags: ['couple'] },
-      { id: 'friends',  label: 'חברים',            emoji: '👯', tags: ['friends'] },
-      { id: 'family',   label: 'משפחה עם ילדים',  emoji: '👨‍👩‍👧', tags: ['family'] },
+      { id: 'solo',    label: 'לבד',             emoji: '🎒', tags: ['solo'] },
+      { id: 'couple',  label: 'זוג',             emoji: '❤️', tags: ['couple'] },
+      { id: 'friends', label: 'חברים',           emoji: '👯', tags: ['friends'] },
+      { id: 'family',  label: 'משפחה + ילדים',  emoji: '👨‍👩‍👧', tags: ['family'] },
     ],
   },
   {
-    id: 'priority',
-    text: 'מה הכי חשוב לך?',
+    id: 'distance',
+    text: 'כמה רחוק לטוס?',
     answers: [
-      { id: 'photo',    label: 'נופים לתמונות',   emoji: '📸', tags: ['scenic','nature'] },
-      { id: 'food2',    label: 'חוויית אוכל',      emoji: '🍣', tags: ['food'] },
-      { id: 'history',  label: 'היסטוריה ותרבות',  emoji: '🏛️', tags: ['culture','history'] },
-      { id: 'party',    label: 'נייטליף ובילויים', emoji: '🎉', tags: ['nightlife','friends'] },
+      { id: 'near',   label: 'עד 5 שעות',   emoji: '🛫', tags: ['near'] },
+      { id: 'medium', label: 'עד 10 שעות',  emoji: '🌏', tags: ['medium'] },
+      { id: 'far',    label: 'לא משנה',     emoji: '🌍', tags: ['far'] },
     ],
   },
 ]
 
-// ── Destination database ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Destination database
+// ─────────────────────────────────────────────────────────────────────────────
+
+type BudgetTier = 'backpacker' | 'comfort' | 'premium' | 'luxury'
+type FlightZone = 'near' | 'medium' | 'far'  // near<5h, medium 5-10h, far>10h
 
 interface Destination {
   key: string
   nameHe: string
-  nameEn: string
-  city: string        // main city to fly to
+  city: string          // city/region shown in results
   emoji: string
   tagline: string
-  why: string         // short "למה ?" sentence
-  tags: string[]      // matching tags
-  score?: number      // calculated at runtime
+  why: (season: Season) => string
+  tags: AnswerTag[]
+  budgetMin: BudgetTier // minimum budget tier
+  flightZone: FlightZone
+  seasonal: Record<Season, number>  // 0-3, how good is this destination this season
+  skiDest?: boolean     // true = ski-specific destination
 }
 
 const DESTINATIONS: Destination[] = [
-  // Asia - budget-friendly
+
+  // ── NEAR (up to 5h from Israel) ────────────────────────────────────────────
+
   {
-    key: 'Thailand', nameHe: 'תאילנד', nameEn: 'Thailand', city: 'בנגקוק',
-    emoji: '🇹🇭', tagline: 'אוכל מדהים, חופים, מקדשים',
-    why: 'היעד הפופולרי ביותר של ישראלים — לא מקרי',
-    tags: ['budget-low','budget-mid','tropical','beach','food','adventure','culture','solo','couple','friends','week','long','scenic'],
+    key: 'Greece', nameHe: 'יוון', city: 'סנטוריני / אתונה',
+    emoji: '🇬🇷', tagline: 'כחול לבן, שקיעות, ים',
+    why: s => s === 'summer' ? 'עונת השיא — ים מושלם, אנרגיה גבוהה' : s === 'spring' ? 'פחות צפוף, מחירים נמוכים, בלי חום קיצוני' : 'עונת ביניים, שקט יותר',
+    tags: ['beach', 'city', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'comfort', flightZone: 'near',
+    seasonal: { winter: 1, spring: 2, summer: 3, autumn: 2 },
   },
   {
-    key: 'Japan', nameHe: 'יפן', nameEn: 'Japan', city: 'טוקיו',
-    emoji: '🇯🇵', tagline: 'עולם אחר לגמרי',
-    why: 'תרבות ייחודית, אוכל מהשורה הראשונה, נקי ובטוח',
-    tags: ['budget-mid','budget-high','mild','city','culture','food','history','solo','couple','friends','week','long','scenic'],
+    key: 'Turkey', nameHe: 'טורקיה', city: 'איסטנבול / קפדוקיה',
+    emoji: '🇹🇷', tagline: 'מזרח ומערב, היסטוריה, אוכל',
+    why: s => s === 'spring' || s === 'autumn' ? 'מזג האוויר הכי נעים לסיורים' : s === 'summer' ? 'חוף אגאי בשיא' : 'בלון הכדור בקפדוקיה — שלג = קסם',
+    tags: ['city', 'beach', 'adventure', 'solo', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'near',
+    seasonal: { winter: 2, spring: 3, summer: 3, autumn: 3 },
   },
   {
-    key: 'Vietnam', nameHe: 'וייטנאם', nameEn: 'Vietnam', city: 'האנוי',
-    emoji: '🇻🇳', tagline: 'ירוק, זול, מרהיב',
-    why: 'ערך הכסף הטוב ביותר באסיה — נופים עוצרי נשימה',
-    tags: ['budget-low','tropical','beach','food','adventure','nature','solo','couple','friends','long','scenic'],
+    key: 'Jordan', nameHe: 'ירדן', city: 'פטרה / ואדי רם',
+    emoji: '🇯🇴', tagline: 'פטרה, מדבר, ים המלח',
+    why: s => s === 'spring' || s === 'autumn' ? 'טמפ\' מושלמת לטיולים במדבר' : s === 'winter' ? 'ירוק, קריר, שקט — שעתיים טיסה' : 'חם מאוד, בואו מוקדם בבוקר',
+    tags: ['adventure', 'city', 'solo', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'near',
+    seasonal: { winter: 2, spring: 3, summer: 1, autumn: 3 },
   },
   {
-    key: 'Indonesia', nameHe: 'בלי (אינדונזיה)', nameEn: 'Bali', city: 'באלי',
-    emoji: '🇮🇩', tagline: 'רוחניות, גלים, עיצוב מדהים',
-    why: 'האי הכי אינסטגרמי בעולם — אין ויכוח',
-    tags: ['budget-low','budget-mid','tropical','beach','culture','adventure','nature','solo','couple','friends','week','long','scenic'],
+    key: 'Egypt', nameHe: 'מצרים', city: 'שארם אל-שייח / הורגדה',
+    emoji: '🇪🇬', tagline: 'אלמוגים, מדבר, עתיקות',
+    why: s => s === 'winter' ? 'העונה הטובה ביותר — 25° ושמש' : s === 'autumn' ? 'ים מדהים, ריפים מלאי חיים' : s === 'spring' ? 'נעים עדיין לפני החום' : 'חם מאוד — תתכנן בהתאם',
+    tags: ['beach', 'adventure', 'solo', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'near',
+    seasonal: { winter: 3, spring: 2, summer: 1, autumn: 3 },
   },
   {
-    key: 'Cambodia', nameHe: 'קמבודיה', nameEn: 'Cambodia', city: 'סיאם ריפ',
-    emoji: '🇰🇭', tagline: 'אנגקור ואט — חייב לראות',
-    why: 'אחת מפלאות העולם, טיסות זולות מתאילנד',
-    tags: ['budget-low','tropical','culture','history','adventure','solo','friends','week','long'],
+    key: 'UAE', nameHe: 'דובאי', city: 'דובאי',
+    emoji: '🇦🇪', tagline: 'פאר, עתיד, ספארי מדברי',
+    why: s => s === 'winter' ? 'הדובאי הכי טוב — 25°, כל מה שיש פתוח' : s === 'autumn' ? 'מתחמם — מחירים מוזלים' : s === 'spring' ? 'נעים עדיין לפני הקיץ' : 'חום קיצוני — מול, אינדור בלבד',
+    tags: ['city', 'beach', 'solo', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'comfort', flightZone: 'near',
+    seasonal: { winter: 3, spring: 2, summer: 1, autumn: 2 },
   },
   {
-    key: 'SriLanka', nameHe: 'סרי לנקה', nameEn: 'Sri Lanka', city: 'קולומבו',
-    emoji: '🇱🇰', tagline: 'גן עדן לא מפורסם מספיק',
-    why: 'חופים, ג\'ונגל, פיל, תה — הכל במדינה קטנה',
-    tags: ['budget-low','budget-mid','tropical','beach','nature','adventure','culture','solo','couple','friends','week','long','scenic'],
+    key: 'Morocco', nameHe: 'מרוקו', city: 'מרקש / פס / דהאב',
+    emoji: '🇲🇦', tagline: 'שווקים, ריאד, סהרה',
+    why: s => s === 'spring' || s === 'autumn' ? 'מזג האוויר המושלם — לא חם ולא קר' : s === 'winter' ? 'טיול מדברי + הרי האטלס עם שלג' : 'חם מאוד — עדיף לרחצה בחוף',
+    tags: ['adventure', 'city', 'solo', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'near',
+    seasonal: { winter: 2, spring: 3, summer: 1, autumn: 3 },
+  },
+
+  // ── SKI (near/medium) ──────────────────────────────────────────────────────
+
+  {
+    key: 'Alps', nameHe: 'האלפים', city: 'שאמוני / ורבייה / זרמאט',
+    emoji: '🏔️', tagline: 'סקי עולמי, קרחונים, כפרים',
+    why: s => s === 'winter' ? 'ינואר-פברואר — שלג מושלם, 200+ מסלולים' : s === 'spring' ? 'סקי אביבי — שמש + שלג, עד מרץ' : 'אין שלג — עדיף יעד אחר',
+    tags: ['ski', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'premium', flightZone: 'near',
+    skiDest: true,
+    seasonal: { winter: 3, spring: 2, summer: 0, autumn: 0 },
   },
   {
-    key: 'India', nameHe: 'הודו', nameEn: 'India', city: 'גואה',
-    emoji: '🇮🇳', tagline: 'חוויה שתשנה אותך',
-    why: 'צבע, טעם, תרבות — אין מקום כזה בעולם',
-    tags: ['budget-low','tropical','warm','culture','history','food','adventure','solo','friends','long','scenic'],
-  },
-  // Europe
-  {
-    key: 'Italy', nameHe: 'איטליה', nameEn: 'Italy', city: 'רומא',
-    emoji: '🇮🇹', tagline: 'אוכל, היסטוריה, רומנטיקה',
-    why: 'פיצה, פסטה, קולוסיאום — איטליה מספרת את עצמה',
-    tags: ['budget-mid','budget-high','mild','city','culture','history','food','couple','friends','family','short','week','scenic'],
+    key: 'Dolomites', nameHe: 'דולומיטים', city: 'קורטינה / ואל גארדנה',
+    emoji: '⛰️', tagline: 'סקי איטלקי — אוכל + שלג',
+    why: s => s === 'winter' ? 'הנוף הכי יפה לסקי בעולם — פיצה אחרי הסלאלום' : s === 'spring' ? 'סקי עד אפריל, אחר כך טיולי הרים' : 'לא עונת סקי',
+    tags: ['ski', 'adventure', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'premium', flightZone: 'near',
+    skiDest: true,
+    seasonal: { winter: 3, spring: 2, summer: 1, autumn: 0 },
   },
   {
-    key: 'Spain', nameHe: 'ספרד', nameEn: 'Spain', city: 'ברצלונה',
-    emoji: '🇪🇸', tagline: 'שמש, פלמנקו, טפאס',
-    why: 'חיי לילה, חוף וארכיטקטורה — ברצלונה נותנת הכל',
-    tags: ['budget-mid','warm','beach','city','culture','food','nightlife','solo','couple','friends','short','week','scenic'],
+    key: 'Georgia', nameHe: 'גאורגיה (גודאורי)', city: 'גודאורי / תביליסי',
+    emoji: '🇬🇪', tagline: 'סקי זול, חינג\'לי, אוירה',
+    why: s => s === 'winter' ? 'הכי זול לסקי בעולם — ₪400/יום כולל סקי פס ואוכל' : s === 'spring' ? 'עיר תביליסי — אחת הכי מיוחדות שיש' : 'יפה בקיץ לטיולים',
+    tags: ['ski', 'adventure', 'solo', 'friends', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'near',
+    skiDest: true,
+    seasonal: { winter: 3, spring: 1, summer: 1, autumn: 1 },
   },
   {
-    key: 'Greece', nameHe: 'יוון', nameEn: 'Greece', city: 'אתונה / סנטוריני',
-    emoji: '🇬🇷', tagline: 'כחול ולבן, פלאפל ושקיעות',
-    why: 'סנטוריני — השקיעה הכי יפה בעולם. ללא דיון',
-    tags: ['budget-mid','warm','beach','culture','history','food','couple','friends','family','short','week','scenic'],
+    key: 'Andorra', nameHe: 'אנדורה', city: 'גרנוולרה / אנדורה לה ויה',
+    emoji: '🏳️', tagline: 'סקי + דיוטי פרי + פירנאים',
+    why: s => s === 'winter' ? 'סקי + קניות פטורות ממס — קומבו מנצח' : 'לא עונת סקי — אין סיבה מיוחדת',
+    tags: ['ski', 'friends', 'short'],
+    budgetMin: 'comfort', flightZone: 'near',
+    skiDest: true,
+    seasonal: { winter: 3, spring: 1, summer: 0, autumn: 0 },
+  },
+
+  // ── MEDIUM (5-10h from Israel) ─────────────────────────────────────────────
+
+  {
+    key: 'Italy', nameHe: 'איטליה', city: 'רומא / פירנצה / אמלפי',
+    emoji: '🇮🇹', tagline: 'אוכל, אמנות, la dolce vita',
+    why: s => s === 'spring' ? 'הכי יפה — פרחים, אור זהב, בלי פקקים' : s === 'autumn' ? 'ענבים, טרופים, אורנג\' וחינם בעמק' : s === 'summer' ? 'חם, צפוף, יקר — אבל החוף מדהים' : 'כמעט ריק — מוזיאונים ללא תור',
+    tags: ['city', 'beach', 'couple', 'friends', 'family', 'short', 'week', 'long'],
+    budgetMin: 'comfort', flightZone: 'medium',
+    seasonal: { winter: 1, spring: 3, summer: 2, autumn: 3 },
   },
   {
-    key: 'Portugal', nameHe: 'פורטוגל', nameEn: 'Portugal', city: 'ליסבון',
-    emoji: '🇵🇹', tagline: 'גל הגלישה הגדול + פסטל נאטה',
-    why: 'הסוד הכי שמור באירופה — עדיין מחירים סבירים',
-    tags: ['budget-mid','mild','beach','city','culture','food','adventure','solo','couple','friends','short','week','scenic'],
+    key: 'Spain', nameHe: 'ספרד', city: 'ברצלונה / מדריד / איביזה',
+    emoji: '🇪🇸', tagline: 'פלמנקו, טפאס, שמש, ים',
+    why: s => s === 'summer' ? 'איביזה וברצלונה בשיא — אנרגיה מטורפת' : s === 'spring' || s === 'autumn' ? 'מושלם — לא קיץ, לא חורף, מחירים נוחים' : 'מדריד וברצלונה חיות גם בחורף',
+    tags: ['beach', 'city', 'adventure', 'solo', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'medium',
+    seasonal: { winter: 1, spring: 3, summer: 3, autumn: 3 },
   },
   {
-    key: 'Croatia', nameHe: 'קרואטיה', nameEn: 'Croatia', city: 'דוברובניק',
-    emoji: '🇭🇷', tagline: 'Game of Thrones + ים אדריאטי',
-    why: 'מים כחולים, חומות עתיקות — דוברובניק היא אגדה',
-    tags: ['budget-mid','mild','beach','culture','history','adventure','couple','friends','short','week','scenic'],
+    key: 'Portugal', nameHe: 'פורטוגל', city: 'ליסבון / פורטו / אלגארבה',
+    emoji: '🇵🇹', tagline: 'פאדו, גלישה, אוכל, חינניות',
+    why: s => s === 'spring' || s === 'summer' ? 'אלגארבה בשיא — חופים מדהימים' : s === 'autumn' ? 'ענבים, כמהין, ליסבון ריקה' : 'גשום אבל ליסבון חיה',
+    tags: ['beach', 'city', 'adventure', 'solo', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'medium',
+    seasonal: { winter: 1, spring: 3, summer: 3, autumn: 2 },
   },
   {
-    key: 'Turkey', nameHe: 'טורקיה', nameEn: 'Turkey', city: 'איסטנבול',
-    emoji: '🇹🇷', tagline: 'מזרח ומערב במחיר טוב',
-    why: 'איסטנבול היא אחת הערים הכי עשירות תרבותית בעולם',
-    tags: ['budget-low','budget-mid','warm','city','culture','history','food','beach','solo','couple','friends','family','short','week','scenic'],
+    key: 'France', nameHe: 'צרפת', city: 'פריז / ריביירה',
+    emoji: '🇫🇷', tagline: 'אמנות, בישול, רומנטיקה',
+    why: s => s === 'spring' ? 'פריז בפריחה — כמו בסרטים' : s === 'summer' ? 'קאן ונייס — ריביירה בשיא' : s === 'autumn' ? 'בציר יין, כמהין, ירידי אוכל' : 'פריז בחורף — קוסמופוליטי ורגוע',
+    tags: ['city', 'beach', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'premium', flightZone: 'medium',
+    seasonal: { winter: 1, spring: 3, summer: 3, autumn: 2 },
   },
   {
-    key: 'UAE', nameHe: 'דובאי', nameEn: 'Dubai', city: 'דובאי',
-    emoji: '🇦🇪', tagline: 'עתיד, יוקרה, ענקי',
-    why: 'ברג\'ה חליפה, מדבר, שופינג — ה-WOW מובטח',
-    tags: ['budget-high','warm','city','adventure','nightlife','solo','couple','friends','family','short','week'],
+    key: 'Netherlands', nameHe: 'הולנד', city: 'אמסטרדם / כפר הצבעונים',
+    emoji: '🇳🇱', tagline: 'צבעונים, תעלות, מוזיאונים',
+    why: s => s === 'spring' ? 'אפריל = שדות הצבעונים בשיא — איקוניק' : s === 'summer' ? 'תיירות בשיא אבל יפה מאוד' : 'עירוני כל השנה, מוזיאון מהטובים',
+    tags: ['city', 'solo', 'couple', 'friends', 'family', 'short', 'week'],
+    budgetMin: 'comfort', flightZone: 'medium',
+    seasonal: { winter: 1, spring: 3, summer: 2, autumn: 1 },
   },
   {
-    key: 'Morocco', nameHe: 'מרוקו', nameEn: 'Morocco', city: 'מרקש',
-    emoji: '🇲🇦', tagline: 'מבוך שווקים ושמש מדברית',
-    why: 'הג\'לבייה, הסוק, הריאד — מזרח שקרוב',
-    tags: ['budget-low','budget-mid','warm','culture','history','food','adventure','nature','solo','couple','friends','week','scenic'],
+    key: 'Croatia', nameHe: 'קרואטיה', city: 'דוברובניק / ספליט / האיים',
+    emoji: '🇭🇷', tagline: 'Game of Thrones, ים אדריאטי',
+    why: s => s === 'summer' ? 'האיים בשיא — מי שמש ושמש' : s === 'spring' ? 'ריק, זול, ים שקוף כמו אריח' : s === 'autumn' ? 'עונת סיום — שקט ונהדר' : 'לא עונה — עדיף לבחור אחר',
+    tags: ['beach', 'adventure', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'comfort', flightZone: 'medium',
+    seasonal: { winter: 0, spring: 2, summer: 3, autumn: 2 },
   },
   {
-    key: 'Maldives', nameHe: 'מלדיביים', nameEn: 'Maldives', city: 'מאלה',
-    emoji: '🇲🇻', tagline: 'וילה על המים — פשוט שם',
-    why: 'הבנגלו מעל האוקיאנוס — זה לא חופשה, זה חוויה',
-    tags: ['budget-high','tropical','beach','couple','scenic','week'],
+    key: 'CzechRepublic', nameHe: 'פראג', city: 'פראג',
+    emoji: '🇨🇿', tagline: 'ביירה, ארכיטקטורה, נייטליף',
+    why: s => s === 'winter' ? 'שוקי הקריסמס — פנטזיה אירופאית' : s === 'spring' || s === 'summer' ? 'פסטיבלים, בגינות, ביירה בחוץ' : 'אדום-זהב ברחובות — עיר יפה',
+    tags: ['city', 'solo', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'medium',
+    seasonal: { winter: 2, spring: 3, summer: 3, autumn: 2 },
   },
   {
-    key: 'Nepal', nameHe: 'נפאל', nameEn: 'Nepal', city: 'קטמנדו',
-    emoji: '🇳🇵', tagline: 'אוורסט, טרקינג, נשמה',
-    why: 'לו טרק בהימאלאיה — הנסיעה שמשנה ממ\u05b4ד',
-    tags: ['budget-low','cold','adventure','nature','solo','friends','long','scenic'],
+    key: 'Hungary', nameHe: 'בודפשט', city: 'בודפשט',
+    emoji: '🇭🇺', tagline: 'ספא, ביירה, גשרים, פסטיבלים',
+    why: s => s === 'summer' ? 'פסטיבל Sziget — מהגדולים בעולם' : s === 'winter' ? 'ספא עם קיטור בשלג — חוויה ייחודית' : 'נעים כל השנה, זול מאירופה',
+    tags: ['city', 'solo', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'backpacker', flightZone: 'medium',
+    seasonal: { winter: 2, spring: 2, summer: 3, autumn: 2 },
   },
   {
-    key: 'CzechRepublic', nameHe: 'פראג', nameEn: 'Prague', city: 'פראג',
-    emoji: '🇨🇿', tagline: 'אגדת אירופה הקלאסית',
-    why: 'ביירה זולה, ארכיטקטורה קסומה — סיטי בריק מושלם',
-    tags: ['budget-low','budget-mid','mild','cold','city','culture','history','nightlife','food','solo','couple','friends','short'],
+    key: 'Iceland', nameHe: 'איסלנד', city: 'רייקיאוויק / האות הצפוני',
+    emoji: '🇮🇸', tagline: 'פיורדים, ברקים צפוניים, לבה',
+    why: s => s === 'winter' ? 'זוהר הצפון — הסיכוי הטוב ביותר לראות אורות צפוניים' : s === 'summer' ? 'שמש חצות — 20 שעות אור, ירוק מדהים' : 'מעניין כל עונה — ולקנו פעיל',
+    tags: ['adventure', 'solo', 'couple', 'friends', 'short', 'week'],
+    budgetMin: 'premium', flightZone: 'medium',
+    seasonal: { winter: 3, spring: 2, summer: 3, autumn: 2 },
   },
   {
-    key: 'Hungary', nameHe: 'בודפשט', nameEn: 'Budapest', city: 'בודפשט',
-    emoji: '🇭🇺', tagline: 'בתי מרחץ + ספא + בירה',
-    why: 'מחצית מהמחיר של וינה, כפול הכיף',
-    tags: ['budget-low','budget-mid','mild','city','culture','history','nightlife','food','solo','couple','friends','short'],
+    key: 'Norway', nameHe: 'נורבגיה', city: 'ברגן / פיורדים / לופוטן',
+    emoji: '🇳🇴', tagline: 'פיורדים, אורות, וקינגים',
+    why: s => s === 'summer' ? 'שמש חצות — פיורדים ירוקים, טיולים אינסופיים' : s === 'winter' ? 'אורות צפוניים + סקי + חשכה קסומה' : 'יפה מאוד אבל יקר — תתכנן מראש',
+    tags: ['adventure', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'premium', flightZone: 'medium',
+    seasonal: { winter: 2, spring: 2, summer: 3, autumn: 2 },
+  },
+
+  // ── FAR (10h+ from Israel) ─────────────────────────────────────────────────
+
+  {
+    key: 'Thailand', nameHe: 'תאילנד', city: 'בנגקוק / פוקט / קו סמוי',
+    emoji: '🇹🇭', tagline: 'אוכל, חופים, מקדשים, חיים',
+    why: s => s === 'winter' ? 'הדרום (פוקט) בשיא — ים שקוף, אין גשם' : s === 'spring' ? 'לפני העונה — זול וריק יחסית' : s === 'summer' ? 'עונת גשמים בדרום — הצפון (צ\'יאנג מאי) מדהים' : 'עונת המעבר — ים מתחיל להתפנות',
+    tags: ['beach', 'adventure', 'city', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'backpacker', flightZone: 'far',
+    seasonal: { winter: 3, spring: 2, summer: 2, autumn: 2 },
   },
   {
-    key: 'UK', nameHe: 'לונדון', nameEn: 'London', city: 'לונדון',
-    emoji: '🇬🇧', tagline: 'מוזיאונים חינמיים, תרבות עולמית',
-    why: 'אפשר לשלושה ימים — מוזיאונים, בורוסוק, תיאטרון',
-    tags: ['budget-mid','budget-high','mild','city','culture','history','food','nightlife','solo','couple','friends','family','short','week'],
+    key: 'Japan', nameHe: 'יפן', city: 'טוקיו / קיוטו / אוסקה',
+    emoji: '🇯🇵', tagline: 'תרבות ייחודית, אוכל עולמי, נקי',
+    why: s => s === 'spring' ? 'פריחת הדובדבן — אחת מחוויות החיים הבלתי נשכחות' : s === 'autumn' ? 'עלים אדומים וזהובים — יפן בסתיו = קסם' : s === 'winter' ? 'סקי בהוקאידו + אונסן + שלג' : 'חם ולח — עדיין מדהים',
+    tags: ['city', 'adventure', 'ski', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'comfort', flightZone: 'far',
+    seasonal: { winter: 2, spring: 3, summer: 1, autumn: 3 },
   },
   {
-    key: 'France', nameHe: 'פריז', nameEn: 'Paris', city: 'פריז',
-    emoji: '🇫🇷', tagline: 'אהבה, אמנות, קרואסון',
-    why: 'יש סיבה שכולם חולמים על פריז',
-    tags: ['budget-high','mild','city','culture','history','food','couple','friends','short','scenic'],
+    key: 'Bali', nameHe: 'באלי', city: 'אובוד / סמיניאק / נוסה פניידה',
+    emoji: '🇮🇩', tagline: 'ריהאן, גלים, ספא, רוחניות',
+    why: s => s === 'summer' ? 'עונה יבשה — השמש שולטת, גלישה בשיא' : s === 'autumn' ? 'עדיין יבש — פחות תיירים, מחירים נמוכים' : s === 'winter' ? 'עונת הגשמים — אבל עדיין נהדר, הזול ביותר' : 'מעבר עונות — יפה עם קצת גשם',
+    tags: ['beach', 'adventure', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'backpacker', flightZone: 'far',
+    seasonal: { winter: 2, spring: 2, summer: 3, autumn: 3 },
   },
   {
-    key: 'Jordan', nameHe: 'ירדן', nameEn: 'Jordan', city: 'עמאן / פטרה',
-    emoji: '🇯🇴', tagline: 'פטרה + ים המלח + וואדי רם',
-    why: 'שעתיים טיסה, עולם שלם — ועם ויזה ישראלית',
-    tags: ['budget-low','budget-mid','warm','culture','history','adventure','nature','solo','couple','friends','short','week','scenic'],
+    key: 'Vietnam', nameHe: 'וייטנאם', city: 'האנוי / הוי אן / הו צ\'י מין',
+    emoji: '🇻🇳', tagline: 'נופים, אוכל, ספינות האלונג',
+    why: s => s === 'winter' ? 'הצפון (האנוי, האלונג) — קריר ומושלם לטיולים' : s === 'spring' ? 'מרכז הוי אן בשיא — שמש ופרחים' : s === 'summer' ? 'הדרום (הו צ\'י מין, מקונג) — עונה יבשה' : 'ארץ ארוכה — תמיד יש מקום עם מזג אוויר מושלם',
+    tags: ['adventure', 'city', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'backpacker', flightZone: 'far',
+    seasonal: { winter: 3, spring: 3, summer: 2, autumn: 2 },
   },
   {
-    key: 'Philippines', nameHe: 'פיליפינים', nameEn: 'Philippines', city: 'פלאוואן',
-    emoji: '🇵🇭', tagline: '7,000 איים לבחור',
-    why: 'המים השקופים ביותר בעולם — אל נאידו ב-TOP 1',
-    tags: ['budget-low','tropical','beach','adventure','nature','solo','couple','friends','long','scenic'],
+    key: 'Maldives', nameHe: 'מלדיביים', city: 'מאלה / אטולים',
+    emoji: '🇲🇻', tagline: 'וילות על מים, אלמוגים, שלווה',
+    why: s => s === 'winter' || s === 'spring' ? 'העונה היבשה — מים שקופים, שמש מובטחת' : s === 'summer' ? 'עונת גשמים — זול יותר, עדיין יפה' : 'מעבר — מחירים מוזלים',
+    tags: ['beach', 'couple', 'solo', 'short', 'week'],
+    budgetMin: 'luxury', flightZone: 'far',
+    seasonal: { winter: 3, spring: 3, summer: 2, autumn: 2 },
+  },
+  {
+    key: 'Seychelles', nameHe: 'סיישל', city: 'מאהה / לה דיג',
+    emoji: '🏝️', tagline: 'גרניט, טורקיז, שמורות טבע',
+    why: s => s === 'spring' || s === 'autumn' ? 'הגרנד אנסה בשיא — הים הכי יפה שתראה' : 'יפה כל השנה — גשם מגיע בהתראה קצרה',
+    tags: ['beach', 'couple', 'solo', 'week', 'long'],
+    budgetMin: 'luxury', flightZone: 'far',
+    seasonal: { winter: 2, spring: 3, summer: 2, autumn: 3 },
+  },
+  {
+    key: 'SriLanka', nameHe: 'סרי לנקה', city: 'קולומבו / גאלה / אנוראדהפורה',
+    emoji: '🇱🇰', tagline: 'פילים, תה, ריפים, מקדשים',
+    why: s => s === 'winter' || s === 'spring' ? 'הצד המערבי — ים שקוף ופילים חופשיים' : 'הצד המזרחי — גאלה ועיר ישנה',
+    tags: ['adventure', 'city', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'backpacker', flightZone: 'far',
+    seasonal: { winter: 3, spring: 3, summer: 1, autumn: 2 },
+  },
+  {
+    key: 'Nepal', nameHe: 'נפאל', city: 'קטמנדו / פוקהרה / אוורסט',
+    emoji: '🇳🇵', tagline: 'הימאלאיה, טרקינג, נשמה',
+    why: s => s === 'spring' ? 'אוקטובר ואפריל — תקופת הטרקינג — נוף מדהים ושמיים נקיים' : s === 'autumn' ? 'הכי טוב לטרקינג — שמיים כחולים, שלג טרי' : 'גשם (קיץ) או קור עז (חורף)',
+    tags: ['adventure', 'solo', 'friends', 'week', 'long'],
+    budgetMin: 'backpacker', flightZone: 'far',
+    seasonal: { winter: 1, spring: 3, summer: 1, autumn: 3 },
+  },
+  {
+    key: 'Hokkaido', nameHe: 'הוקאידו (יפן)', city: 'ניסקו / סאפורו',
+    emoji: '🎿', tagline: 'הסקי הטוב בעולם — אבקת שלג יפנית',
+    why: s => s === 'winter' ? 'פברואר = פסטיבל השלג בסאפורו + הסקי הכי טוב באסיה' : 'לא עונת סקי — יפן כן, הוקאידו לא',
+    tags: ['ski', 'adventure', 'couple', 'friends', 'week'],
+    budgetMin: 'premium', flightZone: 'far',
+    skiDest: true,
+    seasonal: { winter: 3, spring: 0, summer: 0, autumn: 0 },
+  },
+  {
+    key: 'Peru', nameHe: 'פרו', city: 'מאצ\'ו פיצ\'ו / קוסקו / ליים',
+    emoji: '🇵🇪', tagline: 'אינקה, ג\'ונגל, מטבח עולמי',
+    why: s => s === 'summer' || s === 'autumn' ? 'העונה היבשה — מאצ\'ו פיצ\'ו ללא עננים' : 'גשם — מאצ\'ו פיצ\'ו בענן אבל מיסטי',
+    tags: ['adventure', 'solo', 'couple', 'friends', 'week', 'long'],
+    budgetMin: 'comfort', flightZone: 'far',
+    seasonal: { winter: 2, spring: 2, summer: 3, autumn: 3 },
   },
 ]
 
-// ── Scoring engine ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Scoring engine
+// ─────────────────────────────────────────────────────────────────────────────
 
-function scoreDestinations(selectedTags: string[]): Destination[] {
+const BUDGET_ORDER: BudgetTier[] = ['backpacker', 'comfort', 'premium', 'luxury']
+
+function scoreDestinations(
+  answers: Record<string, AnswerTag[]>,
+  season: Season,
+): Destination[] {
+  const allTags = Object.values(answers).flat()
+
+  const userBudget = (allTags.find(t =>
+    ['backpacker','comfort','premium','luxury'].includes(t)
+  ) ?? 'comfort') as BudgetTier
+
+  const userDistance = (allTags.find(t =>
+    ['near','medium','far'].includes(t)
+  ) ?? 'far') as FlightZone
+
+  const wantsski = allTags.includes('ski')
+
   return DESTINATIONS
     .map(dest => {
       let score = 0
-      for (const tag of selectedTags) {
-        if (dest.tags.includes(tag)) score += 2
+
+      // 1. Seasonal score (0-9 pts) — the main driver
+      score += dest.seasonal[season] * 3
+
+      // 2. Style / vibe match (0-4 pts each)
+      for (const tag of ['beach','city','adventure','ski'] as AnswerTag[]) {
+        if (allTags.includes(tag) && dest.tags.includes(tag)) score += 4
       }
-      // Small random tiebreaker for variety
-      score += Math.random() * 0.4
-      return { ...dest, score }
+
+      // 3. With-whom match (0-2 pts)
+      for (const tag of ['solo','couple','friends','family'] as AnswerTag[]) {
+        if (allTags.includes(tag) && dest.tags.includes(tag)) score += 2
+      }
+
+      // 4. Duration match (0-2 pts)
+      for (const tag of ['short','week','long'] as AnswerTag[]) {
+        if (allTags.includes(tag) && dest.tags.includes(tag)) score += 2
+      }
+
+      // 5. Budget — penalise destinations the user can't afford
+      const budgetIdx     = BUDGET_ORDER.indexOf(userBudget)
+      const destBudgetIdx = BUDGET_ORDER.indexOf(dest.budgetMin)
+      if (destBudgetIdx > budgetIdx) score -= 15       // way out of budget
+      if (destBudgetIdx < budgetIdx - 1) score -= 2    // slight downgrade
+
+      // 6. Distance filter
+      if (userDistance === 'near' && dest.flightZone !== 'near') score -= 10
+      if (userDistance === 'medium' && dest.flightZone === 'far') score -= 5
+
+      // 7. Ski bonus / penalty
+      if (wantsski && dest.skiDest) {
+        // Strong boost in season, penalty out of season
+        score += season === 'winter' ? 8 : season === 'spring' ? 3 : -10
+      }
+      if (!wantsski && dest.skiDest) score -= 12  // user doesn't want ski
+
+      // 8. Small randomness for tie-breaking
+      score += Math.random() * 0.5
+
+      return { ...dest, _score: score }
     })
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .slice(0, 3)
+    .sort((a, b) => (b as Destination & { _score: number })._score - (a as Destination & { _score: number })._score)
+    .slice(0, 4)
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 const GRADIENT = 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)'
 
+const BUDGET_RANGE: Record<BudgetTier, string> = {
+  backpacker: 'עד $1,500',
+  comfort:    '$1,500–$3,000',
+  premium:    '$3,000–$6,000',
+  luxury:     '$6,000+',
+}
+
+const TAG_LABEL: Partial<Record<AnswerTag, string>> = {
+  beach: 'חוף ים', city: 'עיר', adventure: 'הרפתקה', ski: 'סקי',
+  solo: 'סולו', couple: 'זוגות', friends: 'חברים', family: 'משפחה',
+  backpacker: 'Backpacker', comfort: 'Comfort', premium: 'Premium', luxury: 'Luxury',
+  short: 'סיטי בריק', week: 'שבוע', long: 'טיול ארוך',
+  near: 'טיסה קצרה', medium: 'טיסה בינונית', far: 'כל מרחק',
+}
+
 export default function QuizPage() {
-  const router = useRouter()
-  const [step, setStep]               = useState(0)      // 0 = intro, 1-6 = questions, 7 = results
-  const [answers, setAnswers]         = useState<Record<string, string[]>>({})
-  const [results, setResults]         = useState<Destination[]>([])
-  const [animDir, setAnimDir]         = useState(1)       // 1 = forward, -1 = backward
-  const [chosen, setChosen]           = useState<Destination | null>(null)
+  const router    = useRouter()
+  const season    = getCurrentSeason()
+
+  const [step, setStep]         = useState(0)
+  const [answers, setAnswers]   = useState<Record<string, AnswerTag[]>>({})
+  const [results, setResults]   = useState<Destination[]>([])
+  const [animDir, setAnimDir]   = useState(1)
+  const [chosen, setChosen]     = useState<string | null>(null)
 
   const totalSteps = QUESTIONS.length
-  const progress   = step === 0 ? 0 : step <= totalSteps ? (step / totalSteps) * 100 : 100
+  const progress   = step === 0 ? 0 : Math.min((step / totalSteps) * 100, 100)
 
-  function selectAnswer(qId: string, tags: string[]) {
+  function selectAnswer(qId: string, tags: AnswerTag[]) {
     const next = { ...answers, [qId]: tags }
     setAnswers(next)
-
+    setAnimDir(1)
     if (step < totalSteps) {
-      setAnimDir(1)
-      setTimeout(() => setStep(s => s + 1), 180)
+      setTimeout(() => setStep(s => s + 1), 160)
     } else {
-      // Calculate results
-      const allTags = Object.values(next).flat()
-      setResults(scoreDestinations(allTags))
-      setAnimDir(1)
-      setTimeout(() => setStep(totalSteps + 1), 180)
+      setResults(scoreDestinations(next, season))
+      setTimeout(() => setStep(totalSteps + 1), 160)
     }
   }
 
@@ -304,14 +501,14 @@ export default function QuizPage() {
   }
 
   function restart() {
-    setAnswers({})
-    setResults([])
-    setChosen(null)
-    setAnimDir(-1)
-    setStep(0)
+    setAnswers({}); setResults([]); setChosen(null)
+    setAnimDir(-1); setStep(0)
   }
 
   const currentQ = step >= 1 && step <= totalSteps ? QUESTIONS[step - 1] : null
+  const userBudget = (Object.values(answers).flat().find(t =>
+    ['backpacker','comfort','premium','luxury'].includes(t)
+  ) ?? 'comfort') as BudgetTier
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50"
@@ -323,69 +520,65 @@ export default function QuizPage() {
           className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm active:scale-95 transition-transform">
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </button>
-
-        <h1 className="text-base font-bold text-gray-700">לאן לטוס? ✈️</h1>
-
-        {step > 0 && step <= totalSteps && (
+        <div className="text-center">
+          <p className="text-sm font-bold text-gray-700">לאן לטוס? ✈️</p>
+          <p className="text-[10px] text-gray-400">{SEASON_LABEL[season]}</p>
+        </div>
+        {step > 0 ? (
           <button onClick={restart}
             className="w-9 h-9 flex items-center justify-center rounded-xl bg-white shadow-sm active:scale-95 transition-transform">
             <RotateCcw className="w-4 h-4 text-gray-500" />
           </button>
-        )}
-        {(step === 0 || step > totalSteps) && <div className="w-9" />}
+        ) : <div className="w-9" />}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress */}
       {step > 0 && step <= totalSteps && (
         <div className="px-4 mb-1">
-          <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full rounded-full"
+          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <motion.div className="h-full rounded-full"
               style={{ background: GRADIENT }}
               animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.35, ease: 'easeInOut' }}
-            />
+              transition={{ duration: 0.3, ease: 'easeInOut' }} />
           </div>
-          <p className="text-[10px] text-gray-400 text-center mt-1">
-            שאלה {step} מתוך {totalSteps}
-          </p>
         </div>
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden px-4 pb-8">
+      <div className="flex-1 overflow-hidden px-4 pb-10">
         <AnimatePresence mode="wait" custom={animDir}>
+
           {/* ── Intro ── */}
           {step === 0 && (
             <motion.div key="intro"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.35 }}
-              className="flex flex-col items-center justify-center min-h-[70vh] text-center gap-6">
+              initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center justify-center min-h-[72vh] text-center gap-5">
 
-              <div className="w-24 h-24 rounded-3xl flex items-center justify-center text-5xl shadow-lg"
-                style={{ background: GRADIENT }}>
-                🌍
-              </div>
+              <div className="w-20 h-20 rounded-3xl flex items-center justify-center text-4xl shadow-lg"
+                style={{ background: GRADIENT }}>🌍</div>
 
               <div>
-                <h2 className="text-2xl font-black text-gray-800 mb-2">
-                  לא יודע לאן לטוס?
-                </h2>
-                <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
-                  6 שאלות קצרות — ואנחנו נמצא לך את היעד המושלם עבורך
+                <h2 className="text-2xl font-black text-gray-800 mb-2">לא יודע לאן לטוס?</h2>
+                <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
+                  5 שאלות מהירות — המנוע שלנו יתאים לך את היעד המושלם
+                  <br />
+                  <span className="font-medium" style={{ color: '#6C47FF' }}>
+                    מסונכרן ל{SEASON_LABEL[season]} הנוכחי
+                  </span>
                 </p>
               </div>
 
-              <div className="flex gap-3 text-xs text-gray-400">
-                <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> דקה אחת</div>
-                <div className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> 20+ יעדים</div>
-                <div className="flex items-center gap-1"><ThumbsUp className="w-3.5 h-3.5" /> מותאם אישית</div>
+              {/* Season indicator */}
+              <div className="flex gap-2">
+                {(['winter','spring','summer','autumn'] as Season[]).map(s => (
+                  <div key={s} className={`w-2 h-2 rounded-full transition-all ${s === season ? 'scale-125' : 'bg-gray-200'}`}
+                    style={s === season ? { background: GRADIENT, width: 24, borderRadius: 4 } : {}} />
+                ))}
               </div>
 
               <button onClick={() => { setAnimDir(1); setStep(1) }}
-                className="w-full max-w-xs py-4 rounded-2xl text-white font-bold text-lg shadow-lg active:scale-95 transition-transform"
+                className="w-full max-w-xs py-4 rounded-2xl text-white font-bold text-base shadow-lg active:scale-95 transition-transform"
                 style={{ background: GRADIENT }}>
                 בואו נמצא יעד! 🚀
               </button>
@@ -396,126 +589,126 @@ export default function QuizPage() {
           {currentQ && (
             <motion.div key={`q-${step}`}
               custom={animDir}
-              initial={{ opacity: 0, x: animDir * 60 }}
+              initial={{ opacity: 0, x: animDir * 50 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: animDir * -40 }}
-              transition={{ duration: 0.28 }}
-              className="pt-6 space-y-5">
+              exit={{ opacity: 0, x: animDir * -30 }}
+              transition={{ duration: 0.25 }}
+              className="pt-5 space-y-4">
 
-              <div>
-                <h2 className="text-xl font-black text-gray-800 leading-snug">{currentQ.text}</h2>
-                {currentQ.sub && <p className="text-sm text-gray-400 mt-1">{currentQ.sub}</p>}
-              </div>
+              <h2 className="text-xl font-black text-gray-800">{currentQ.text}</h2>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid gap-3 ${currentQ.answers.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 {currentQ.answers.map(ans => {
-                  const selected = answers[currentQ.id]?.includes(ans.tags[0])
+                  const isSkiOff = ans.id === 'ski' && season !== 'winter' && season !== 'spring'
                   return (
                     <button key={ans.id}
                       onClick={() => selectAnswer(currentQ.id, ans.tags)}
-                      className="relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-white shadow-sm border-2 active:scale-95 transition-all"
-                      style={selected
-                        ? { borderColor: '#6C47FF', background: '#F5F2FF' }
-                        : { borderColor: 'transparent' }}>
+                      className="relative flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-2xl bg-white shadow-sm border-2 active:scale-95 transition-all"
+                      style={{ borderColor: 'transparent' }}>
                       <span className="text-3xl">{ans.emoji}</span>
-                      <span className="text-sm font-semibold text-gray-700 text-center leading-tight">
-                        {ans.label}
-                      </span>
-                      {selected && (
-                        <div className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center"
-                          style={{ background: GRADIENT }}>
-                          <span className="text-white text-[9px]">✓</span>
-                        </div>
+                      <span className="text-sm font-semibold text-gray-700 text-center leading-tight">{ans.label}</span>
+                      {/* Budget range hint */}
+                      {currentQ.id === 'budget' && (
+                        <span className="text-[9px] text-gray-400">
+                          {BUDGET_RANGE[ans.id as BudgetTier]}
+                        </span>
+                      )}
+                      {/* Off-season ski warning */}
+                      {isSkiOff && (
+                        <span className="text-[9px] text-amber-500 font-medium">לא עונה עכשיו</span>
                       )}
                     </button>
                   )
                 })}
               </div>
+
+              <p className="text-center text-xs text-gray-400">{step} / {totalSteps}</p>
             </motion.div>
           )}
 
           {/* ── Results ── */}
           {step > totalSteps && (
             <motion.div key="results"
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              className="pt-4 space-y-4">
+              initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.35 }}
+              className="pt-4 space-y-3">
 
-              <div className="text-center mb-2">
-                <h2 className="text-xl font-black text-gray-800">היעדים המושלמים עבורך! 🎯</h2>
-                <p className="text-sm text-gray-400 mt-1">על בסיס התשובות שלך</p>
+              <div className="text-center mb-3">
+                <h2 className="text-xl font-black text-gray-800">היעדים המושלמים עבורך 🎯</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  מותאם ל{SEASON_LABEL[season]} · {BUDGET_RANGE[userBudget]}
+                </p>
               </div>
 
               {results.map((dest, i) => (
                 <motion.div key={dest.key}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.12 }}>
+                  initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08 }}>
 
-                  <button
-                    onClick={() => setChosen(chosen?.key === dest.key ? null : dest)}
-                    className="w-full text-right"
-                  >
-                    <div className={`bg-white rounded-2xl shadow-sm overflow-hidden border-2 transition-all ${chosen?.key === dest.key ? 'border-violet-500' : 'border-transparent'}`}>
-                      {/* Top bar */}
-                      <div className="px-4 pt-4 pb-3 flex items-start gap-3">
-                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 bg-gray-50">
-                          {dest.emoji}
-                        </div>
+                  <button onClick={() => setChosen(chosen === dest.key ? null : dest.key)}
+                    className="w-full text-right">
+                    <div className={`bg-white rounded-2xl overflow-hidden border-2 transition-all shadow-sm ${chosen === dest.key ? 'border-violet-500' : 'border-transparent'}`}>
+
+                      <div className="p-4 flex items-start gap-3">
+                        <div className="text-3xl flex-shrink-0 leading-none pt-0.5">{dest.emoji}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 mb-0.5">
                             {i === 0 && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
                                 style={{ background: GRADIENT }}>
-                                ⭐ הכי מתאים
+                                ⭐ הכי מתאים לך
+                              </span>
+                            )}
+                            {/* Seasonal badge */}
+                            {dest.seasonal[season] === 3 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">
+                                עונה מושלמת ✓
                               </span>
                             )}
                           </div>
-                          <h3 className="text-base font-black text-gray-800 mt-0.5">{dest.nameHe}</h3>
-                          <p className="text-xs text-gray-400">{dest.tagline}</p>
+                          <h3 className="text-base font-black text-gray-800">{dest.nameHe}</h3>
+                          <p className="text-xs text-gray-400">{dest.city}</p>
+                        </div>
+                        <div className="flex-shrink-0">
+                          {[...Array(dest.seasonal[season])].map((_, si) => (
+                            <Star key={si} className="w-3 h-3 inline-block" fill="#6C47FF" stroke="none" />
+                          ))}
                         </div>
                       </div>
 
-                      {/* Why section */}
+                      {/* Why this season */}
                       <div className="px-4 pb-3">
-                        <p className="text-sm text-gray-600 leading-relaxed">💡 {dest.why}</p>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                          💡 {dest.why(season)}
+                        </p>
                       </div>
 
                       {/* Tags */}
                       <div className="px-4 pb-4 flex flex-wrap gap-1.5">
                         {dest.tags.slice(0, 4).map(tag => (
                           <span key={tag} className="text-[10px] px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full font-medium">
-                            {{
-                              'beach': 'חוף ים', 'city': 'עיר', 'culture': 'תרבות',
-                              'food': 'אוכל', 'adventure': 'הרפתקה', 'nature': 'טבע',
-                              'history': 'היסטוריה', 'nightlife': 'לילות', 'scenic': 'נופים',
-                              'budget-low': 'חסכוני', 'budget-mid': 'בינוני', 'budget-high': 'פרמיום',
-                              'tropical': 'טרופי', 'warm': 'חמים', 'mild': 'נעים', 'cold': 'קריר',
-                              'solo': 'סולו', 'couple': 'זוגות', 'friends': 'חברים', 'family': 'משפחה',
-                              'short': 'סיטי-בריק', 'week': 'שבוע', 'long': 'טיול ארוך',
-                            }[tag] || tag}
+                            {TAG_LABEL[tag] || tag}
                           </span>
                         ))}
+                        <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full font-medium">
+                          {{ near: '✈️ עד 5ש\'', medium: '✈️ 5-10ש\'', far: '✈️ 10ש\'+' }[dest.flightZone]}
+                        </span>
                       </div>
                     </div>
                   </button>
 
-                  {/* CTA — shown when card is selected */}
+                  {/* CTA on select */}
                   <AnimatePresence>
-                    {chosen?.key === dest.key && (
+                    {chosen === dest.key && (
                       <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden">
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                         <Link
-                          href={`/trips/new?dest=${encodeURIComponent(dest.city + ', ' + dest.nameHe)}`}
+                          href={`/trips/new?dest=${encodeURIComponent(dest.city.split('/')[0].trim() + ', ' + dest.nameHe)}`}
                           className="flex items-center justify-center gap-2 mt-2 py-3.5 rounded-2xl text-white font-bold shadow-md active:scale-95 transition-transform"
                           style={{ background: GRADIENT }}>
                           <Plane className="w-4 h-4" />
-                          יאללה, בואו נתכנן את {dest.nameHe}!
+                          יאללה, מתכננים {dest.nameHe}!
                         </Link>
                       </motion.div>
                     )}
@@ -523,14 +716,13 @@ export default function QuizPage() {
                 </motion.div>
               ))}
 
-              {/* Start over */}
               <button onClick={restart}
-                className="w-full py-3 rounded-2xl border border-gray-200 text-gray-500 text-sm font-medium flex items-center justify-center gap-2 active:scale-95 transition-transform bg-white">
-                <RotateCcw className="w-4 h-4" />
-                נסה שוב עם תשובות שונות
+                className="w-full py-3 rounded-2xl border border-gray-200 text-gray-500 text-sm font-medium flex items-center justify-center gap-2 active:scale-95 bg-white">
+                <RotateCcw className="w-4 h-4" /> נסה עם תשובות שונות
               </button>
             </motion.div>
           )}
+
         </AnimatePresence>
       </div>
     </div>
