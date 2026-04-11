@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plane, ChevronLeft, Users, User, Baby, Heart, Plus, Trash2 } from 'lucide-react'
+import { Plane, ChevronLeft, Users, User, Baby, Heart, Plus, Trash2, Briefcase } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -14,41 +14,65 @@ import { Analytics } from '@/lib/analytics'
 
 const TRIP_TYPES = [
   {
+    id: 'business',
+    label: 'נסיעה עסקית',
+    icon: Briefcase,
+    color: 'bg-slate-50 text-slate-700 border-slate-200',
+    desc: 'כנסים, פגישות, עסקים',
+    emoji: '💼',
+    welcomeTitle: 'נסיעה עסקית — נסדר הכל בצורה מקצועית 💼',
+    welcomeText: 'ניהול הוצאות עסקיות, קבלות להחזר, לוח זמנים — הכל במקום אחד.',
+    defaultCount: 1,
+    // Business-specific defaults
+    defaultCategories: ['hotel', 'taxi', 'food', 'other'],
+    suggestExpenseReport: true,
+    requireReceipts: true,
+  },
+  {
     id: 'family',
-    label: 'טיול משפחתי',
+    label: 'נסיעה משפחתית',
     icon: Baby,
     color: 'bg-blue-50 text-blue-600 border-blue-200',
-    desc: 'זוג / משפחה עם ילדים',
+    desc: 'משפחה עם ילדים',
     emoji: '👨‍👩‍👧‍👦',
     welcomeTitle: 'אין כמו טיול משפחתי! 👨‍👩‍👧‍👦',
-    welcomeText: 'מתרגשים לעשות לכם סדר לקראת הטיול. בואו נתחיל!',
-    defaultCount: 3,
+    welcomeText: 'אטרקציות לילדים, בטיחות, רשימת אריזה — הכל מסודר.',
+    defaultCount: 4,
+    defaultCategories: ['hotel', 'activity', 'food', 'transport'],
+    suggestExpenseReport: false,
+    requireReceipts: false,
   },
   {
     id: 'solo',
-    label: 'טיול בודד',
+    label: 'נסיעת יחיד',
     icon: User,
     color: 'bg-purple-50 text-purple-600 border-purple-200',
     desc: 'מטייל יחיד',
-    emoji: '🌍',
-    welcomeTitle: 'לצאת לבד — אומץ אמיתי! 🌍',
+    emoji: '🎒',
+    welcomeTitle: 'לצאת לבד — אומץ אמיתי! 🎒',
     welcomeText: 'הרפתקה אישית שלא תשכח. בוא נעזור לך לתכנן אותה.',
     defaultCount: 1,
+    defaultCategories: ['hotel', 'food', 'activity', 'transport'],
+    suggestExpenseReport: false,
+    requireReceipts: false,
   },
   {
     id: 'friends',
-    label: 'טיול חברים',
+    label: 'נסיעת חברים',
     icon: Users,
     color: 'bg-orange-50 text-orange-600 border-orange-200',
-    desc: 'קבוצת חברים / רווקים',
+    desc: 'קבוצת חברים',
     emoji: '🎉',
     welcomeTitle: 'טיול עם חברים — הכי כיף! 🎉',
-    welcomeText: 'הזיכרונות הכי טובים נוצרים ביחד. בואו נסדר את הטיול!',
+    welcomeText: 'שיתוף הוצאות, לוגיסטיקה קבוצתית, בילויים — הכל מסודר.',
     defaultCount: 4,
+    defaultCategories: ['hotel', 'food', 'activity', 'nightlife'],
+    suggestExpenseReport: false,
+    requireReceipts: false,
   },
   {
     id: 'couple',
-    label: 'טיול זוגי',
+    label: 'נסיעה זוגית',
     icon: Heart,
     color: 'bg-pink-50 text-pink-600 border-pink-200',
     desc: 'ירח דבש / חופשה זוגית',
@@ -56,6 +80,9 @@ const TRIP_TYPES = [
     welcomeTitle: 'רומנטי ומרגש! 💑',
     welcomeText: 'נעזור לכם לתכנן את חופשת החלומות המושלמת.',
     defaultCount: 2,
+    defaultCategories: ['hotel', 'food', 'activity', 'transport'],
+    suggestExpenseReport: false,
+    requireReceipts: false,
   },
 ]
 
@@ -92,8 +119,63 @@ export default function NewTripPage() {
   const [endDate, setEndDate] = useState('')
   const [budget, setBudget] = useState('')
   const [currency, setCurrency] = useState('ILS')
-  const [travelers, setTravelers] = useState([{ id: 'traveler_1', name: '' }])
+  const [travelers, setTravelers] = useState([{ id: 'traveler_1', name: '', nameEn: '', translating: false }])
   const [saving, setSaving] = useState(false)
+
+  // ── Traveler name helpers ─────────────────────────────────────────────────
+  const HE_REGEX = /[\u0590-\u05FF]/
+
+  async function translateNameToEn(hebrewName: string): Promise<string> {
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(hebrewName)}&langpair=he|en`)
+      const data = await res.json() as { responseData?: { translatedText?: string } }
+      const translated = data.responseData?.translatedText?.trim() || ''
+      // MyMemory sometimes returns transliteration — clean up
+      return translated.replace(/[^a-zA-Z\s'-]/g, '').trim()
+    } catch {
+      return ''
+    }
+  }
+
+  function validateTravelerName(name: string): string | null {
+    if (!name.trim()) return 'שם נדרש'
+    if (/\d/.test(name)) return 'שם לא יכול להכיל מספרים'
+    const words = name.trim().split(/\s+/)
+    if (words.length < 2) return 'יש להזין שם מלא (שם + משפחה)'
+    return null
+  }
+
+  async function handleTravelerNameChange(i: number, value: string) {
+    // Block digits
+    if (/\d/.test(value)) return
+
+    const updated = [...travelers]
+    updated[i] = { ...updated[i], name: value, nameEn: '' }
+    setTravelers(updated)
+
+    // If Hebrew detected and looks like a full name — auto-translate
+    if (HE_REGEX.test(value) && value.trim().split(/\s+/).length >= 2) {
+      updated[i] = { ...updated[i], translating: true }
+      setTravelers([...updated])
+      const en = await translateNameToEn(value.trim())
+      const final = [...travelers]
+      final[i] = { ...final[i], name: value, nameEn: en, translating: false }
+      setTravelers(final)
+    }
+  }
+
+  function confirmTranslation(i: number) {
+    const updated = [...travelers]
+    updated[i] = { ...updated[i], name: updated[i].nameEn, nameEn: '', translating: false }
+    setTravelers(updated)
+  }
+
+  function editTranslation(i: number, value: string) {
+    if (/\d/.test(value)) return
+    const updated = [...travelers]
+    updated[i] = { ...updated[i], nameEn: value }
+    setTravelers(updated)
+  }
 
   const filteredDests = searchDestinations(destSearch)
 
@@ -101,7 +183,7 @@ export default function NewTripPage() {
     setSelectedType(type)
     const defaultTravs = Array.from({ length: type.defaultCount }, (_, i) => ({
       id: `traveler_${i + 1}`,
-      name: '',
+      name: '', nameEn: '', translating: false,
     }))
     setTravelers(defaultTravs)
     setStep(2)
@@ -161,13 +243,15 @@ export default function NewTripPage() {
   const travelerLabel = (index: number) => {
     if (!selectedType) return `נוסע ${index + 1}`
     if (selectedType.id === 'solo') return 'מטייל'
+    if (selectedType.id === 'business') return index === 0 ? 'נוסע עסקי' : `עמית ${index}`
     if (selectedType.id === 'couple') return index === 0 ? 'שותף/ה 1' : 'שותף/ה 2'
     if (selectedType.id === 'family') {
       if (index === 0) return 'הורה 1'
       if (index === 1) return 'הורה 2'
       return `ילד/ה ${index - 1}`
     }
-    return index === 0 ? 'מארגן' : `חבר/ה ${index}`
+    if (selectedType.id === 'friends') return index === 0 ? 'מארגן' : `חבר/ה ${index}`
+    return `נוסע ${index + 1}`
   }
 
   const goBack = () => {
@@ -234,11 +318,17 @@ export default function NewTripPage() {
                   onClick={() => handleTypeSelect(type)}
                   className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-right active:scale-[0.98] transition-all ${type.color}`}
                 >
-                  <type.icon className="w-8 h-8 flex-shrink-0" />
-                  <div>
-                    <p className="font-bold text-sm">{type.label}</p>
+                  <span className="text-2xl flex-shrink-0">{type.emoji}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-sm">{type.label}</p>
+                      {type.id === 'business' && (
+                        <span className="text-[9px] px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded-full font-medium">קבלות להחזר</span>
+                      )}
+                    </div>
                     <p className="text-xs opacity-70">{type.desc}</p>
                   </div>
+                  <type.icon className="w-5 h-5 flex-shrink-0 opacity-40" />
                 </button>
               ))}
             </motion.div>
@@ -433,42 +523,69 @@ export default function NewTripPage() {
               <div className="text-center">
                 <div className="text-4xl mb-2">👥</div>
                 <h2 className="text-xl font-bold">מי טס?</h2>
-                <p className="text-sm text-gray-500 mt-1">הוסף את שמות הנוסעים (באנגלית)</p>
+                <p className="text-sm text-gray-500 mt-1">שם מלא בלבד · ניתן להקליד בעברית ולאשר תרגום</p>
               </div>
 
-              <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
-                {travelers.map((t, i) => (
-                  <div key={t.id} className="flex gap-2 items-center">
-                    <span className="text-[11px] text-primary w-16 flex-shrink-0 text-right font-medium">
-                      {travelerLabel(i)}
-                    </span>
-                    <input
-                      type="text"
-                      value={t.name}
-                      dir="ltr"
-                      onChange={(e) => {
-                        const updated = [...travelers]
-                        updated[i] = { ...updated[i], name: e.target.value }
-                        setTravelers(updated)
-                      }}
-                      placeholder="Full name"
-                      className="flex-1 bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none text-left focus:ring-2 focus:ring-primary/20"
-                    />
-                    {travelers.length > 1 && (
-                      <button
-                        onClick={() => setTravelers(prev => prev.filter((_, idx) => idx !== i))}
-                        className="text-red-400 active:scale-95 p-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
+              <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+                {travelers.map((t, i) => {
+                  const nameErr = t.name.trim() ? validateTravelerName(t.name) : null
+                  return (
+                    <div key={t.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500 font-medium">{travelerLabel(i)}</span>
+                        {travelers.length > 1 && (
+                          <button onClick={() => setTravelers(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-red-400 active:scale-95 p-0.5">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={t.name}
+                        onChange={(e) => handleTravelerNameChange(i, e.target.value)}
+                        placeholder="שם מלא — גם בעברית וגם באנגלית"
+                        className={`w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 ${nameErr ? 'ring-2 ring-red-200' : ''}`}
+                        dir="auto"
+                      />
+
+                      {/* Name error */}
+                      {nameErr && (
+                        <p className="text-[11px] text-red-400 px-1">{nameErr}</p>
+                      )}
+
+                      {/* Translation suggestion */}
+                      {t.translating && (
+                        <p className="text-[11px] text-violet-500 px-1 animate-pulse">מתרגם לאנגלית...</p>
+                      )}
+                      {t.nameEn && !t.translating && (
+                        <div className="bg-violet-50 rounded-xl px-3 py-2 space-y-1.5">
+                          <p className="text-[11px] text-violet-600 font-medium">
+                            תרגום לאנגלית — אשר או ערוך:
+                          </p>
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={t.nameEn}
+                              dir="ltr"
+                              onChange={(e) => editTranslation(i, e.target.value)}
+                              className="flex-1 bg-white rounded-lg px-3 py-1.5 text-sm outline-none text-left border border-violet-200 focus:ring-2 focus:ring-violet-200"
+                            />
+                            <button onClick={() => confirmTranslation(i)}
+                              className="text-xs px-3 py-1.5 rounded-lg text-white font-bold active:scale-95"
+                              style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
+                              ✓ אשר
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
 
                 <button
-                  onClick={() =>
-                    setTravelers(prev => [...prev, { id: `traveler_${Date.now()}`, name: '' }])
-                  }
+                  onClick={() => setTravelers(prev => [...prev, { id: `traveler_${Date.now()}`, name: '', nameEn: '', translating: false }])}
                   className="w-full bg-gray-50 text-gray-500 rounded-xl py-2.5 text-xs font-medium active:scale-95 border border-dashed border-gray-300 flex items-center justify-center gap-1"
                 >
                   <Plus className="w-3 h-3" /> הוסף נוסע

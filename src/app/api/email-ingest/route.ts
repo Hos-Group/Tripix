@@ -268,15 +268,16 @@ export async function POST(req: NextRequest) {
 
   // ── Auto-create expense if matched ────────────────────────────────────────
   if (parsed && matchedTripId && parsed.confidence >= 0.7) {
-    const expenseCategory = {
+    const expenseCategory = ({
       hotel:       'hotel',
       flight:      'flight',
       car_rental:  'taxi',
       activity:    'activity',
       tour:        'activity',
       insurance:   'other',
+      inflight:    'other',
       other:       'other',
-    }[parsed.booking_type] || 'other'
+    } as Record<string, string>)[parsed.booking_type] || 'other'
 
     const expenseTitle =
       parsed.hotel_name ||

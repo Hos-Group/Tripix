@@ -16,7 +16,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { DocumentBlockParam, TextBlockParam } from '@anthropic-ai/sdk/resources/messages/messages'
 
 export interface ParsedBooking {
-  booking_type: 'hotel' | 'flight' | 'car_rental' | 'activity' | 'tour' | 'insurance' | 'other'
+  booking_type: 'hotel' | 'flight' | 'car_rental' | 'activity' | 'tour' | 'insurance' | 'inflight' | 'other'
   vendor: string               // "Booking.com", "El Al", "Airbnb" etc.
   destination_city: string     // "Barcelona", "Bangkok"
   destination_country: string  // "Spain", "Thailand"
@@ -58,6 +58,10 @@ export const KNOWN_BOOKING_DOMAINS: ReadonlySet<string> = new Set([
   // Israeli travel
   'isrotel.co.il', 'danhotels.com', 'fattal.co.il', 'atlas.co.il',
   'traveltalm.co.il', 'diesenhaus.com', 'superhotel.co.il',
+  // In-flight services
+  'onboard.ryanair.com', 'shop.ryanair.com', 'easyjet.com/inflight',
+  'buy.inflight.com', 'gogo.com', 'gogoair.com', 'inflight-wifi.com',
+  'dutyfreeairline.com', 'elal-shop.co.il',
   // Israeli airlines
   'elal.co.il', 'elal.com', 'arkia.com', 'israir.co.il',
   // International airlines
@@ -95,8 +99,13 @@ const BOOKING_SUBJECT_KEYWORDS = [
   'voucher', 'receipt', 'invoice', 'boarding pass', 'check-in', 'checkin',
   'booking', 'order confirmed', 'ticket', 'payment received', 'booking ref',
   'your trip', 'your flight', 'your stay', 'your booking',
+  // In-flight purchases
+  'inflight purchase', 'onboard purchase', 'in-flight receipt', 'onboard receipt',
+  'wifi purchase', 'in-flight wifi', 'duty free', 'duty-free', 'onboard order',
+  'seat upgrade', 'baggage receipt', 'extra baggage', 'meal order',
   // Hebrew
   'אישור', 'הזמנה', 'כרטיס', 'טיסה', 'קבלה', 'חשבונית', 'תשלום', 'צ\'ק-אין',
+  'דיוטי פרי', 'שדרוג מושב', 'ווי-פיי בטיסה', 'קנייה בטיסה',
 ]
 
 const SPAM_SUBJECT_KEYWORDS = [
@@ -142,7 +151,7 @@ export function quickPreFilter(
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
 const BASE_BOOKING_FIELDS = `{
-  "booking_type": "hotel|flight|car_rental|activity|tour|insurance|taxi|other",
+  "booking_type": "hotel|flight|car_rental|activity|tour|insurance|taxi|inflight|other",
   "vendor": "שם הפלטפורמה/חברה",
   "destination_city": "עיר היעד",
   "destination_country": "מדינת היעד באנגלית",
@@ -172,6 +181,15 @@ const BOOKING_TYPE_GUIDE = `
 - tour = חבילת נסיעה מאורגנת
 - insurance = ביטוח נסיעות
 - taxi = Uber, Gett, Bolt, Yango, מונית
+- inflight = רכישה במהלך הטיסה: WiFi, אוכל, משקאות, duty-free, שדרוג מושב, כבודה עודפת, מוצרים אחרים שנרכשו על הסיפון
+
+⚠️ זיהוי רכישות בטיסה (inflight):
+- WiFi / internet בטיסה → inflight
+- אוכל ומשקאות שהוזמנו בטיסה → inflight
+- duty-free שנרכש על הסיפון → inflight
+- שדרוג מושב שנרכש בטיסה (לא מראש) → inflight
+- כבודה עודפת שנשלמה בטיסה → inflight
+- לשייך לאותה טיסה לפי תאריך / מספר טיסה
 
 ⚠️ destination_city:
 - מלון/פעילות: העיר שבה נמצא המלון/הפעילות
