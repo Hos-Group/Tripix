@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   title: 'Tripix — מנהל נסיעות',
   description: 'מנהל נסיעות חכם — ניהול הוצאות, מסמכים, ציר זמן וכלים לנסיעה מושלמת',
   manifest: '/manifest.json',
+  other: {
+    'impact-site-verification': 'd06b618e-7803-4c8e-b31e-49c6aad02b22',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -42,7 +45,6 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" className={inter.variable}>
       <head>
-        <meta name="impact-site-verification" value="d06b618e-7803-4c8e-b31e-49c6aad02b22" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Tripix" />
