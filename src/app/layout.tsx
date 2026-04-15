@@ -15,12 +15,12 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Tripix — מנהל טיול חכם',
-  description: 'מערכת לניהול נסיעות אוטומטי',
+  title: 'Tripix — מנהל נסיעות',
+  description: 'מנהל נסיעות חכם — ניהול הוצאות, מסמכים, ציר זמן וכלים לנסיעה מושלמת',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
     title: 'Tripix',
   },
 }
@@ -42,6 +42,10 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl" className={inter.variable}>
       <head>
+        <meta name="impact-site-verification" value="d06b618e-7803-4c8e-b31e-49c6aad02b22" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Tripix" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="bg-surface-secondary text-gray-900 antialiased">
