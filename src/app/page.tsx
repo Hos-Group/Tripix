@@ -705,7 +705,7 @@ export default function MarketingPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6 }}
               className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-4"
               style={{ background: `${PRIMARY}15`, color: PRIMARY }}
@@ -715,7 +715,7 @@ export default function MarketingPage() {
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
               className="text-3xl md:text-4xl font-black text-gray-900 mb-4"
             >
@@ -724,7 +724,7 @@ export default function MarketingPage() {
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-gray-500 text-lg max-w-2xl mx-auto"
             >
@@ -748,7 +748,7 @@ export default function MarketingPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6 }}
               className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-4"
               style={{ background: `${PRIMARY}15`, color: PRIMARY }}
@@ -758,7 +758,7 @@ export default function MarketingPage() {
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
               className="text-3xl md:text-4xl font-black text-gray-900 mb-4"
             >
@@ -779,7 +779,7 @@ export default function MarketingPage() {
                   key={step.num}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
+                  viewport={{ once: true, amount: 0 }}
                   transition={{ duration: 0.6, delay: i * 0.15 }}
                   className="text-center relative"
                 >
@@ -817,7 +817,7 @@ export default function MarketingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
             className="text-center mt-12"
           >
@@ -840,7 +840,7 @@ export default function MarketingPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6 }}
               className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-4"
               style={{ background: `${PRIMARY}15`, color: PRIMARY }}
@@ -850,7 +850,7 @@ export default function MarketingPage() {
             <motion.h2
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
               className="text-3xl md:text-4xl font-black text-gray-900 mb-4"
             >
@@ -859,7 +859,7 @@ export default function MarketingPage() {
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              viewport={{ once: true, amount: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-gray-500 text-lg max-w-2xl mx-auto"
             >
@@ -873,7 +873,7 @@ export default function MarketingPage() {
                 key={partner.name}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
+                viewport={{ once: true, amount: 0 }}
                 transition={{ duration: 0.5, delay: i * 0.07 }}
                 whileHover={{ y: -4, transition: { duration: 0.2 } }}
                 className="bg-white rounded-2xl p-5 border border-gray-100 hover:border-purple-200 hover:shadow-md transition-all"
@@ -906,7 +906,7 @@ export default function MarketingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             className="text-center mt-10"
           >
@@ -931,7 +931,7 @@ export default function MarketingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6 }}
             className="text-center mb-14"
           >
@@ -950,7 +950,7 @@ export default function MarketingPage() {
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             className="mt-16 max-w-2xl mx-auto text-center"
           >
@@ -984,7 +984,7 @@ export default function MarketingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6 }}
             className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-6"
             style={{ background: `${PRIMARY}15`, color: PRIMARY }}
@@ -994,7 +994,7 @@ export default function MarketingPage() {
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-3xl md:text-5xl font-black text-gray-900 mb-6"
           >
@@ -1003,7 +1003,7 @@ export default function MarketingPage() {
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-gray-500 text-lg md:text-xl max-w-xl mx-auto mb-12"
           >
@@ -1014,7 +1014,7 @@ export default function MarketingPage() {
           <motion.div
             initial={{ opacity: 0, y: 30, scale: 0.95 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
             className="max-w-sm mx-auto rounded-3xl p-8 mb-10 relative overflow-hidden"
             style={{
@@ -1061,7 +1061,7 @@ export default function MarketingPage() {
           <motion.p
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
+            viewport={{ once: true, amount: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
             className="text-gray-400 text-sm"
           >

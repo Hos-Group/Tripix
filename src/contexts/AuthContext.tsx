@@ -34,7 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 })
 
-const PUBLIC_PATHS = ['/auth/login', '/auth/signup']
+const PUBLIC_PATHS = ['/auth/login', '/auth/signup', '/']
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
