@@ -50,12 +50,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s)
-      setUser(s?.user ?? null)
-      if (s?.user) loadProfile(s.user.id)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session: s } }) => {
+        setSession(s)
+        setUser(s?.user ?? null)
+        if (s?.user) loadProfile(s.user.id)
+        setLoading(false)
+      })
+      .catch((err) => {
+        // Network failure — don't hang forever on the loading screen
+        console.warn('[AuthContext] getSession failed (network?):', err?.message)
+        setLoading(false)
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s)
@@ -65,7 +71,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    // Safety timeout: if auth hasn't resolved in 5s, unblock the UI
+    const timeout = setTimeout(() => setLoading(false), 5000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   useEffect(() => {

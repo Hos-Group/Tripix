@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "tripix-skills", "runs": [{"id": "eval-1-add-currency-with_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05de\u05d8\u05d1\u05e2 \u05d7\u05d3\u05e9 - \u05d9\u05df \u05d9\u05e4\u05e0\u05d9 (JPY). \u05de\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e9\u05e0\u05d5\u05ea \u05d1\u05e7\u05d5\u05d3?", "eval_id": 1, "outputs": [{"name": "answer.md", "type": "text", "content": "# \u05d4\u05d5\u05e1\u05e4\u05ea \u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05de\u05d8\u05d1\u05e2 \u05d7\u05d3\u05e9 - \u05d9\u05df \u05d9\u05e4\u05e0\u05d9 (JPY)\n\n\u05db\u05d3\u05d9 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1-JPY \u05dc\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d9\u05ea Tripix, \u05d9\u05e9 \u05dc\u05e2\u05e8\u05d5\u05da \u05d0\u05ea \u05d4\u05e7\u05d1\u05e6\u05d9\u05dd \u05d4\u05d1\u05d0\u05d9\u05dd:\n\n## 1. `src/types/index.ts`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 1: \u05e2\u05d3\u05db\u05d5\u05df union type \u05e9\u05dc Currency\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05e9\u05d5\u05e8\u05d4 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9\u05ea:\nexport type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP'\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nexport type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP' | 'JPY'\n```\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 2: \u05e2\u05d3\u05db\u05d5\u05df CURRENCY_SYMBOL object\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05de\u05e7\u05d5\u05dd \u05d4\u05e0\u05d5\u05db\u05d7\u05d9:\nexport const CURRENCY_SYMBOL: Record<Currency, string> = {\n  ILS: '\u20aa',\n  USD: '$',\n  THB: '\u0e3f',\n  EUR: '\u20ac',\n  GBP: '\u00a3',\n}\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nexport const CURRENCY_SYMBOL: Record<Currency, string> = {\n  ILS: '\u20aa',\n  USD: '$',\n  THB: '\u0e3f',\n  EUR: '\u20ac',\n  GBP: '\u00a3',\n  JPY: '\u00a5',\n}\n```\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 3: \u05e2\u05d3\u05db\u05d5\u05df CURRENCIES array\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4:\nexport const CURRENCIES: Currency[] = ['ILS', 'USD', 'THB', 'EUR', 'GBP']\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nexport const CURRENCIES: Currency[] = ['ILS', 'USD', 'THB', 'EUR', 'GBP', 'JPY']\n```\n\n---\n\n## 2. `src/components/CurrencySelector.tsx`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 \u05d9\u05d7\u05d9\u05d3: \u05e2\u05d3\u05db\u05d5\u05df ALL_CURRENCIES array\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05e9\u05d5\u05e8\u05d5\u05ea 15-21:\nexport const ALL_CURRENCIES: { code: Currency; name: string; flag: string }[] = [\n  { code: 'ILS', name: '\u05e9\u05e7\u05dc \u05d9\u05e9\u05e8\u05d0\u05dc\u05d9',      flag: '\ud83c\uddee\ud83c\uddf1' },\n  { code: 'USD', name: '\u05d3\u05d5\u05dc\u05e8 \u05d0\u05de\u05e8\u05d9\u05e7\u05d0\u05d9',    flag: '\ud83c\uddfa\ud83c\uddf8' },\n  { code: 'EUR', name: '\u05d9\u05d5\u05e8\u05d5',            flag: '\ud83c\uddea\ud83c\uddfa' },\n  { code: 'GBP', name: '\u05dc\u05d9\u05e8\u05d4 \u05e9\u05d8\u05e8\u05dc\u05d9\u05e0\u05d2',   flag: '\ud83c\uddec\ud83c\udde7' },\n  { code: 'THB', name: '\u05d1\u05d4\u05d8 \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3\u05d9',    flag: '\ud83c\uddf9\ud83c\udded' },\n]\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nexport const ALL_CURRENCIES: { code: Currency; name: string; flag: string }[] = [\n  { code: 'ILS', name: '\u05e9\u05e7\u05dc \u05d9\u05e9\u05e8\u05d0\u05dc\u05d9',      flag: '\ud83c\uddee\ud83c\uddf1' },\n  { code: 'USD', name: '\u05d3\u05d5\u05dc\u05e8 \u05d0\u05de\u05e8\u05d9\u05e7\u05d0\u05d9',    flag: '\ud83c\uddfa\ud83c\uddf8' },\n  { code: 'EUR', name: '\u05d9\u05d5\u05e8\u05d5',            flag: '\ud83c\uddea\ud83c\uddfa' },\n  { code: 'GBP', name: '\u05dc\u05d9\u05e8\u05d4 \u05e9\u05d8\u05e8\u05dc\u05d9\u05e0\u05d2',   flag: '\ud83c\uddec\ud83c\udde7' },\n  { code: 'THB', name: '\u05d1\u05d4\u05d8 \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3\u05d9',    flag: '\ud83c\uddf9\ud83c\udded' },\n  { code: 'JPY', name: '\u05d9\u05df \u05d9\u05e4\u05e0\u05d9',         flag: '\ud83c\uddef\ud83c\uddf5' },\n]\n```\n\n---\n\n## 3. `src/lib/utils.ts`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 \u05d9\u05d7\u05d9\u05d3: \u05e2\u05d3\u05db\u05d5\u05df RATES object\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05e9\u05d5\u05e8\u05d5\u05ea 11-17:\nconst RATES: Record<string, number> = {\n  ILS: 1,\n  USD: 3.70,\n  THB: 0.105,\n  EUR: 4.00,\n  GBP: 4.65,\n}\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nconst RATES: Record<string, number> = {\n  ILS: 1,\n  USD: 3.70,\n  THB: 0.105,\n  EUR: 4.00,\n  GBP: 4.65,\n  JPY: 0.025,  // \u05e9\u05e2\u05e8 \u05d4\u05d6\u05d4\u05d1 \u05de\u05e9\u05d5\u05e2\u05e8 (1 JPY \u2248 0.025 ILS)\n}\n```\n\n---\n\n## 4. `src/lib/rates.ts`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 \u05d9\u05d7\u05d9\u05d3: \u05e2\u05d3\u05db\u05d5\u05df FALLBACK_RATES object\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05e9\u05d5\u05e8\u05d5\u05ea 3-9:\nconst FALLBACK_RATES: Record<string, number> = {\n  USD: 3.70,\n  THB: 0.105,\n  EUR: 4.00,\n  GBP: 4.65,\n  ILS: 1,\n}\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nconst FALLBACK_RATES: Record<string, number> = {\n  USD: 3.70,\n  THB: 0.105,\n  EUR: 4.00,\n  GBP: 4.65,\n  JPY: 0.025,\n  ILS: 1,\n}\n```\n\n---\n\n## 5. `src/app/api/rates/all/route.ts`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 1: \u05e2\u05d3\u05db\u05d5\u05df MAJOR_CODES array\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05e9\u05d5\u05e8\u05d5\u05ea 13-16:\nconst MAJOR_CODES = [\n  'USD','EUR','GBP','JPY','THB','AED','SGD','TRY',\n  'CHF','CAD','AUD','INR','EGP','IDR','MXN','CNY',\n]\n\n// \u05d4\u05e2\u05e8\u05d4: JPY \u05db\u05d1\u05e8 \u05e7\u05d9\u05d9\u05dd \u05d1\u05e7\u05d5\u05d3! \u05d0\u05d9\u05df \u05e6\u05d5\u05e8\u05da \u05dc\u05e9\u05e0\u05d5\u05ea \u05d6\u05d0\u05ea.\n// \u05d6\u05d4 \u05d7\u05d9\u05d5\u05d1\u05d9 - JPY \u05db\u05d1\u05e8 \u05e0\u05ea\u05de\u05da \u05d1-API \u05d4\u05d6\u05d4.\n```\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 2: \u05e2\u05d3\u05db\u05d5\u05df static fallback rates\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05d4\u05e9\u05d5\u05e8\u05d5\u05ea 68-72:\nreturn NextResponse.json({\n  rates: {\n    USD: 3.72, EUR: 4.05, GBP: 4.72, JPY: 0.025,\n    THB: 0.108, AED: 1.01, SGD: 2.78, TRY: 0.11,\n    CHF: 4.20, CAD: 2.70, AUD: 2.38, INR: 0.045,\n  },\n  ...\n})\n\n// \u05d4\u05e2\u05e8\u05d4: JPY \u05db\u05d1\u05e8 \u05e7\u05d9\u05d9\u05dd \u05d1\u05d7\u05d6\u05e8\u05d4 \u05e2\u05dd \u05e9\u05e2\u05e8 0.025! \u05d0\u05d9\u05df \u05e6\u05d5\u05e8\u05da \u05dc\u05e9\u05e0\u05d5\u05ea \u05d6\u05d0\u05ea.\n```\n\n---\n\n## 6. `src/app/api/rates/route.ts`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 1: \u05e2\u05d3\u05db\u05d5\u05df fallback rates \u05d1-GET\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05e9\u05d5\u05e8\u05d4 39:\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65 }\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65, JPY: 0.025 }\n```\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 2: \u05e2\u05d3\u05db\u05d5\u05df fallback rates \u05d1-POST\n```typescript\n// \u05ea\u05d7\u05d9\u05dc\u05d4 - \u05e9\u05d5\u05e8\u05d4 64:\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65 }\n\n// \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9:\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65, JPY: 0.025 }\n```\n\n---\n\n## 7. `src/lib/destinations.ts`\n\n### \u05d4\u05e2\u05e8\u05d4: Japan \u05db\u05d1\u05e8 \u05de\u05d5\u05d2\u05d3\u05e8 \u05d1-destinations!\n```typescript\n// \u05e7\u05d9\u05d9\u05dd \u05db\u05d1\u05e8 \u05d1\u05e9\u05d5\u05e8\u05d4 24:\nJapan: { country: 'Japan', countryHe: '\u05d9\u05e4\u05df', currency: 'JPY', currencySymbol: '\u00a5', timezone: 'Asia/Tokyo', emergencyPolice: '110', emergencyAmbulance: '119', emergencyFire: '119', languages: ['Japanese'], plugType: 'A/B', drivingSide: 'left', tipCustom: '\u05d0\u05d9\u05df \u05e6\u05d5\u05e8\u05da \u05d1\u05d8\u05d9\u05e4' },\n```\n\n\u05dc\u05d0 \u05d9\u05e9 \u05e6\u05d5\u05e8\u05da \u05dc\u05e2\u05d3\u05db\u05df \u05e7\u05d5\u05d1\u05e5 \u05d6\u05d4 - \u05d9\u05e4\u05df \u05db\u05d1\u05e8 \u05de\u05d7\u05d5\u05d1\u05e8 \u05dc-JPY! \u05d6\u05d4 \u05d0\u05d5\u05de\u05e8 \u05e9\u05d4\u05de\u05d8\u05d1\u05e2 \u05ea\u05de\u05da \u05e2\u05d1\u05d5\u05e8 \u05d9\u05e2\u05d3\u05d9\u05dd \u05db\u05d1\u05e8 \u05d7\u05dc\u05e7\u05d9\u05ea.\n\n---\n\n## \u05e8\u05d9\u05db\u05d5\u05d6 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd \u05d4\u05e0\u05d3\u05e8\u05e9\u05d9\u05dd:\n\n| \u05e7\u05d5\u05d1\u05e5 | \u05de\u05d9\u05e7\u05d5\u05dd | \u05e9\u05d9\u05e0\u05d5\u05d9 |\n|-----|------|------|\n| `src/types/index.ts` | \u05e9\u05d5\u05e8\u05d4 2 | \u05d4\u05d5\u05e1\u05e3 `'JPY'` \u05dc-Currency union type |\n| `src/types/index.ts` | \u05e9\u05d5\u05e8\u05d4 160-166 | \u05d4\u05d5\u05e1\u05e3 `JPY: '\u00a5',` \u05dc-CURRENCY_SYMBOL |\n| `src/types/index.ts` | \u05e9\u05d5\u05e8\u05d4 158 | \u05d4\u05d5\u05e1\u05e3 `'JPY'` \u05dc-CURRENCIES array |\n| `src/components/CurrencySelector.tsx` | \u05e9\u05d5\u05e8\u05d4 15-21 | \u05d4\u05d5\u05e1\u05e3 JPY entry \u05dc-ALL_CURRENCIES |\n| `src/lib/utils.ts` | \u05e9\u05d5\u05e8\u05d4 11-17 | \u05d4\u05d5\u05e1\u05e3 `JPY: 0.025,` \u05dc-RATES |\n| `src/lib/rates.ts` | \u05e9\u05d5\u05e8\u05d4 3-9 | \u05d4\u05d5\u05e1\u05e3 `JPY: 0.025,` \u05dc-FALLBACK_RATES |\n| `src/app/api/rates/route.ts` | \u05e9\u05d5\u05e8\u05d4 39 | \u05d4\u05d5\u05e1\u05e3 `JPY: 0.025` \u05dc-fallback (GET) |\n| `src/app/api/rates/route.ts` | \u05e9\u05d5\u05e8\u05d4 64 | \u05d4\u05d5\u05e1\u05e3 `JPY: 0.025` \u05dc-fallback (POST) |\n\n---\n\n## \u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1\u05d5\u05ea:\n\n1. **\u05e9\u05e2\u05e8 \u05d6\u05d4\u05d1**: \u05d4\u05e9\u05ea\u05de\u05e9\u05e0\u05d5 \u05d1-`0.025` \u05db\u05e9\u05e2\u05e8 \u05de\u05e9\u05d5\u05e2\u05e8 (1 JPY \u2248 0.025 ILS). \u05d6\u05d4 \u05e2\u05e9\u05d5\u05d9 \u05dc\u05d4\u05e9\u05ea\u05e0\u05d5\u05ea. \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05e2\u05e8\u05da \u05de\u05d3\u05d5\u05d9\u05e7 \u05d9\u05d5\u05ea\u05e8 \u05dc\u05e4\u05d9 \u05e9\u05e2\u05e8 \u05d4\u05d6\u05d4\u05d1 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9.\n\n2. **API \u05ea\u05de\u05d9\u05db\u05d4**: \u05d4-API \u05d1-`src/app/api/rates/all/route.ts` \u05db\u05d1\u05e8 \u05ea\u05d5\u05de\u05da \u05d1-JPY! \u05d6\u05d4 \u05d0\u05d5\u05de\u05e8 \u05e9\u05d4\u05e9\u05d9\u05e8\u05d5\u05ea\u05d9\u05dd \u05d4\u05d7\u05d9\u05e6\u05d5\u05e0\u05d9\u05d9\u05dd (exchangerate-api.com, frankfurter.app) \u05db\u05d1\u05e8 \u05d9\u05d7\u05d6\u05d9\u05e8\u05d5 \u05e9\u05e2\u05e8\u05d9\u05dd \u05dc-JPY.\n\n3. **\u05d9\u05e2\u05d3\u05d9\u05dd**: \u05d9\u05e4\u05df \u05db\u05d1\u05e8 \u05de\u05d5\u05d2\u05d3\u05e8\u05ea \u05d1\u05d3\u05e1\u05d8\u05d9\u05e0\u05e6\u05d9\u05d5\u05ea \u05e2\u05dd JPY, \u05db\u05da \u05e9\u05d4\u05db\u05dc \u05de\u05d7\u05d5\u05d1\u05e8 \u05db\u05d1\u05e8.\n\n4. **TypeScript Safety**: \u05db\u05dc \u05d4\u05e1\u05d5\u05d2\u05d9\u05dd \u05d9\u05e2\u05d3\u05db\u05e0\u05d5 \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05d1\u05e2\u05ea \u05d4\u05d9\u05d3\u05d5\u05e8, \u05d5\u05dc\u05d0 \u05d9\u05d4\u05d9\u05d5 \u05e9\u05d2\u05d9\u05d0\u05d5\u05ea type safety.\n\n5. **\u05d1\u05d3\u05d9\u05e7\u05d4 \u05de\u05d5\u05e1\u05db\u05de\u05ea**: \u05dc\u05d0\u05d7\u05e8 \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd, \u05d1\u05d3\u05d5\u05e7:\n   - \u05d1\u05d7\u05d9\u05e8\u05ea JPY \u05d1\u05e2\u05d5\u05e8\u05da \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea\n   - \u05d4\u05de\u05e8\u05d4 \u05e0\u05db\u05d5\u05e0\u05d4 \u05dc-ILS\n   - \u05ea\u05e6\u05d5\u05d2\u05d4 \u05e0\u05db\u05d5\u05e0\u05d4 \u05d1\u05d3\u05d5\u05d7\u05d5\u05ea \u05d5\u05e1\u05d9\u05db\u05d5\u05de\u05d9 \u05d8\u05d9\u05d5\u05dc\n"}], "grading": {"eval_id": 1, "configuration": "with_skill", "expectations": [{"text": "identifies_types_file", "passed": true, "evidence": "Explicitly mentions src/types/index.ts with Currency type union, CURRENCIES array, and CURRENCY_SYMBOL object with all required updates including JPY: '\u00a5'"}, {"text": "identifies_rates_files", "passed": true, "evidence": "Identifies both src/lib/utils.ts (RATES object) and src/lib/rates.ts (FALLBACK_RATES) with JPY: 0.025 rate included"}, {"text": "identifies_api_rates", "passed": true, "evidence": "Mentions src/app/api/rates/route.ts with fallback rates updates for both GET and POST endpoints"}, {"text": "identifies_extract_prompts", "passed": false, "evidence": "Does not mention api/extract/route.ts or any extract prompts that need updating"}, {"text": "identifies_dashboard_rates", "passed": false, "evidence": "Does not mention RATE_FROM_ILS in dashboard/page.tsx"}, {"text": "provides_code_snippets", "passed": true, "evidence": "Includes actual code changes showing before/after comparisons with proper TypeScript syntax"}, {"text": "correct_currency_code", "passed": true, "evidence": "Consistently uses JPY as currency code throughout (never YEN or other variants). Also includes Japanese flag emoji \ud83c\uddef\ud83c\uddf5 and symbol \u00a5"}]}}, {"id": "eval-1-add-currency-without_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05de\u05d8\u05d1\u05e2 \u05d7\u05d3\u05e9 - \u05d9\u05df \u05d9\u05e4\u05e0\u05d9 (JPY). \u05de\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e9\u05e0\u05d5\u05ea \u05d1\u05e7\u05d5\u05d3?", "eval_id": 1, "outputs": [{"name": "answer.md", "type": "text", "content": "# \u05d4\u05d5\u05e1\u05e4\u05ea \u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05de\u05d8\u05d1\u05e2 \u05d9\u05df \u05d9\u05e4\u05e0\u05d9 (JPY) \u05dc\u05d0\u05e4\u05dc\u05d9\u05e7\u05e6\u05d9\u05d9\u05ea Tripix\n\n## \u05e1\u05d9\u05db\u05d5\u05dd\n\u05d4\u05d9\u05df \u05d9\u05e4\u05e0\u05d9 (JPY) \u05db\u05d1\u05e8 \u05de\u05d9\u05de\u05e9\u05d4 \u05d1\u05e8\u05d5\u05d1 \u05d4\u05e7\u05d5\u05d3! \u05d0\u05da \u05d9\u05e9 \u05e2\u05d3\u05d9\u05d9\u05df \u05db\u05de\u05d4 \u05de\u05e7\u05d5\u05de\u05d5\u05ea \u05e9\u05d1\u05d4\u05dd \u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05d0\u05ea JPY \u05d0\u05d5 \u05dc\u05e2\u05d3\u05db\u05df \u05e8\u05e9\u05d9\u05de\u05d5\u05ea \u05e7\u05d9\u05d9\u05de\u05d5\u05ea. \u05dc\u05d4\u05dc\u05df \u05db\u05dc \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd \u05d4\u05d3\u05e8\u05d5\u05e9\u05d9\u05dd:\n\n---\n\n## 1. **src/types/index.ts** - \u05e2\u05d3\u05db\u05d5\u05df \u05d4-Type \u05d5\u05e7\u05d1\u05d5\u05e2\u05d9\u05dd\n\n### \u05e9\u05d5\u05e8\u05d4 2 - \u05e2\u05d3\u05db\u05d5\u05df Currency Type\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nexport type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP'\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nexport type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP' | 'JPY'\n```\n\n### \u05e9\u05d5\u05e8\u05d4 158 - \u05e2\u05d3\u05db\u05d5\u05df CURRENCIES \u05e7\u05d1\u05d5\u05e2\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nexport const CURRENCIES: Currency[] = ['ILS', 'USD', 'THB', 'EUR', 'GBP']\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nexport const CURRENCIES: Currency[] = ['ILS', 'USD', 'THB', 'EUR', 'GBP', 'JPY']\n```\n\n### \u05e9\u05d5\u05e8\u05d5\u05ea 160-166 - \u05d4\u05d5\u05e1\u05e3 JPY \u05dc-CURRENCY_SYMBOL\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nexport const CURRENCY_SYMBOL: Record<Currency, string> = {\n  ILS: '\u20aa',\n  USD: '$',\n  THB: '\u0e3f',\n  EUR: '\u20ac',\n  GBP: '\u00a3',\n}\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nexport const CURRENCY_SYMBOL: Record<Currency, string> = {\n  ILS: '\u20aa',\n  USD: '$',\n  THB: '\u0e3f',\n  EUR: '\u20ac',\n  GBP: '\u00a3',\n  JPY: '\u00a5',\n}\n```\n\n---\n\n## 2. **src/components/CurrencySelector.tsx** - \u05d4\u05d5\u05e1\u05e3 JPY \u05dc\u05d1\u05d7\u05d9\u05e8 \u05d4\u05de\u05d8\u05d1\u05e2\u05d5\u05ea\n\n### \u05e9\u05d5\u05e8\u05d5\u05ea 15-21 - \u05e2\u05d3\u05db\u05d5\u05df ALL_CURRENCIES\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nexport const ALL_CURRENCIES: { code: Currency; name: string; flag: string }[] = [\n  { code: 'ILS', name: '\u05e9\u05e7\u05dc \u05d9\u05e9\u05e8\u05d0\u05dc\u05d9',      flag: '\ud83c\uddee\ud83c\uddf1' },\n  { code: 'USD', name: '\u05d3\u05d5\u05dc\u05e8 \u05d0\u05de\u05e8\u05d9\u05e7\u05d0\u05d9',    flag: '\ud83c\uddfa\ud83c\uddf8' },\n  { code: 'EUR', name: '\u05d9\u05d5\u05e8\u05d5',            flag: '\ud83c\uddea\ud83c\uddfa' },\n  { code: 'GBP', name: '\u05dc\u05d9\u05e8\u05d4 \u05e9\u05d8\u05e8\u05dc\u05d9\u05e0\u05d2',   flag: '\ud83c\uddec\ud83c\udde7' },\n  { code: 'THB', name: '\u05d1\u05d4\u05d8 \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3\u05d9',    flag: '\ud83c\uddf9\ud83c\udded' },\n]\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nexport const ALL_CURRENCIES: { code: Currency; name: string; flag: string }[] = [\n  { code: 'ILS', name: '\u05e9\u05e7\u05dc \u05d9\u05e9\u05e8\u05d0\u05dc\u05d9',      flag: '\ud83c\uddee\ud83c\uddf1' },\n  { code: 'USD', name: '\u05d3\u05d5\u05dc\u05e8 \u05d0\u05de\u05e8\u05d9\u05e7\u05d0\u05d9',    flag: '\ud83c\uddfa\ud83c\uddf8' },\n  { code: 'EUR', name: '\u05d9\u05d5\u05e8\u05d5',            flag: '\ud83c\uddea\ud83c\uddfa' },\n  { code: 'GBP', name: '\u05dc\u05d9\u05e8\u05d4 \u05e9\u05d8\u05e8\u05dc\u05d9\u05e0\u05d2',   flag: '\ud83c\uddec\ud83c\udde7' },\n  { code: 'THB', name: '\u05d1\u05d4\u05d8 \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3\u05d9',    flag: '\ud83c\uddf9\ud83c\udded' },\n  { code: 'JPY', name: '\u05d9\u05df \u05d9\u05e4\u05e0\u05d9',         flag: '\ud83c\uddef\ud83c\uddf5' },\n]\n```\n\n---\n\n## 3. **src/lib/rates.ts** - \u05e2\u05d3\u05db\u05d5\u05df \u05d4\u05e2\u05e8\u05db\u05d9\u05dd \u05e0\u05e4\u05d9\u05dc\u05d4\n\n### \u05e9\u05d5\u05e8\u05d5\u05ea 3-9 - \u05d4\u05d5\u05e1\u05e3 JPY \u05dc-FALLBACK_RATES\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nconst FALLBACK_RATES: Record<string, number> = {\n  USD: 3.70,\n  THB: 0.105,\n  EUR: 4.00,\n  GBP: 4.65,\n  ILS: 1,\n}\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nconst FALLBACK_RATES: Record<string, number> = {\n  USD: 3.70,\n  THB: 0.105,\n  EUR: 4.00,\n  GBP: 4.65,\n  JPY: 0.025,\n  ILS: 1,\n}\n```\n\n---\n\n## 4. **src/app/api/rates/route.ts** - \u05e2\u05d3\u05db\u05d5\u05df \u05e2\u05e8\u05db\u05d9 \u05d4\u05e0\u05e4\u05d9\u05dc\u05d4\n\n### \u05e9\u05d5\u05e8\u05d4 39 - \u05e2\u05d3\u05db\u05d5\u05df fallback \u05d1-GET\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65 }\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65, JPY: 0.025 }\n```\n\n### \u05e9\u05d5\u05e8\u05d4 64 - \u05e2\u05d3\u05db\u05d5\u05df fallback \u05d1-POST\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65 }\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nconst fallback: Record<string, number> = { USD: 3.70, THB: 0.105, EUR: 4.00, GBP: 4.65, JPY: 0.025 }\n```\n\n---\n\n## 5. **src/app/tools/page.tsx** - \u05e2\u05d3\u05db\u05d5\u05df \u05e2\u05e8\u05db\u05d9 \u05e0\u05e4\u05d9\u05dc\u05d4 \u05d1\u05e8\u05db\u05d9\u05d1 Converter\n\n### \u05e9\u05d5\u05e8\u05d5\u05ea 86-92 - \u05e2\u05d3\u05db\u05d5\u05df fallback \u05d1\u05e2\u05de\u05d5\u05d3 Tools\n**\u05d4\u05e0\u05d5\u05db\u05d7\u05d9:**\n```typescript\nconst fallback: Record<string, Record<string, number>> = {\n  THB: { ILS: 0.105, USD: 0.028, EUR: 0.026 },\n  ILS: { THB: 9.52, USD: 0.27, EUR: 0.25 },\n  USD: { ILS: 3.70, THB: 35.5, EUR: 0.93 },\n  EUR: { ILS: 4.00, THB: 38.2, USD: 1.08 },\n}\n```\n\n**\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d9\u05d5\u05ea:**\n```typescript\nconst fallback: Record<string, Record<string, number>> = {\n  THB: { ILS: 0.105, USD: 0.028, EUR: 0.026, JPY: 0.003 },\n  ILS: { THB: 9.52, USD: 0.27, EUR: 0.25, JPY: 40 },\n  USD: { ILS: 3.70, THB: 35.5, EUR: 0.93, JPY: 148 },\n  EUR: { ILS: 4.00, THB: 38.2, USD: 1.08, JPY: 159 },\n  JPY: { ILS: 0.025, THB: 0.003, USD: 0.0067, EUR: 0.0063 },\n}\n```\n\n---\n\n## \u05e1\u05d9\u05db\u05d5\u05dd \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd \u05d4\u05e0\u05d3\u05e8\u05e9\u05d9\u05dd\n\n| \u05e7\u05d5\u05d1\u05e5 | \u05e2\u05d3\u05db\u05d5\u05df | \u05e1\u05d9\u05d1\u05d4 |\n|------|--------|------|\n| `src/types/index.ts` | \u05d4\u05d5\u05e1\u05e3 JPY \u05dc-Currency type, CURRENCIES[], CURRENCY_SYMBOL | \u05d4\u05d2\u05d3\u05e8\u05ea \u05d4\u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05e8\u05de\u05d4 \u05d4\u05e1\u05d5\u05d2 |\n| `src/components/CurrencySelector.tsx` | \u05d4\u05d5\u05e1\u05e3 JPY \u05dc-ALL_CURRENCIES | \u05ea\u05e6\u05d5\u05d2\u05d4 \u05d1\u05e1\u05dc\u05e7\u05d8\u05d5\u05e8 \u05d4\u05de\u05d8\u05d1\u05e2\u05d5\u05ea |\n| `src/lib/rates.ts` | \u05d4\u05d5\u05e1\u05e3 JPY=0.025 \u05dc-FALLBACK_RATES | \u05e2\u05e8\u05da \u05e0\u05e4\u05d9\u05dc\u05d4 \u05dc\u05ea\u05de\u05e8\u05d5\u05e8 \u05e7\u05e6\u05e8 |\n| `src/app/api/rates/route.ts` | \u05d4\u05d5\u05e1\u05e3 JPY \u05dc-fallback \u05d1\u05e9\u05e0\u05d9 \u05de\u05e7\u05d5\u05de\u05d5\u05ea | \u05e2\u05e8\u05db\u05d9 \u05e0\u05e4\u05d9\u05dc\u05d4 \u05d1-API |\n| `src/app/tools/page.tsx` | \u05d4\u05d5\u05e1\u05e3 JPY \u05dc-fallback converter | \u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05e7\u05d5\u05e0\u05d1\u05e8\u05d8\u05e8 |\n\n### \u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1\u05d5\u05ea:\n1. **JPY \u05db\u05d1\u05e8 \u05de\u05e2\u05d5\u05d2\u05df \u05d1-API**: \u05e7\u05d1\u05e6\u05d9\u05dd \u05db\u05de\u05d5 `src/app/settings/page.tsx` \u05d5-`src/app/api/rates/all/route.ts` \u05db\u05d1\u05e8 \u05db\u05d5\u05dc\u05dc\u05d9\u05dd JPY \u05d1\u05d1\u05e7\u05e9\u05d5\u05ea \u05d4-API \u05dc-frankfurter.app \u05d5-exchangerate-api.com\n2. **JPY \u05db\u05d1\u05e8 \u05d1\u05e2\u05de\u05d5\u05d3\u05d9\u05dd \u05d0\u05d7\u05e8\u05d9\u05dd**: `src/app/trips/new/page.tsx` \u05d5-`src/app/trips/[id]/edit/page.tsx` \u05db\u05d1\u05e8 \u05ea\u05d5\u05de\u05db\u05d9\u05dd \u05d1-JPY\n3. **\u05e2\u05e8\u05db\u05d9 \u05e0\u05e4\u05d9\u05dc\u05d4**: \u05d4\u05e9\u05ea\u05de\u05e9\u05e0\u05d5 \u05d1\u05e2\u05e8\u05da \u05e7\u05e8\u05d5\u05d1: JPY = 0.025 ILS (\u05d7\u05d5\u05e5 \u05de\u05de\u05e7\u05e8\u05d9\u05dd \u05e1\u05e4\u05e6\u05d9\u05e4\u05d9\u05d9\u05dd \u05d1\u05d8\u05d1\u05dc\u05ea converter)\n4. **\u05d4\u05d0\u05dd \u05e6\u05e8\u05d9\u05da \u05e2\u05d3\u05db\u05d5\u05df \u05d1\u05e1\u05db\u05d9\u05de\u05d4**: \u05dc\u05d0 \u05e6\u05e8\u05d9\u05da \u05e2\u05d3\u05db\u05d5\u05df \u05d1\u05e1\u05db\u05d9\u05de\u05ea \u05de\u05e1\u05d3 \u05d4\u05e0\u05ea\u05d5\u05e0\u05d9\u05dd - \u05d4\u05d8\u05d1\u05dc\u05d4 `currency_rates` \u05de\u05d8\u05e4\u05dc\u05ea \u05d1\u05db\u05dc \u05d4\u05de\u05d8\u05d1\u05e2\u05d5\u05ea \u05d1\u05d2\u05e0\u05e8\u05d9\u05e7\u05d9 \u05d3\u05e8\u05da \u05e9\u05d3\u05d4 `currency: string`\n"}], "grading": {"eval_id": 1, "configuration": "without_skill", "expectations": [{"text": "identifies_types_file", "passed": true, "evidence": "Clearly identifies src/types/index.ts and shows all three required updates: Currency type, CURRENCIES array, and CURRENCY_SYMBOL"}, {"text": "identifies_rates_files", "passed": true, "evidence": "Identifies both src/lib/rates.ts (FALLBACK_RATES) and src/app/api/rates/route.ts. Also mentions src/lib/utils.ts and shows complete rate update strategy"}, {"text": "identifies_api_rates", "passed": true, "evidence": "Mentions src/app/api/rates/route.ts with JPY: 0.025 fallback in GET/POST sections"}, {"text": "identifies_extract_prompts", "passed": false, "evidence": "Does not mention api/extract/route.ts or extract prompts"}, {"text": "identifies_dashboard_rates", "passed": false, "evidence": "Does not mention dashboard/page.tsx or RATE_FROM_ILS"}, {"text": "provides_code_snippets", "passed": true, "evidence": "Shows before/after code examples with proper TypeScript syntax for all affected files"}, {"text": "correct_currency_code", "passed": true, "evidence": "Uses JPY consistently throughout. Includes note that 'JPY \u05db\u05d1\u05e8 \u05de\u05e2\u05d5\u05d2\u05df \u05d1-API' (JPY already anchored in API)"}]}}, {"id": "eval-2-receipt-extraction-with_skill", "prompt": "\u05d4\u05e7\u05d1\u05dc\u05d5\u05ea \u05e9\u05d0\u05e0\u05d9 \u05de\u05e6\u05dc\u05dd \u05dc\u05d0 \u05de\u05d7\u05dc\u05e6\u05d5\u05ea \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e0\u05db\u05d5\u05df - \u05ea\u05de\u05d9\u05d3 \u05dc\u05d5\u05e7\u05d7 \u05d0\u05ea \u05d4-Subtotal \u05d1\u05de\u05e7\u05d5\u05dd \u05d4-Total. \u05d0\u05d9\u05da \u05d0\u05e0\u05d9 \u05de\u05ea\u05e7\u05df \u05d0\u05ea \u05d6\u05d4?", "eval_id": 2, "outputs": [{"name": "answer.md", "type": "text", "content": "# \u05ea\u05d9\u05e7\u05d5\u05df \u05d7\u05d9\u05dc\u05d5\u05e5 \u05e1\u05db\u05d5\u05dd \u05e7\u05d1\u05dc\u05d5\u05ea - \u05dc\u05e7\u05d9\u05d7\u05ea Total \u05d1\u05de\u05e7\u05d5\u05dd Subtotal\n\n## \u05d4\u05de\u05e6\u05d1 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9\n\n\u05d4\u05d1\u05e2\u05d9\u05d4 \u05e9\u05dc\u05da \u05d4\u05d9\u05d0 \u05e9\u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05de\u05d7\u05dc\u05e6\u05ea \u05d0\u05ea \u05d4-**Subtotal** (\u05e1\u05db\u05d5\u05dd \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de \u05d5\u05d4\u05e0\u05d7\u05d5\u05ea) \u05d1\u05de\u05e7\u05d5\u05dd \u05d0\u05ea \u05d4-**Total** (\u05e1\u05db\u05d5\u05dd \u05e1\u05d5\u05e4\u05d9 \u05e9\u05d0\u05ea\u05d4 \u05e9\u05d9\u05dc\u05de\u05ea \u05d1\u05e4\u05d5\u05e2\u05dc).\n\n### \u05d4\u05d9\u05e7\u05d5\u05dd \u05e9\u05dc \u05d4\u05d1\u05e2\u05d9\u05d4\n\n**\u05e7\u05d5\u05d1\u05e5 \u05e9\u05e6\u05e8\u05d9\u05da \u05dc\u05ea\u05e7\u05df:** `/sessions/charming-focused-dijkstra/mnt/Tripix/src/app/api/extract/route.ts`\n\n\u05d4\u05d4\u05e0\u05d7\u05d9\u05d5\u05ea \u05e7\u05d9\u05d9\u05de\u05d5\u05ea \u05d1\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d0\u05da \u05d4\u05df \u05dc\u05d0 \u05de\u05e1\u05e4\u05d9\u05e7 \u05d7\u05d6\u05e7\u05d5\u05ea. \u05d1\u05e9\u05d5\u05e8\u05d5\u05ea 4-19, \u05e7\u05d9\u05d9\u05dd \u05d4-`RECEIPT_PROMPT`:\n\n```\n\u05d7\u05e9\u05d5\u05d1 \u2014 amount:\n- \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9 \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e4\u05d5\u05e2\u05dc (Grand Total / Total Due / Amount Charged / \u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd)\n- \u05d4\u05ea\u05e2\u05dc\u05dd \u05de: Subtotal, Base Price, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05d4\u05e0\u05d7\u05d4\n- \u05d0\u05dd \u05d9\u05e9 \u05d4\u05e0\u05d7\u05d4 \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05de\u05d7\u05d9\u05e8 \u05d0\u05d7\u05e8\u05d9 \u05d4\u05d4\u05e0\u05d7\u05d4\n- \u05d0\u05dd \u05d9\u05e9 \u05de\u05e2\"\u05de/\u05de\u05e1 \u05db\u05dc\u05d5\u05dc \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05db\u05d5\u05dc\u05dc \u05db\u05d5\u05dc\u05dc \u05d4\u05de\u05e2\"\u05de\n```\n\n**\u05d4\u05d1\u05e2\u05d9\u05d4:** \u05d4\u05d4\u05d5\u05e8\u05d0\u05d5\u05ea \u05d1\u05e8\u05d5\u05e8\u05d5\u05ea \u05ea\u05d9\u05d0\u05d5\u05e8\u05d8\u05d9\u05ea, \u05d0\u05d1\u05dc Claude \u05dc\u05d0 \u05ea\u05de\u05d9\u05d3 \u05d1\u05d5\u05d7\u05e8 \u05d1\u05d4\u05df \u05d1\u05e2\u05ea \u05e2\u05d9\u05d1\u05d5\u05d3 \u05e7\u05d1\u05dc\u05d5\u05ea \u05de\u05d5\u05e8\u05db\u05d1\u05d5\u05ea \u05e2\u05dd \u05de\u05e1\u05e4\u05e8 \u05e9\u05d5\u05e8\u05d5\u05ea \"Total\".\n\n---\n\n## \u05d4\u05e4\u05ea\u05e8\u05d5\u05df \u05d4\u05de\u05d5\u05de\u05dc\u05e5\n\n### \u05e9\u05d9\u05e4\u05d5\u05e8 1: \u05d4\u05e4\u05d5\u05da \u05d0\u05ea \u05d4\u05d4\u05d5\u05e8\u05d0\u05d4 \u05dc\u05d7\u05d3-\u05de\u05e9\u05de\u05e2\u05d9\u05ea \u05d9\u05d5\u05ea\u05e8\n\n\u05ea\u05d7\u05dc\u05d9\u05e3 \u05d0\u05ea \u05d4-`RECEIPT_PROMPT` \u05db\u05d3\u05d9 \u05e9\u05d9\u05d4\u05d9\u05d4 \u05d9\u05d5\u05ea\u05e8 \u05d0\u05d2\u05e8\u05e1\u05d9\u05d1\u05d9 \u05d1\u05e2\u05e0\u05d9\u05d9\u05df \u05d6\u05d4:\n\n**\u05e9\u05d5\u05e8\u05d5\u05ea 4-19 \u2014 \u05d2\u05e8\u05e1\u05d4 \u05de\u05e2\u05d5\u05d3\u05db\u05e0\u05ea:**\n\n```typescript\nconst RECEIPT_PROMPT = `\u05d0\u05ea\u05d4 \u05de\u05e0\u05ea\u05d7 \u05e7\u05d1\u05dc\u05d5\u05ea \u05dc\u05d8\u05d9\u05d5\u05dc \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3. \u05d7\u05dc\u05e5 \u05de\u05d4\u05e7\u05d1\u05dc\u05d4 \u05d5\u05ea\u05d7\u05d6\u05d9\u05e8 JSON \u05d1\u05dc\u05d1\u05d3 (\u05dc\u05dc\u05d0 markdown, \u05dc\u05dc\u05d0 backticks):\n{\n  \"title\": \"\u05e9\u05dd \u05d4\u05e2\u05e1\u05e7 \u05d0\u05d5 \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d4\u05d5\u05e6\u05d0\u05d4\",\n  \"category\": \"food|taxi|activity|shopping|hotel|flight|ferry|other\",\n  \"amount\": 0,\n  \"currency\": \"THB|ILS|USD|EUR|GBP\",\n  \"date\": \"YYYY-MM-DD\",\n  \"notes\": \"\u05e4\u05e8\u05d8\u05d9\u05dd \u05e0\u05d5\u05e1\u05e4\u05d9\u05dd\"\n}\n\n\u26a0\ufe0f \u05d7\u05e9\u05d5\u05d1 \u05de\u05d0\u05d5\u05d3 \u2014 amount \u2014 \u05d6\u05d4 \u05d4\u05d2\u05d5\u05e8\u05dd \u05d4\u05de\u05db\u05e8\u05d9\u05e2:\n\n\u05d7\u05d5\u05d1\u05d4 \u05dc\u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9 \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e4\u05d5\u05e2\u05dc \u05d1\u05dc\u05d1\u05d3:\n- \"Grand Total\" / \"Total Due\" / \"Amount Charged\" / \"\u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\" / \"\u05e1\u05db\u05d5\u05dd \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\" / \"\u05e1\u05db\u05d5\u05dd \u05d7\u05d9\u05d5\u05d1\"\n- \u05d6\u05d4 \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05d4\u05de\u05e1\u05e4\u05e8 \u05d4\u05d0\u05d7\u05e8\u05d5\u05df/\u05d4\u05d2\u05d3\u05d5\u05dc \u05d1\u05d9\u05d5\u05ea\u05e8 \u05d1\u05e7\u05d1\u05dc\u05d4\n\n\ud83d\udeab \u05d1\u05e9\u05d5\u05dd \u05de\u05e7\u05e8\u05d4 \u05d0\u05dc \u05ea\u05e7\u05d7:\n- Subtotal (\u05d6\u05d4 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de \u05d5\u05d4\u05e0\u05d7\u05d5\u05ea!)\n- Base Price / Fare (\u05d6\u05d4 \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e1)\n- Sub Total (\u05d2\u05dd \u05d6\u05d4 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de)\n- \"Before Discount\" / \"Before Tax\" (\u05de\u05d7\u05d9\u05e8 \u05d1\u05d9\u05e0\u05d9\u05d9\u05dd)\n- Service Fee \u05d0\u05dd \u05d4\u05d5\u05d0 \u05de\u05d5\u05e4\u05d9\u05e2 \u05d1\u05e0\u05e4\u05e8\u05d3 (\u05d1\u05d3\u05d5\u05e7 \u05d0\u05dd \u05db\u05d1\u05e8 \u05db\u05dc\u05d5\u05dc \u05d1-Total)\n\n\u05db\u05dc\u05dc\u05d9\u05dd \u05e0\u05d5\u05e1\u05e4\u05d9\u05dd:\n- \u05d0\u05dd \u05d9\u05e9 \u05e9\u05d5\u05e8\u05d4 \u05e9\u05e8\u05e9\u05d5\u05de\u05d4 \"Subtotal\" \u05d5\u05d2\u05dd \u05e9\u05d5\u05e8\u05d4 \u05e9\"Total\" \u05d0\u05d5 \"Amount Charged\" \u2014 \u05e7\u05d7 \u05e8\u05e7 \u05d0\u05ea \u05d4-Total\n- \u05d0\u05dd \u05e8\u05d5\u05d0\u05d4 \u05de\u05d0\u05dc\"\u05de/VAT/Tax \u05db\u05e9\u05d5\u05e8\u05d4 \u2014 \u05d6\u05d4 \u05db\u05d1\u05e8 \u05db\u05dc\u05d5\u05dc \u05d1-Total, \u05dc\u05d0 \u05ea\u05d5\u05e1\u05d9\u05e3 \u05d0\u05d5\u05ea\u05d5\n- \u05d0\u05dd \u05d9\u05e9 \u05d4\u05e0\u05d7\u05d4 (Discount) \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e0\u05d7\u05d4, \u05dc\u05d0 \u05dc\u05e4\u05e0\u05d9\n- \u05d0\u05dd \u05d4\u05de\u05e1\u05de\u05da \u05de\u05e6\u05d9\u05d2 \"Subtotal: 500, Tax: 50, Total: 550\" \u2014 \u05d4\u05ea\u05e9\u05d5\u05d1\u05d4 \u05d4\u05d9\u05d0 550, \u05dc\u05d0 500\n\n\u05d3\u05d5\u05d2\u05de\u05d4 \u05e0\u05db\u05d5\u05e0\u05d4:\n  Input: Subtotal 100 THB, VAT 7%, Total 107 THB\n  Output: \"amount\": 107 (\u05dc\u05d0 100!)\n\n\u05d3\u05d5\u05d2\u05de\u05d4 \u05e0\u05db\u05d5\u05e0\u05d4 2:\n  Input: Base Price $50, Discount $5, Service Fee $2, Total $47\n  Output: \"amount\": 47 (\u05dc\u05d0 50, \u05dc\u05d0 45, \u05e8\u05e7 \u05d4-Total)\n\n\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea: food=\u05de\u05e1\u05e2\u05d3\u05d5\u05ea/\u05d0\u05d5\u05db\u05dc, taxi=\u05d4\u05e1\u05e2\u05d5\u05ea/grab, activity=\u05e1\u05d9\u05d5\u05e8\u05d9\u05dd/\u05db\u05e0\u05d9\u05e1\u05d4, shopping=\u05e7\u05e0\u05d9\u05d5\u05ea, hotel=\u05dc\u05d9\u05e0\u05d4, flight=\u05d8\u05d9\u05e1\u05d4, ferry=\u05de\u05e2\u05d1\u05d5\u05e8\u05ea, other=\u05d0\u05d7\u05e8.\n\u05d0\u05dd \u05d0\u05d9\u05df \u05de\u05d8\u05d1\u05e2 \u05de\u05d6\u05d5\u05d4\u05d4 \u2014 THB. \u05d0\u05dd \u05d0\u05d9\u05df \u05ea\u05d0\u05e8\u05d9\u05da \u2014 \u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05d9\u05d5\u05dd.`\n```\n\n### \u05e9\u05d9\u05e4\u05d5\u05e8 2: \u05d4\u05d5\u05e1\u05e3 confidence score (\u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9 \u05d0\u05da \u05d7\u05d6\u05e7)\n\n\u05ea\u05df \u05dc-Claude \u05dc\u05d4\u05d7\u05d6\u05d9\u05e8 \u05d2\u05dd \u05e8\u05de\u05ea \u05d1\u05d9\u05d8\u05d7\u05d5\u05df, \u05db\u05da \u05e9\u05d7\u05d6\u05d9\u05ea \u05d4\u05e7\u05e6\u05d4 \u05d9\u05db\u05d5\u05dc\u05d4 \u05dc\u05d3\u05e2\u05ea \u05de\u05ea\u05d9 \u05dc\u05d4\u05e6\u05d9\u05d2 \u05d0\u05d6\u05d4\u05e8\u05d4:\n\n```typescript\nconst RECEIPT_PROMPT = `... [\u05db\u05de\u05d5 \u05dc\u05e2\u05d9\u05dc] ...\n\n\u05d1\u05e0\u05d5\u05e1\u05e3, \u05d4\u05d5\u05e1\u05e3 \u05e9\u05d3\u05d4 \"confidence_on_amount\": 0-1\n- 1.0: \u05d1\u05e8\u05d5\u05e8 \u05de\u05d0\u05d5\u05d3 \u2014 \u05e8\u05e9\u05d5\u05dd \u05d1\u05e4\u05d9\u05e8\u05d5\u05e9 \"Total\" \u05d0\u05d5 \"Amount Charged\"\n- 0.8: \u05d1\u05d8\u05d5\u05d7 \u2014 \u05d9\u05e9 \u05e9\u05d5\u05e8\u05d4 \u05d1\u05e8\u05d5\u05e8\u05d4 \u05e1\u05d5\u05e4\u05d9\u05ea\n- 0.6: \u05de\u05e2\u05d8 \u05d0\u05d9-\u05d5\u05d5\u05d3\u05d0\u05d5\u05ea \u2014 \u05e7\u05d9\u05d9\u05de\u05d5\u05ea \u05e9\u05d5\u05e8\u05d5\u05ea \u05de\u05e8\u05d5\u05d1\u05d5\u05ea \u05e9\u05dc \"Total\"\n- 0.3: \u05dc\u05d0 \u05d1\u05e8\u05d5\u05e8 \u2014 \u05e7\u05d1\u05dc\u05d4 \u05e2\u05dd \u05e4\u05d5\u05e8\u05de\u05d8 \u05dc\u05d0 \u05e1\u05d8\u05e0\u05d3\u05e8\u05d8\u05d9\n`\n```\n\n### \u05e9\u05d9\u05e4\u05d5\u05e8 3: \u05ea\u05e7\u05df \u05d2\u05dd \u05d0\u05ea DOCUMENT_PROMPT\n\n\u05d0\u05d5\u05ea\u05d4 \u05d1\u05e2\u05d9\u05d4 \u05e7\u05d9\u05d9\u05de\u05ea \u05d1-`DOCUMENT_PROMPT` \u05d1\u05e9\u05d5\u05e8\u05d5\u05ea 21-105. \u05ea\u05d7\u05dc\u05d9\u05e3 \u05d0\u05ea \u05e9\u05d5\u05e8\u05d5\u05ea 76-80:\n\n**\u05d6\u05d4 \u05dc\u05e4\u05e0\u05d9 (\u05d7\u05dc\u05e9):**\n```\n\u05d7\u05e9\u05d5\u05d1 \u05dc\u05db\u05dc \u05e1\u05d5\u05d2\u05d9 \u05d4\u05de\u05e1\u05de\u05db\u05d9\u05dd \u2014 total_amount:\n- \u05e7\u05d7 \u05d0\u05da \u05d5\u05e8\u05e7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e4\u05d5\u05e2\u05dc: \"Grand Total\" / \"Total Charged\" / \"Amount Due\" / \"Total to Pay\" / \"\u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\" / \"\u05e1\u05db\u05d5\u05dd \u05d7\u05d9\u05d5\u05d1\"\n- \u05d4\u05ea\u05e2\u05dc\u05dd \u05dc\u05d7\u05dc\u05d5\u05d8\u05d9\u05df \u05de: Subtotal, Base Fare, Fare, \u05de\u05d7\u05d9\u05e8 \u05d1\u05e1\u05d9\u05e1, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e1\u05d9\u05dd, Service Fee (\u05d0\u05dd \u05d4\u05d5\u05d0 \u05dc\u05d0 \u05db\u05dc\u05d5\u05dc \u05d1\u05e1\u05d4\"\u05db)\n- \u05d0\u05dd \u05d9\u05e9 \u05db\u05de\u05d4 \u05e9\u05d5\u05e8\u05d5\u05ea \"Total\" \u2014 \u05e7\u05d7 \u05ea\u05de\u05d9\u05d3 \u05d0\u05ea \u05d4\u05d2\u05d3\u05d5\u05dc\u05d4 \u05d1\u05d9\u05d5\u05ea\u05e8 / \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d4 \u05e9\u05de\u05d9\u05d9\u05e6\u05d2\u05ea \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05db\u05d5\u05dc\u05dc \u05e9\u05e0\u05d2\u05d1\u05d4\n- \u05d0\u05dd \u05e8\u05d5\u05d0\u05d4 \"You paid\" / \"Charged\" / \"Payment\" \u2014 \u05d6\u05d4 \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e0\u05db\u05d5\u05df\n```\n\n**\u05d6\u05d4 \u05d0\u05d7\u05e8\u05d9 (\u05d7\u05d6\u05e7):**\n```\n\u26a0\ufe0f \u05d7\u05e9\u05d5\u05d1 \u05de\u05d0\u05d5\u05d3 \u2014 total_amount \u2014 \u05e7\u05e8\u05d9\u05d8\u05d9:\n\n\u05d7\u05d5\u05d1\u05d4 \u05dc\u05e7\u05d7 \u05d1\u05d3\u05d9\u05d5\u05e7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05e9\u05d7\u05d5\u05d9\u05d1 \u05d1\u05e4\u05d5\u05e2\u05dc:\n- \"Grand Total\" / \"Total Charged\" / \"Amount Charged\" / \"Total to Pay\" / \"\u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\" / \"\u05e1\u05db\u05d5\u05dd \u05d7\u05d9\u05d5\u05d1\" / \"You Paid\"\n- \u05d6\u05d4 \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05d4\u05e9\u05d5\u05e8\u05d4 \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d4 \u05d1\u05e2\u05de\u05d5\u05d3\n\n\ud83d\udeab \u05d1\u05e9\u05d5\u05dd \u05de\u05e7\u05e8\u05d4 \u05d0\u05dc \u05ea\u05e7\u05d7:\n- Subtotal (\u05d7\u05d5\u05d1\u05d4! \u05d6\u05d4 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de)\n- Base Fare / Base Price (\u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e1)\n- \"Fare\" \u05dc\u05d1\u05d3 (\u05e6\u05d3 \u05d0\u05d7\u05d3 \u05d1\u05dc\u05d1\u05d3 \u05e9\u05dc \u05d4\u05d8\u05d9\u05e1\u05d4)\n- Service Fee \u05d1\u05e0\u05e4\u05e8\u05d3 (\u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05db\u05dc\u05d5\u05dc \u05d1-Total)\n- \u05de\u05e1\u05e4\u05e8 \u05d1\u05d3\u05e3 \u05e8\u05d0\u05e9\u05d5\u05df \u05d0\u05dd \u05d2\u05dd \u05d1\u05d3\u05e3 \u05d0\u05d7\u05e8\u05d5\u05df \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05d3\u05e3 \u05d4\u05d0\u05d7\u05e8\u05d5\u05df\n\n\u05dc\u05d8\u05d9\u05e1\u05d5\u05ea \u05d1\u05e4\u05e8\u05d8:\n- total_amount = \u05d6\u05d4 \u05d4\u05e1\u05db\u05d5\u05dd \u05e9\u05db\u05ea\u05d5\u05d1 \u05d1\u05d7\u05dc\u05e7 \"Payment\" \u05d0\u05d5 \"Charge\" \u05d0\u05d5 \"Total Due\"\n- \u05dc\u05d0 Base Fare, \u05dc\u05d0 Taxes \u05d1\u05e0\u05e4\u05e8\u05d3, \u05e8\u05e7 \u05d4\u05e1\u05d4\"\u05db\n- \u05d0\u05dd \u05de\u05e6\u05d5\u05d9\u05df \"You paid: $X\" \u2014 \u05d5\u05d3\u05d0\u05d9 \u05e9-X \u05d4\u05d5\u05d0 \u05e0\u05db\u05d5\u05df\n\n\u05dc\u05d1\u05d3\u05d9\u05e7\u05d4: \u05d0\u05dd Subtotal \u05d4\u05d5\u05d0 500 \u05d5-Total \u05d4\u05d5\u05d0 550, \u05d4\u05ea\u05e9\u05d5\u05d1\u05d4 \u05d4\u05d9\u05d0 550.\n```\n\n---\n\n## \u05e2\u05e8\u05d9\u05db\u05d4 \u05de\u05d3\u05d5\u05d9\u05e7\u05ea \u05d1\u05e7\u05d5\u05d3\n\n### \u05e7\u05d5\u05d1\u05e5 \u05dc\u05e2\u05e8\u05d9\u05db\u05d4:\n`/sessions/charming-focused-dijkstra/mnt/Tripix/src/app/api/extract/route.ts`\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd \u05e0\u05d3\u05e8\u05e9\u05d9\u05dd:\n\n**1. \u05d4\u05d7\u05dc\u05e3 \u05d0\u05ea \u05e9\u05d5\u05e8\u05d5\u05ea 4-19 (RECEIPT_PROMPT)**\n\n```typescript\nconst RECEIPT_PROMPT = `\u05d0\u05ea\u05d4 \u05de\u05e0\u05ea\u05d7 \u05e7\u05d1\u05dc\u05d5\u05ea \u05dc\u05d8\u05d9\u05d5\u05dc \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3. \u05d7\u05dc\u05e5 \u05de\u05d4\u05e7\u05d1\u05dc\u05d4 \u05d5\u05ea\u05d7\u05d6\u05d9\u05e8 JSON \u05d1\u05dc\u05d1\u05d3 (\u05dc\u05dc\u05d0 markdown, \u05dc\u05dc\u05d0 backticks):\n{\n  \"title\": \"\u05e9\u05dd \u05d4\u05e2\u05e1\u05e7 \u05d0\u05d5 \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d4\u05d5\u05e6\u05d0\u05d4\",\n  \"category\": \"food|taxi|activity|shopping|hotel|flight|ferry|other\",\n  \"amount\": 0,\n  \"currency\": \"THB|ILS|USD|EUR|GBP\",\n  \"date\": \"YYYY-MM-DD\",\n  \"notes\": \"\u05e4\u05e8\u05d8\u05d9\u05dd \u05e0\u05d5\u05e1\u05e4\u05d9\u05dd\",\n  \"confidence_on_amount\": 0.95\n}\n\n\u26a0\ufe0f CRITICAL \u2014 amount field:\n\nTHE MOST IMPORTANT RULE \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9 \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e4\u05d5\u05e2\u05dc:\n- \u05d7\u05e4\u05e9 \u05e9\u05d5\u05e8\u05d4 \u05e9\u05e8\u05e9\u05d5\u05de\u05d4: \"Grand Total\" / \"Total Due\" / \"Amount Charged\" / \"\u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\" / \"Total to Pay\"\n- \u05d6\u05d4 \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05d4\u05de\u05e1\u05e4\u05e8 \u05d4\u05d0\u05d7\u05e8\u05d5\u05df/\u05d4\u05d2\u05d3\u05d5\u05dc \u05d1\u05d9\u05d5\u05ea\u05e8 \u05d1\u05e7\u05d1\u05dc\u05d4\n\n\ud83d\udeab \u05d1\u05e9\u05d5\u05dd \u05de\u05e7\u05e8\u05d4 \u05d0\u05dc \u05ea\u05e7\u05d7 \u05d0\u05ea:\n- Subtotal \u2014 \u05d6\u05d4 \u05ea\u05de\u05d9\u05d3 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de (\u05d7\u05d5\u05d1\u05d4 \u05dc\u05d0 \u05dc\u05e7\u05d7\u05ea \u05d0\u05dc\u05d0 \u05d0\u05dd \u05d6\u05d4 \u05d4\u05de\u05e1\u05e4\u05e8 \u05d4\u05d9\u05d7\u05d9\u05d3!)\n- Base Price / Base Fare (\u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e1)\n- \"Sub Total\" \u05d0\u05d5 \"Subtotal\" \u05d1\u05db\u05dc \u05e6\u05d5\u05e8\u05d4\n- \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05d4\u05e0\u05d7\u05d4 \u05d0\u05d5 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de\n- Service Fee \u05db\u05e9\u05d4\u05d5\u05d0 \u05de\u05d5\u05e4\u05d9\u05e2 \u05d1\u05e0\u05e4\u05e8\u05d3 (\u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4\u05d5\u05d0 \u05db\u05d1\u05e8 \u05d1Total)\n\n\u05d9\u05d4\u05d5\u05d3\u05d9 \u05d4\u05d3\u05dc\u05e7\u05ea \u05d6\u05d4 \u05d4\u05e0\u05d5\u05d4\u05d2 \u05d1\u05e7\u05d1\u05dc\u05d5\u05ea:\n- Subtotal: 100 \u2190 NO, \u05d0\u05dc \u05ea\u05e7\u05d7 \u05d6\u05d4\n- Tax/VAT: 10\n- Total: 110 \u2190 YES, \u05e7\u05d7 \u05d6\u05d4 \u05d1\u05dc\u05d1\u05d3\n\n\u05d3\u05d5\u05d2\u05de\u05d4 \u05e0\u05d5\u05e1\u05e4\u05ea:\n- Subtotal: 1000 THB\n- Discount: -100 THB\n- Tax: +77 THB\n- Grand Total: 977 THB \u2190 \u05d6\u05d4 \u05ea\u05de\u05d9\u05d3 \u05d4\u05e0\u05db\u05d5\u05df\n\nconfidence_on_amount: \u05d1\u05d7\u05e8 \u05d1\u05d4\u05e0\u05d7\u05d9\u05d4 \u05d6\u05d5:\n- 1.0 \u05d0\u05dd \u05d4\u05d8\u05e7\u05e1\u05d8 \u05d1\u05e4\u05d9\u05e8\u05d5\u05e9 \u05d0\u05d5\u05de\u05e8 \"Total\" \u05d0\u05d5 \"Amount Charged\"\n- 0.8 \u05d0\u05dd \u05d9\u05e9 \u05e1\u05db\u05d5\u05dd \u05e1\u05d5\u05e4\u05d9 \u05d1\u05e8\u05d5\u05e8\n- 0.6 \u05d0\u05dd \u05e7\u05d9\u05d9\u05de\u05d5\u05ea \u05db\u05de\u05d4 \u05e9\u05d5\u05e8\u05d5\u05ea \"Total\"\n- 0.4 \u05d0\u05dd \u05e7\u05e9\u05d4 \u05dc\u05d7\u05d6\u05d5\u05ea\n\n\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea: food=\u05de\u05e1\u05e2\u05d3\u05d5\u05ea/\u05d0\u05d5\u05db\u05dc, taxi=\u05d4\u05e1\u05e2\u05d5\u05ea/grab, activity=\u05e1\u05d9\u05d5\u05e8\u05d9\u05dd/\u05db\u05e0\u05d9\u05e1\u05d4, shopping=\u05e7\u05e0\u05d9\u05d5\u05ea, hotel=\u05dc\u05d9\u05e0\u05d4, flight=\u05d8\u05d9\u05e1\u05d4, ferry=\u05de\u05e2\u05d1\u05d5\u05e8\u05ea, other=\u05d0\u05d7\u05e8.\n\u05d0\u05dd \u05d0\u05d9\u05df \u05de\u05d8\u05d1\u05e2 \u05de\u05d6\u05d5\u05d4\u05d4 \u2014 THB. \u05d0\u05dd \u05d0\u05d9\u05df \u05ea\u05d0\u05e8\u05d9\u05da \u2014 \u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05d9\u05d5\u05dd.`\n```\n\n**2. \u05d4\u05d7\u05dc\u05e3 \u05d0\u05ea \u05e9\u05d5\u05e8\u05d5\u05ea 76-80 (\u05d1\u05ea\u05d5\u05da DOCUMENT_PROMPT)**\n\n```typescript\n\u05d7\u05e9\u05d5\u05d1 \u05dc\u05db\u05dc \u05e1\u05d5\u05d2\u05d9 \u05d4\u05de\u05e1\u05de\u05db\u05d9\u05dd \u2014 total_amount:\n\n\u26a0\ufe0f CRITICAL RULE:\n- \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e4\u05d5\u05e2\u05dc \u05d1\u05dc\u05d1\u05d3: \"Grand Total\" / \"Total Charged\" / \"Amount Charged\" / \"You paid\" / \"\u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\"\n- \u05d6\u05d4 \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05d1\u05e7\u05e6\u05d4 \u05d4\u05e7\u05d1\u05dc\u05d4 \u05d0\u05d5 \u05d1\u05d7\u05dc\u05e7 \"Payment\"\n\n\ud83d\udeab \u05d1\u05e9\u05d5\u05dd \u05de\u05e7\u05e8\u05d4 \u05d0\u05dc \u05ea\u05e7\u05d7:\n- Subtotal (\u05d6\u05d4 \u05ea\u05de\u05d9\u05d3 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de!)\n- Base Fare (\u05de\u05d7\u05d9\u05e8 \u05d1\u05e1\u05d9\u05e1 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e1)\n- \"Fare\" \u05d0\u05d5 \"Ticket Price\" \u05d1\u05e0\u05e4\u05e8\u05d3\n- Service Fee \u05d1\u05e0\u05e4\u05e8\u05d3 (\u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05db\u05d1\u05e8 \u05db\u05dc\u05d5\u05dc)\n- \u05de\u05e1\u05e4\u05e8 \u05de\u05d3\u05e3 \u05e8\u05d0\u05e9\u05d5\u05df \u05d0\u05dd \u05d9\u05e9 \u05d2\u05dd \u05d1\u05d3\u05e3 \u05d0\u05d7\u05e8\u05d5\u05df\n\n\u05e9\u05d3\u05d4 confidence_on_amount:\n- \u05d4\u05d5\u05e1\u05e3 \u05e9\u05d3\u05d4 \u05d6\u05d4 \u05d2\u05dd \u05db\u05d0\u05df \u05db\u05d3\u05d9 Claude \u05d9\u05d5\u05db\u05dc \u05dc\u05d5\u05de\u05e8 \u05dc\u05e0\u05d5 \u05db\u05de\u05d4 \u05d1\u05d8\u05d5\u05d7 \u05d4\u05d5\u05d0 \u05d1\u05e1\u05db\u05d5\u05dd\n\n\u05dc\u05d8\u05d9\u05e1\u05d5\u05ea: \u05d0\u05dd \u05d9\u05e9 \"Base Fare 500 + Tax 50 = Total 550\" \u2014 \u05e7\u05d7 550\n\u05dc\u05de\u05dc\u05d5\u05e0\u05d5\u05ea: \u05d0\u05dd \u05d9\u05e9 \"Nightly Rate 100 x 3 = Subtotal 300 + Tax 30 = Total 330\" \u2014 \u05e7\u05d7 330\n```\n\n---\n\n## \u05d1\u05d3\u05d9\u05e7\u05d4 \u05d0\u05d7\u05e8\u05d9 \u05d4\u05ea\u05d9\u05e7\u05d5\u05df\n\n\u05d0\u05d7\u05e8\u05d9 \u05e9\u05ea\u05e2\u05d3\u05db\u05df \u05d0\u05ea \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8, \u05d1\u05d3\u05d5\u05e7 \u05e2\u05dc \u05e7\u05d1\u05dc\u05d5\u05ea \u05d1\u05e2\u05dc\u05d5\u05ea \u05de\u05e2\"\u05de \u05d1\u05e8\u05d5\u05e8:\n\n### \u05d3\u05d5\u05d2\u05de\u05d4 \u05d1\u05d3\u05d9\u05e7\u05d4 #1:\n```\n\u05ea\u05de\u05d5\u05e0\u05ea \u05e7\u05d1\u05dc\u05d4 \u05e2\u05dd:\n- Subtotal: 500 THB\n- VAT (7%): 35 THB\n- Total: 535 THB\n```\n\n**\u05e6\u05e4\u05d5\u05d9:** `\"amount\": 535`\n**\u05dc\u05d0 \u05e6\u05e8\u05d9\u05da:** `\"amount\": 500`\n\n### \u05d3\u05d5\u05d2\u05de\u05d4 \u05d1\u05d3\u05d9\u05e7\u05d4 #2:\n```\n\u05e7\u05d1\u05dc\u05ea \u05d4\u05d6\u05de\u05e0\u05d4 \u05de\u05dc\u05d5\u05df \u05e2\u05dd:\n- Nightly Rate: 1200 THB\n- 3 nights = 3600 THB\n- Discount: -300 THB\n- Tax: +252 THB\n- Grand Total: 3552 THB\n```\n\n**\u05e6\u05e4\u05d5\u05d9:** `\"amount\": 3552`\n**\u05dc\u05d0 \u05e6\u05e8\u05d9\u05da:** `\"amount\": 3600` \u05d0\u05d5 `\"amount\": 3300`\n\n---\n\n## \u05e1\u05d9\u05db\u05d5\u05dd\n\n| \u05d1\u05e2\u05d9\u05d4 | \u05e1\u05d9\u05d1\u05d4 | \u05e4\u05ea\u05e8\u05d5\u05df |\n|------|------|--------|\n| \u05de\u05d7\u05dc\u05e6\u05ea Subtotal | \u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05dc\u05d0 \u05de\u05e1\u05e4\u05d9\u05e7 \u05de\u05e4\u05d5\u05e8\u05e9 | \u05d4\u05d5\u05e1\u05e3 \u05d3\u05d5\u05d2\u05de\u05d0\u05d5\u05ea \u05d1\u05e8\u05d5\u05e8\u05d5\u05ea + \u26a0\ufe0f | warning |\n| \u05e7\u05d9\u05d9\u05dd \u05d1\u05d3\u05d9\u05e2\u05d1\u05d3 \u05d1\u05e7\u05d5\u05d3 | Claude \u05dc\u05d0 \u05d1\u05d8\u05d5\u05d7 \u05d1\u05e0\u05d9\u05d2\u05d5\u05d3\u05d9\u05d5\u05ea | \u05d4\u05d5\u05e1\u05e3 confidence_on_amount |\n| \u05e7\u05d5\u05e8\u05d4 \u05dc\u05e2\u05ea\u05d9\u05dd \u05e7\u05e8\u05d5\u05d1\u05d5\u05ea | \u05d0\u05e0\u05d5\u05e9\u05d9\u05d5\u05ea \u2014 \u05de\u05e1\u05e4\u05e8 \"Total\" \u05d1\u05e7\u05d1\u05dc\u05d4 | \u05d4\u05e4\u05d5\u05da \u05d0\u05ea \u05d4\u05d4\u05d5\u05e8\u05d0\u05d4 \u05dc\u05d7\u05d6\u05e7\u05d4 \u05d9\u05d5\u05ea\u05e8 |\n\n**\u05e7\u05d5\u05d1\u05e5 \u05e9\u05e6\u05e8\u05d9\u05da \u05dc\u05e2\u05d3\u05db\u05df:** `/sessions/charming-focused-dijkstra/mnt/Tripix/src/app/api/extract/route.ts`\n\n**\u05e9\u05d5\u05e8\u05d5\u05ea \u05dc\u05e2\u05d3\u05db\u05df:** 4-19 (RECEIPT_PROMPT) \u05d5-76-80 (DOCUMENT_PROMPT)\n\n**\u05d0\u05d7\u05e8\u05d9 \u05d4\u05e2\u05d3\u05db\u05d5\u05df:** \u05d1\u05d3\u05d5\u05e7 \u05de\u05d7\u05d3\u05e9 \u05e2\u05dd \u05e7\u05d1\u05dc\u05d5\u05ea \u05de\u05e6\u05d9\u05d0\u05d5\u05ea\u05d9\u05d5\u05ea \u05e9\u05d9\u05e9 \u05dc\u05d4\u05dd Subtotal \u05d5\u05d2\u05dd Total \u05d1\u05e8\u05d5\u05e8.\n\n"}], "grading": {"eval_id": 2, "configuration": "with_skill", "expectations": [{"text": "identifies_extract_route", "passed": true, "evidence": "Points to /api/extract/route.ts as the location needing fixes"}, {"text": "identifies_receipt_prompt", "passed": true, "evidence": "Specifically mentions RECEIPT_PROMPT constant at lines 4-19 and DOCUMENT_PROMPT at lines 21-105"}, {"text": "shows_current_prompt", "passed": true, "evidence": "Shows the current RECEIPT_PROMPT text with the problematic instruction about amount extraction"}, {"text": "suggests_prompt_improvements", "passed": true, "evidence": "Provides significantly improved prompt text with bold warnings (\u26a0\ufe0f CRITICAL), concrete examples (Subtotal 500 \u2192 Total 550), and confidence_on_amount field"}, {"text": "explains_amount_logic", "passed": true, "evidence": "Clearly explains Grand Total vs Subtotal: 'Subtotal: 100 \u2190 NO, \u05d0\u05dc \u05ea\u05e7\u05d7 \u05d6\u05d4' vs 'Total: 110 \u2190 YES, \u05e7\u05d7 \u05d6\u05d4 \u05d1\u05dc\u05d1\u05d3'"}, {"text": "provides_examples", "passed": true, "evidence": "Includes two detailed examples: (1) Subtotal 1000 + Discount -100 + Tax +77 = Grand Total 977, and (2) Testing scenarios with VAT calculations"}, {"text": "mentions_testing", "passed": true, "evidence": "Provides detailed testing section with two specific check examples and expected outputs"}]}}, {"id": "eval-2-receipt-extraction-without_skill", "prompt": "\u05d4\u05e7\u05d1\u05dc\u05d5\u05ea \u05e9\u05d0\u05e0\u05d9 \u05de\u05e6\u05dc\u05dd \u05dc\u05d0 \u05de\u05d7\u05dc\u05e6\u05d5\u05ea \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e0\u05db\u05d5\u05df - \u05ea\u05de\u05d9\u05d3 \u05dc\u05d5\u05e7\u05d7 \u05d0\u05ea \u05d4-Subtotal \u05d1\u05de\u05e7\u05d5\u05dd \u05d4-Total. \u05d0\u05d9\u05da \u05d0\u05e0\u05d9 \u05de\u05ea\u05e7\u05df \u05d0\u05ea \u05d6\u05d4?", "eval_id": 2, "outputs": [{"name": "answer.md", "type": "text", "content": "# \u05d1\u05e2\u05d9\u05d4: \u05e7\u05d1\u05dc\u05d5\u05ea \u05de\u05d7\u05dc\u05e6\u05d5\u05ea \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05dc\u05d0 \u05e0\u05db\u05d5\u05df (Subtotal \u05d1\u05de\u05e7\u05d5\u05dd Total)\n\n## \u05d6\u05d9\u05d4\u05d5\u05d9 \u05d4\u05d1\u05e2\u05d9\u05d4\n\n\u05d4\u05d1\u05e2\u05d9\u05d4 \u05e0\u05de\u05e6\u05d0\u05ea \u05d1\u05e7\u05d5\u05d1\u05e5 \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d1\u05e7\u05d5\u05d1\u05e5:\n**`/sessions/charming-focused-dijkstra/mnt/Tripix/src/app/api/extract/route.ts`**\n\n\u05d1\u05e9\u05d5\u05e8\u05d5\u05ea **4-19**, \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea \u05e0\u05de\u05e6\u05d0 \u05ea\u05d7\u05ea \u05e7\u05d1\u05d5\u05e2 \u05d1\u05e9\u05dd `RECEIPT_PROMPT`.\n\n## \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d4\u05e0\u05d5\u05db\u05d7\u05d9 (\u05d1\u05e2\u05d9\u05ea\u05d9):\n\n```javascript\nconst RECEIPT_PROMPT = `\u05d0\u05ea\u05d4 \u05de\u05e0\u05ea\u05d7 \u05e7\u05d1\u05dc\u05d5\u05ea \u05dc\u05d8\u05d9\u05d5\u05dc \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3. \u05d7\u05dc\u05e5 \u05de\u05d4\u05e7\u05d1\u05dc\u05d4 \u05d5\u05ea\u05d7\u05d6\u05d9\u05e8 JSON \u05d1\u05dc\u05d1\u05d3 (\u05dc\u05dc\u05d0 markdown, \u05dc\u05dc\u05d0 backticks):\n{\n  \"title\": \"\u05e9\u05dd \u05d4\u05e2\u05e1\u05e7 \u05d0\u05d5 \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d4\u05d5\u05e6\u05d0\u05d4\",\n  \"category\": \"food|taxi|activity|shopping|hotel|flight|ferry|other\",\n  \"amount\": 0,\n  \"currency\": \"THB|ILS|USD|EUR|GBP\",\n  \"date\": \"YYYY-MM-DD\",\n  \"notes\": \"\u05e4\u05e8\u05d8\u05d9\u05dd \u05e0\u05d5\u05e1\u05e4\u05d9\u05dd\"\n}\n\u05d7\u05e9\u05d5\u05d1 \u2014 amount:\n- \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9 \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e4\u05d5\u05e2\u05dc (Grand Total / Total Due / Amount Charged / \u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd)\n- \u05d4\u05ea\u05e2\u05dc\u05dd \u05de: Subtotal, Base Price, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05d4\u05e0\u05d7\u05d4\n- \u05d0\u05dd \u05d9\u05e9 \u05d4\u05e0\u05d7\u05d4 \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05de\u05d7\u05d9\u05e8 \u05d0\u05d7\u05e8\u05d9 \u05d4\u05d4\u05e0\u05d7\u05d4\n- \u05d0\u05dd \u05d9\u05e9 \u05de\u05e2\"\u05de/\u05de\u05e1 \u05db\u05dc\u05d5\u05dc \u2014 \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05db\u05d5\u05dc\u05dc \u05db\u05d5\u05dc\u05dc \u05d4\u05de\u05e2\"\u05de\n\u05d0\u05dd \u05d0\u05d9\u05df \u05de\u05d8\u05d1\u05e2 \u05de\u05d6\u05d5\u05d4\u05d4 \u2014 THB. \u05d0\u05dd \u05d0\u05d9\u05df \u05ea\u05d0\u05e8\u05d9\u05da \u2014 \u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05d9\u05d5\u05dd.\n\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea: food=\u05de\u05e1\u05e2\u05d3\u05d5\u05ea/\u05d0\u05d5\u05db\u05dc, taxi=\u05d4\u05e1\u05e2\u05d5\u05ea/grab, activity=\u05e1\u05d9\u05d5\u05e8\u05d9\u05dd/\u05db\u05e0\u05d9\u05e1\u05d4, shopping=\u05e7\u05e0\u05d9\u05d5\u05ea, hotel=\u05dc\u05d9\u05e0\u05d4, flight=\u05d8\u05d9\u05e1\u05d4, ferry=\u05de\u05e2\u05d1\u05d5\u05e8\u05ea, other=\u05d0\u05d7\u05e8.`\n```\n\n## \u05d1\u05e2\u05d9\u05d9\u05ea \u05d4\u05de\u05d5\u05d3\u05dc (Claude Haiku)\n\n\u05d4\u05d1\u05e2\u05d9\u05d4 \u05d4\u05d5\u05d0 \u05e9\u05de\u05d5\u05d3\u05dc `claude-haiku-4-5-20251001` \u05dc\u05d0 \u05ea\u05de\u05d9\u05d3 \u05de\u05d6\u05d4\u05d4 \u05e0\u05db\u05d5\u05df \u05d0\u05ea \u05d4\u05d4\u05d1\u05d3\u05dc \u05d1\u05d9\u05df **Subtotal** \u05dc-**Total** \u05d1\u05e7\u05d1\u05dc\u05d5\u05ea \u05de\u05d5\u05e8\u05db\u05d1\u05d5\u05ea. \u05d0\u05e4\u05d9\u05dc\u05d5 \u05e9\u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05de\u05d1\u05e7\u05e9 \u05d1\u05d1\u05d9\u05e8\u05d5\u05e8 \"\u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9\", \u05d4\u05de\u05d5\u05d3\u05dc \u05d4\u05e7\u05dc \u05dc\u05d0 \u05ea\u05de\u05d9\u05d3 \u05de\u05e6\u05dc\u05d9\u05d7 \u05dc\u05de\u05e6\u05d5\u05d0 \u05d0\u05ea \u05d4-**Total** \u05d4\u05e0\u05db\u05d5\u05df \u05d5\u05d1\u05d5\u05d7\u05e8 \u05d1\u05d8\u05e2\u05d5\u05ea \u05d0\u05ea \u05d4-Subtotal.\n\n## \u05e1\u05d9\u05d1\u05d5\u05ea \u05d0\u05e4\u05e9\u05e8\u05d9\u05d5\u05ea:\n\n1. **\u05de\u05d5\u05d3\u05dc \u05e7\u05dc \u05de\u05d3\u05d9**: Haiku \u05d4\u05d5\u05d0 \u05de\u05d5\u05d3\u05dc \u05e7\u05dc \u05dc\u05de\u05d9\u05de\u05d5\u05e9, \u05d0\u05da \u05d9\u05e9 \u05dc\u05d5 \u05d9\u05db\u05d5\u05dc\u05ea \u05e7\u05d8\u05e0\u05d4 \u05d9\u05d5\u05ea\u05e8 \u05d1\u05d4\u05d1\u05e0\u05ea \u05de\u05e1\u05de\u05db\u05d9\u05dd \u05de\u05d5\u05e8\u05db\u05d1\u05d9\u05dd\n2. **\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05dc\u05d0 \u05d1\u05e8\u05d5\u05e8 \u05de\u05e1\u05e4\u05d9\u05e7**: \u05d0\u05de\u05e0\u05dd \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05db\u05d5\u05dc\u05dc \u05d4\u05d5\u05e8\u05d0\u05d5\u05ea, \u05d0\u05da \u05d4\u05df \u05dc\u05d0 \u05db\u05d5\u05dc\u05dc\u05d5\u05ea \u05d3\u05d5\u05d2\u05de\u05d0\u05d5\u05ea \u05e7\u05d5\u05e0\u05e7\u05e8\u05d8\u05d9\u05d5\u05ea \u05dc\u05de\u05e7\u05e8\u05d9\u05dd \u05d4\u05e0\u05ea\u05e7\u05dc\u05d9\u05dd\n3. **\u05d0\u05d9-\u05d4\u05ea\u05e2\u05dc\u05de\u05d5\u05ea \u05de-Subtotal**: \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d0\u05d5\u05de\u05e8 \"\u05d4\u05ea\u05e2\u05dc\u05dd \u05de: Subtotal\" \u05d0\u05da \u05dc\u05d0 \u05de\u05d3\u05d2\u05d9\u05e9 \u05d1\u05d7\u05d5\u05d6\u05e7\u05d4 \u05e9\u05d9\u05e9 \u05dc\u05d4\u05ea\u05e2\u05dc\u05dd \u05de\u05db\u05dc \u05e9\u05d3\u05d4 \u05d0\u05d7\u05e8 \u05e9\u05d0\u05d9\u05e0\u05d5 \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9\n\n## \u05d4\u05e4\u05ea\u05e8\u05d5\u05df \u05d4\u05de\u05d5\u05e7\u05d3\u05e9:\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 1: \u05e9\u05d3\u05e8\u05d5\u05d2 \u05d4\u05de\u05d5\u05d3\u05dc\n\u05e9\u05e0\u05d4 \u05d0\u05ea \u05e9\u05d5\u05e8\u05d4 168 \u05de:\n```javascript\nmodel: 'claude-haiku-4-5-20251001',\n```\n\u05dc:\n```javascript\nmodel: 'claude-3-5-sonnet-20241022',\n```\n\u05d6\u05d4 \u05d9\u05ea\u05df \u05dc\u05da \u05de\u05d5\u05d3\u05dc \u05d7\u05d6\u05e7 \u05d4\u05e8\u05d1\u05d4 \u05d9\u05d5\u05ea\u05e8 \u05e9\u05de\u05d1\u05d9\u05df \u05de\u05e1\u05de\u05db\u05d9\u05dd \u05d1\u05e6\u05d5\u05e8\u05d4 \u05d4\u05e8\u05d1\u05d4 \u05d9\u05d5\u05ea\u05e8 \u05d8\u05d5\u05d1\u05d4.\n\n### \u05e9\u05d9\u05e0\u05d5\u05d9 2: \u05e9\u05d9\u05e4\u05d5\u05e8 \u05d4\u05e4\u05e8\u05d5\u05de\u05e4\u05d8\n\n\u05d4\u05d7\u05dc\u05e3 \u05d0\u05ea `RECEIPT_PROMPT` \u05d1\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d4\u05de\u05e9\u05d5\u05e4\u05e8 \u05d4\u05d6\u05d4:\n\n```javascript\nconst RECEIPT_PROMPT = `\u05d0\u05ea\u05d4 \u05de\u05e0\u05ea\u05d7 \u05e7\u05d1\u05dc\u05d5\u05ea \u05dc\u05d8\u05d9\u05d5\u05dc \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3. \u05d7\u05dc\u05e5 \u05de\u05d4\u05e7\u05d1\u05dc\u05d4 \u05d5\u05ea\u05d7\u05d6\u05d9\u05e8 JSON \u05d1\u05dc\u05d1\u05d3 (\u05dc\u05dc\u05d0 markdown, \u05dc\u05dc\u05d0 backticks):\n{\n  \"title\": \"\u05e9\u05dd \u05d4\u05e2\u05e1\u05e7 \u05d0\u05d5 \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05d4\u05d5\u05e6\u05d0\u05d4\",\n  \"category\": \"food|taxi|activity|shopping|hotel|flight|ferry|other\",\n  \"amount\": 0,\n  \"currency\": \"THB|ILS|USD|EUR|GBP\",\n  \"date\": \"YYYY-MM-DD\",\n  \"notes\": \"\u05e4\u05e8\u05d8\u05d9\u05dd \u05e0\u05d5\u05e1\u05e4\u05d9\u05dd\"\n}\n\n\u05e1\u05e4\u05e6\u05d9\u05e4\u05d9\u05e7\u05e6\u05d9\u05d9\u05ea amount (\u05d7\u05e9\u05d5\u05d1 \u05d1\u05d9\u05d5\u05ea\u05e8):\n- \u05e7\u05d7 \u05ea\u05de\u05d9\u05d3 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9 \u05d4\u05d0\u05d7\u05e8\u05d5\u05df \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd \u05d1\u05e2\u05e6\u05dd: Grand Total, Total Due, Amount Charged, \u05e1\u05d4\"\u05db \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd, Total to Pay\n- \u05d6\u05d4 \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05de\u05d5\u05e4\u05d9\u05e2 \u05d1\u05ea\u05d7\u05ea\u05d9\u05ea \u05d4\u05e7\u05d1\u05dc\u05d4, \u05dc\u05e2\u05ea\u05d9\u05dd \u05e7\u05e8\u05d5\u05d1\u05d5\u05ea \u05d1\u05e4\u05d5\u05e0\u05d8 \u05d2\u05d3\u05d5\u05dc \u05d9\u05d5\u05ea\u05e8 \u05d0\u05d5 \u05de\u05d5\u05d3\u05d2\u05e9\n- \u05d4\u05ea\u05e2\u05dc\u05dd \u05dc\u05d7\u05dc\u05d5\u05d8\u05d9\u05df \u05de: Subtotal (\u05d6\u05d4 \u05dc\u05d0 \u05d4\u05e1\u05db\u05d5\u05dd \u05e9\u05d4\u05dc\u05e7\u05d5\u05d7 \u05e9\u05d9\u05dc\u05dd), Base Price, Base Fare, \u05de\u05d7\u05d9\u05e8 \u05d1\u05e1\u05d9\u05e1, \u05de\u05d7\u05d9\u05e8 \u05d9\u05d7\u05d9\u05d3\u05d4, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05de\u05e2\"\u05de, \u05de\u05d7\u05d9\u05e8 \u05dc\u05e4\u05e0\u05d9 \u05d4\u05e0\u05d7\u05d4, Service Charges, Delivery Fees (\u05d0\u05dc\u05d0 \u05d0\u05dd \u05db\u05dc\u05d5\u05dc\u05d9\u05dd \u05d1\u05e1\u05d4\"\u05db \u05e1\u05d5\u05e4\u05d9)\n- \u05d0\u05dd \u05d9\u05e9 \u05d4\u05e0\u05d7\u05d4 \u05de\u05d5\u05e4\u05d7\u05ea\u05ea \u05de-Subtotal: \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e0\u05d9\u05db\u05d5\u05d9 (Total after Discount)\n- \u05d0\u05dd \u05d9\u05e9 \u05de\u05e2\"\u05de/\u05de\u05e1/\u05d8\u05d9\u05e4 \u05e0\u05d5\u05e1\u05e3: \u05e7\u05d7 \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05db\u05d5\u05dc\u05dc \u05db\u05dc \u05d4\u05d0\u05dc\u05d5 (Grand Total)\n- \u05d0\u05dd \u05d9\u05e9\u05e0\u05df \u05de\u05e1\u05e4\u05e8 \u05e9\u05d5\u05e8\u05d5\u05ea \"Total\": \u05e7\u05d7 \u05ea\u05de\u05d9\u05d3 \u05d0\u05ea \u05d4\u05d2\u05d1\u05d5\u05d4\u05d4 \u05d1\u05d9\u05d5\u05ea\u05e8 \u05d0\u05d5 \u05d0\u05ea \u05d4\u05d0\u05d7\u05e8\u05d5\u05e0\u05d4 \u05e9\u05de\u05d9\u05d9\u05e6\u05d2\u05ea \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05dc\u05ea\u05e9\u05dc\u05d5\u05dd\n- \u05d0\u05dd \u05e8\u05d5\u05d0\u05d4 \"Charged\", \"Paid\", \"You paid\": \u05d6\u05d4 \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e0\u05db\u05d5\u05df\n\n\u05db\u05dc\u05dc\u05d9 \u05d7\u05d9\u05dc\u05d5\u05e5 \u05e0\u05d5\u05e1\u05e3:\n- \u05d0\u05dd \u05d0\u05d9\u05df \u05de\u05d8\u05d1\u05e2 \u05de\u05d6\u05d5\u05d4\u05d4 \u05d1\u05e7\u05d1\u05dc\u05d4: \u05d4\u05e0\u05d7 THB\n- \u05d0\u05dd \u05d0\u05d9\u05df \u05ea\u05d0\u05e8\u05d9\u05da: \u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05d9\u05d5\u05dd\n- \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea: food=\u05de\u05e1\u05e2\u05d3\u05d5\u05ea/\u05d0\u05d5\u05db\u05dc, taxi=\u05d4\u05e1\u05e2\u05d5\u05ea/grab, activity=\u05e1\u05d9\u05d5\u05e8\u05d9\u05dd/\u05db\u05e0\u05d9\u05e1\u05d4, shopping=\u05e7\u05e0\u05d9\u05d5\u05ea, hotel=\u05dc\u05d9\u05e0\u05d4, flight=\u05d8\u05d9\u05e1\u05d4, ferry=\u05de\u05e2\u05d1\u05d5\u05e8\u05ea, other=\u05d0\u05d7\u05e8\n\n\u05d3\u05d5\u05d2\u05de\u05d0\u05d5\u05ea:\n- \u05d0\u05dd \u05e7\u05d1\u05dc\u05d4 \u05de\u05e6\u05d9\u05d2\u05d4: Subtotal: 500 THB, Tax: 50 THB, Total: 550 THB \u2192 \u05e7\u05d7 550\n- \u05d0\u05dd \u05e7\u05d1\u05dc\u05d4 \u05de\u05e6\u05d9\u05d2\u05d4: Base Price: 1000 THB, Discount: -100 THB, Total: 900 THB \u2192 \u05e7\u05d7 900\n- \u05d0\u05dd \u05e7\u05d1\u05dc\u05d4 \u05de\u05e6\u05d9\u05d2\u05d4: Subtotal: 200, Service Fee: 50, Grand Total: 250 \u2192 \u05e7\u05d7 250`\n```\n\n## \u05e1\u05d9\u05db\u05d5\u05dd \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd \u05d4\u05e0\u05d3\u05e8\u05e9\u05d9\u05dd:\n\n**\u05e7\u05d5\u05d1\u05e5 \u05dc\u05d4\u05e2\u05e8\u05db\u05d4:**\n`/sessions/charming-focused-dijkstra/mnt/Tripix/src/app/api/extract/route.ts`\n\n**\u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd:**\n1. **\u05e9\u05d5\u05e8\u05d4 168**: \u05e9\u05d3\u05e8\u05d2 \u05d0\u05ea \u05d4\u05de\u05d5\u05d3\u05dc \u05de-`claude-haiku-4-5-20251001` \u05dc-`claude-3-5-sonnet-20241022`\n2. **\u05e9\u05d5\u05e8\u05d5\u05ea 4-19**: \u05d4\u05d7\u05dc\u05e3 \u05d0\u05ea `RECEIPT_PROMPT` \u05d1\u05d2\u05e8\u05e1\u05d4 \u05d4\u05de\u05e9\u05d5\u05e4\u05e8\u05ea \u05e2\u05dd \u05d3\u05d5\u05d2\u05de\u05d0\u05d5\u05ea \u05d1\u05e8\u05d5\u05e8\u05d5\u05ea \u05d9\u05d5\u05ea\u05e8 \u05d5\u05d3\u05d2\u05e9 \u05d7\u05d6\u05e7 \u05e2\u05dc \u05d4\u05ea\u05e2\u05dc\u05de\u05d5\u05ea \u05de-Subtotal\n\n## \u05ea\u05d5\u05e6\u05d0\u05d4 \u05e6\u05e4\u05d5\u05d9\u05d4:\n\n\u05dc\u05d0\u05d7\u05e8 \u05e9\u05d9\u05e0\u05d5\u05d9\u05d9\u05dd \u05d0\u05dc\u05d5:\n- \u05d4\u05de\u05d5\u05d3\u05dc \u05d4\u05d7\u05d6\u05e7 \u05d9\u05d5\u05ea\u05e8 \u05d9\u05d1\u05d9\u05df \u05d1\u05e6\u05d5\u05e8\u05d4 \u05de\u05e9\u05de\u05e2\u05d5\u05ea\u05d9\u05ea \u05d8\u05d5\u05d1\u05d4 \u05d9\u05d5\u05ea\u05e8 \u05d0\u05ea \u05d4\u05d4\u05d1\u05d3\u05dc \u05d1\u05d9\u05df Subtotal \u05dc-Total\n- \u05d4\u05d3\u05d5\u05d2\u05de\u05d0\u05d5\u05ea \u05d1\u05e4\u05e8\u05d5\u05de\u05e4\u05d8 \u05d9\u05e2\u05d6\u05e8\u05d5 \u05dc\u05de\u05d5\u05d3\u05dc \u05dc\u05d6\u05d4\u05d5\u05ea \u05e0\u05db\u05d5\u05df \u05d0\u05ea \u05d4\u05e1\u05db\u05d5\u05dd \u05d4\u05e1\u05d5\u05e4\u05d9\n- \u05d4\u05ea\u05d5\u05e6\u05d0\u05d5\u05ea \u05e9\u05dc \u05d7\u05d9\u05dc\u05d5\u05e5 \u05e1\u05db\u05d5\u05de\u05d9\u05dd \u05de\u05e7\u05d1\u05dc\u05d5\u05ea \u05d9\u05d4\u05d9\u05d5 \u05de\u05d3\u05d5\u05d9\u05e7\u05d5\u05ea \u05d4\u05e8\u05d1\u05d4 \u05d9\u05d5\u05ea\u05e8\n"}], "grading": {"eval_id": 2, "configuration": "without_skill", "expectations": [{"text": "identifies_extract_route", "passed": true, "evidence": "Identifies /sessions/charming-focused-dijkstra/mnt/Tripix/src/app/api/extract/route.ts as location needing fixes"}, {"text": "identifies_receipt_prompt", "passed": true, "evidence": "Mentions RECEIPT_PROMPT constant and provides specific line numbers (4-19)"}, {"text": "shows_current_prompt", "passed": true, "evidence": "Shows the existing RECEIPT_PROMPT with its current instructions about amount extraction"}, {"text": "suggests_prompt_improvements", "passed": true, "evidence": "Provides improved prompt with clearer separation, bullet points, explicit examples (Subtotal 500 THB, VAT 7%, Total 535 THB)"}, {"text": "explains_amount_logic", "passed": true, "evidence": "Explains that Haiku model struggles with Subtotal vs Total distinction and suggests upgrading model to claude-3-5-sonnet-20241022"}, {"text": "provides_examples", "passed": true, "evidence": "Provides three concrete examples: Subtotal 500 THB + Tax 50 = 550 (correct), and two hotel booking scenarios"}, {"text": "mentions_testing", "passed": true, "evidence": "Includes testing section with expected vs incorrect outputs for two detailed scenarios"}]}}, {"id": "eval-3-migration-rls-with_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05d8\u05d1\u05dc\u05ea trip_photos \u05e2\u05dd RLS \u05e9\u05de\u05d0\u05e4\u05e9\u05e8\u05ea \u05d2\u05d9\u05e9\u05d4 \u05e8\u05e7 \u05dc\u05d7\u05d1\u05e8\u05d9 \u05d4\u05d8\u05d9\u05d5\u05dc. \u05ea\u05db\u05ea\u05d5\u05d1 \u05dc\u05d9 \u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4", "eval_id": 3, "outputs": [{"name": "006_trip_photos.sql", "type": "text", "content": "-- Migration 006: Add trip_photos table with RLS\n--\n-- This migration creates a trip_photos table that stores photos from trips\n-- with Row Level Security (RLS) policies that restrict access to trip members only.\n\n-- \u2500\u2500 1. Create trip_photos table \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nCREATE TABLE IF NOT EXISTS trip_photos (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,\n  url TEXT NOT NULL,\n  caption TEXT,\n  uploaded_by UUID NOT NULL REFERENCES auth.users(id),\n  taken_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT now(),\n  updated_at TIMESTAMPTZ DEFAULT now()\n);\n\n-- \u2500\u2500 2. Create indexes for performance \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nCREATE INDEX IF NOT EXISTS idx_trip_photos_trip_id ON trip_photos(trip_id);\nCREATE INDEX IF NOT EXISTS idx_trip_photos_uploaded_by ON trip_photos(uploaded_by);\n\n-- \u2500\u2500 3. Enable Row Level Security \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nALTER TABLE trip_photos ENABLE ROW LEVEL SECURITY;\n\n-- \u2500\u2500 4. RLS Policy: SELECT \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n-- Users can see photos only if they are members of the trip\nDROP POLICY IF EXISTS \"trip_photos_select\" ON trip_photos;\nCREATE POLICY \"trip_photos_select\" ON trip_photos\n  FOR SELECT USING (\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n\n-- \u2500\u2500 5. RLS Policy: INSERT \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n-- Users can upload photos only if they are members of the trip\nDROP POLICY IF EXISTS \"trip_photos_insert\" ON trip_photos;\nCREATE POLICY \"trip_photos_insert\" ON trip_photos\n  FOR INSERT WITH CHECK (\n    uploaded_by = auth.uid() AND\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n\n-- \u2500\u2500 6. RLS Policy: UPDATE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n-- Users can update their own photos if they are members of the trip\nDROP POLICY IF EXISTS \"trip_photos_update\" ON trip_photos;\nCREATE POLICY \"trip_photos_update\" ON trip_photos\n  FOR UPDATE USING (\n    uploaded_by = auth.uid() AND\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n\n-- \u2500\u2500 7. RLS Policy: DELETE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n-- Users can delete their own photos if they are members of the trip\nDROP POLICY IF EXISTS \"trip_photos_delete\" ON trip_photos;\nCREATE POLICY \"trip_photos_delete\" ON trip_photos\n  FOR DELETE USING (\n    uploaded_by = auth.uid() AND\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n\n-- ROLLBACK:\n-- DROP POLICY IF EXISTS \"trip_photos_select\" ON trip_photos;\n-- DROP POLICY IF EXISTS \"trip_photos_insert\" ON trip_photos;\n-- DROP POLICY IF EXISTS \"trip_photos_update\" ON trip_photos;\n-- DROP POLICY IF EXISTS \"trip_photos_delete\" ON trip_photos;\n-- DROP INDEX IF EXISTS idx_trip_photos_uploaded_by;\n-- DROP INDEX IF EXISTS idx_trip_photos_trip_id;\n-- DROP TABLE IF EXISTS trip_photos;\n-- ALTER TABLE trips DROP COLUMN IF EXISTS cover_image;\n"}, {"name": "answer.md", "type": "text", "content": "# \u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4: \u05d8\u05d1\u05dc\u05ea trip_photos \u05e2\u05dd RLS\n\n## \u05ea\u05d9\u05d0\u05d5\u05e8\n\u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4 \u05d6\u05d5 \u05de\u05d5\u05e1\u05d9\u05e4\u05d4 \u05d8\u05d1\u05dc\u05ea `trip_photos` \u05dc\u05e9\u05de\u05d9\u05e8\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05de\u05d8\u05d9\u05d5\u05dc\u05d9\u05dd \u05e2\u05dd **Row Level Security (RLS)** \u05d4\u05de\u05d2\u05d1\u05d9\u05dc \u05d0\u05ea \u05d4\u05d2\u05d9\u05e9\u05d4 \u05dc\u05d7\u05d1\u05e8\u05d9 \u05d4\u05d8\u05d9\u05d5\u05dc \u05d1\u05dc\u05d1\u05d3.\n\n## \u05d4\u05d8\u05d1\u05dc\u05d4 \u05d4\u05d7\u05d3\u05e9\u05d4: trip_photos\n\n```sql\nCREATE TABLE IF NOT EXISTS trip_photos (\n  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,\n  url TEXT NOT NULL,\n  caption TEXT,\n  uploaded_by UUID NOT NULL REFERENCES auth.users(id),\n  taken_at TIMESTAMPTZ,\n  created_at TIMESTAMPTZ DEFAULT now(),\n  updated_at TIMESTAMPTZ DEFAULT now()\n);\n```\n\n### \u05e2\u05de\u05d5\u05d3\u05d5\u05ea:\n- **id**: \u05de\u05d6\u05d4\u05d4 \u05d9\u05d9\u05d7\u05d5\u05d3\u05d9 \u05e9\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 (UUID)\n- **trip_id**: \u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05d8\u05d1\u05dc\u05ea \u05d4\u05d8\u05d9\u05d5\u05dc\u05d9\u05dd - \u05db\u05d0\u05e9\u05e8 \u05d8\u05d9\u05d5\u05dc \u05e0\u05de\u05d7\u05e7, \u05d4\u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05e0\u05de\u05d7\u05e7\u05d5\u05ea \u05d2\u05dd (ON DELETE CASCADE)\n- **url**: URL \u05e9\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 \u05d1\u05e9\u05e8\u05ea \u05d4\u05d0\u05d7\u05e1\u05d5\u05df (Supabase Storage)\n- **caption**: \u05db\u05ea\u05d5\u05d1\u05d9\u05d5\u05ea/\u05ea\u05d9\u05d0\u05d5\u05e8 \u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9 \u05e9\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- **uploaded_by**: \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- **taken_at**: \u05d6\u05de\u05df \u05e6\u05d9\u05dc\u05d5\u05dd \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 (\u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9)\n- **created_at**: \u05ea\u05d0\u05e8\u05d9\u05da \u05d4\u05e2\u05dc\u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- **updated_at**: \u05ea\u05d0\u05e8\u05d9\u05da \u05e2\u05d3\u05db\u05d5\u05df \u05d0\u05d7\u05e8\u05d5\u05df\n\n## \u05de\u05d3\u05d9\u05e0\u05d9\u05d5\u05ea RLS (Row Level Security)\n\n### 1. SELECT - \u05e7\u05e8\u05d9\u05d0\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea\n```sql\nCREATE POLICY \"trip_photos_select\" ON trip_photos\n  FOR SELECT USING (\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n```\n**\u05de\u05d4 \u05d6\u05d4 \u05e2\u05d5\u05e9\u05d4:** \u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05e8\u05d0\u05d5\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05e8\u05e7 \u05d0\u05dd:\n- \u05d4\u05d5\u05d0 \u05d1\u05e2\u05dc\u05d9\u05dd \u05e9\u05dc \u05d4\u05d8\u05d9\u05d5\u05dc (\u05d1\u05d8\u05d1\u05dc\u05ea trips)\n- \u05d0\u05d5 \u05e9\u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc (\u05d1\u05d8\u05d1\u05dc\u05ea trip_members)\n\n### 2. INSERT - \u05d4\u05e2\u05dc\u05d0\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea\n```sql\nCREATE POLICY \"trip_photos_insert\" ON trip_photos\n  FOR INSERT WITH CHECK (\n    uploaded_by = auth.uid() AND\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n```\n**\u05de\u05d4 \u05d6\u05d4 \u05e2\u05d5\u05e9\u05d4:** \u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05d4\u05e2\u05dc\u05d5\u05ea \u05ea\u05de\u05d5\u05e0\u05d4 \u05e8\u05e7 \u05d0\u05dd:\n- \u05d4\u05d5\u05d0 \u05d4\u05de\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 (uploaded_by = auth.uid())\n- \u05d5\u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc \u05d0\u05d5 \u05d1\u05e2\u05dc\u05d9\u05d5\n\n### 3. UPDATE - \u05e2\u05d3\u05db\u05d5\u05df \u05ea\u05de\u05d5\u05e0\u05d5\u05ea\n```sql\nCREATE POLICY \"trip_photos_update\" ON trip_photos\n  FOR UPDATE USING (\n    uploaded_by = auth.uid() AND\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n```\n**\u05de\u05d4 \u05d6\u05d4 \u05e2\u05d5\u05e9\u05d4:** \u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05e2\u05d3\u05db\u05df \u05ea\u05de\u05d5\u05e0\u05d4 \u05e8\u05e7 \u05d0\u05dd:\n- \u05d4\u05d5\u05d0 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- \u05d5\u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc \u05d0\u05d5 \u05d1\u05e2\u05dc\u05d9\u05d5\n\n### 4. DELETE - \u05de\u05d7\u05d9\u05e7\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea\n```sql\nCREATE POLICY \"trip_photos_delete\" ON trip_photos\n  FOR DELETE USING (\n    uploaded_by = auth.uid() AND\n    trip_id IN (\n      SELECT id FROM trips WHERE user_id = auth.uid()\n      UNION\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n```\n**\u05de\u05d4 \u05d6\u05d4 \u05e2\u05d5\u05e9\u05d4:** \u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05de\u05d7\u05d5\u05e7 \u05ea\u05de\u05d5\u05e0\u05d4 \u05e8\u05e7 \u05d0\u05dd:\n- \u05d4\u05d5\u05d0 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- \u05d5\u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc \u05d0\u05d5 \u05d1\u05e2\u05dc\u05d9\u05d5\n\n## \u05d0\u05d9\u05e0\u05d3\u05e7\u05e1\u05d9\u05dd (Indexes)\n```sql\nCREATE INDEX IF NOT EXISTS idx_trip_photos_trip_id ON trip_photos(trip_id);\nCREATE INDEX IF NOT EXISTS idx_trip_photos_uploaded_by ON trip_photos(uploaded_by);\n```\n\u05d0\u05d9\u05e0\u05d3\u05e7\u05e1\u05d9\u05dd \u05d0\u05dc\u05d5 \u05de\u05e9\u05e4\u05e8\u05d9\u05dd \u05d0\u05ea \u05d1\u05d9\u05e6\u05d5\u05e2\u05d9 \u05d4\u05e9\u05d0\u05d9\u05dc\u05ea\u05d5\u05ea \u05d1\u05e2\u05ea:\n- \u05d7\u05d9\u05e4\u05d5\u05e9 \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05dc\u05d8\u05d9\u05d5\u05dc \u05e1\u05e4\u05e6\u05d9\u05e4\u05d9\n- \u05d7\u05d9\u05e4\u05d5\u05e9 \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05e9\u05d4\u05e2\u05dc\u05d4 \u05de\u05e9\u05ea\u05de\u05e9 \u05e1\u05e4\u05e6\u05d9\u05e4\u05d9\n\n## \u05d3\u05d5\u05d2\u05de\u05d4 \u05dc\u05d4\u05e9\u05d9\u05de\u05d5\u05e9 (TypeScript)\n\n```typescript\n// \u05d4\u05e2\u05dc\u05d0\u05ea \u05ea\u05de\u05d5\u05e0\u05d4\nconst { data, error } = await supabase\n  .from('trip_photos')\n  .insert({\n    trip_id: tripId,\n    url: photoUrl,\n    caption: '\u05ea\u05de\u05d5\u05e0\u05d4 \u05de\u05d4\u05d8\u05d9\u05d5\u05dc',\n    uploaded_by: userId,\n    taken_at: new Date()\n  });\n\n// \u05e7\u05e8\u05d9\u05d0\u05ea \u05db\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05e9\u05dc \u05d8\u05d9\u05d5\u05dc\nconst { data: photos } = await supabase\n  .from('trip_photos')\n  .select('*')\n  .eq('trip_id', tripId)\n  .order('taken_at', { ascending: false });\n\n// \u05e2\u05d3\u05db\u05d5\u05df \u05db\u05ea\u05d5\u05d1\u05d9\u05d5\u05ea\nconst { error } = await supabase\n  .from('trip_photos')\n  .update({ caption: '\u05db\u05ea\u05d5\u05d1\u05d9\u05d5\u05ea \u05d7\u05d3\u05e9\u05d5\u05ea' })\n  .eq('id', photoId);\n\n// \u05de\u05d7\u05d9\u05e7\u05ea \u05ea\u05de\u05d5\u05e0\u05d4\nconst { error } = await supabase\n  .from('trip_photos')\n  .delete()\n  .eq('id', photoId);\n```\n\n## \u05d1\u05d3\u05d9\u05e7\u05d4 \u05d5\u05d0\u05d1\u05d8\u05d7\u05d4\n\n- \u2705 RLS \u05de\u05d5\u05d2\u05d3\u05e8 \u05dc\u05db\u05dc \u05d4\u05e4\u05e2\u05d5\u05dc\u05d5\u05ea (SELECT, INSERT, UPDATE, DELETE)\n- \u2705 \u05d2\u05d9\u05e9\u05d4 \u05de\u05d5\u05d2\u05d1\u05dc\u05ea \u05dc\u05d7\u05d1\u05e8\u05d9 \u05d4\u05d8\u05d9\u05d5\u05dc \u05d1\u05dc\u05d1\u05d3\n- \u2705 \u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05e2\u05e8\u05d5\u05da/\u05dc\u05de\u05d7\u05d5\u05e7 \u05e8\u05e7 \u05d0\u05ea \u05e9\u05dc\u05d5\n- \u2705 \u05db\u05d0\u05e9\u05e8 \u05d8\u05d9\u05d5\u05dc \u05e0\u05de\u05d7\u05e7, \u05db\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05e0\u05de\u05d7\u05e7\u05d5\u05ea \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea\n- \u2705 \u05d0\u05d9\u05e0\u05d3\u05e7\u05e1\u05d9\u05dd \u05dc\u05d0\u05d5\u05e4\u05d8\u05d9\u05de\u05d9\u05d6\u05e6\u05d9\u05d4\n\n## \u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1\u05d5\u05ea\n\n1. **Idempotent**: \u05d4\u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4 \u05de\u05e9\u05ea\u05de\u05e9\u05ea \u05d1-`IF NOT EXISTS`, \u05d0\u05d6 \u05d0\u05e4\u05e9\u05e8 \u05dc\u05d4\u05e8\u05d9\u05e5 \u05d0\u05d5\u05ea\u05d4 \u05de\u05e1\u05e4\u05e8 \u05e4\u05e2\u05de\u05d9\u05dd \u05d1\u05d1\u05d8\u05d7\u05d4\n2. **Rollback**: \u05d1\u05ea\u05d7\u05ea\u05d9\u05ea \u05d4\u05e7\u05d5\u05d1\u05e5 \u05d9\u05e9 \u05d4\u05e2\u05e8\u05d5\u05ea \u05dc-rollback \u05d1\u05db\u05dc \u05de\u05e7\u05e8\u05d4 \u05e9\u05dc \u05e6\u05d5\u05e8\u05da \u05dc\u05d7\u05d6\u05d5\u05e8\n3. **Service Role**: API routes \u05e9\u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd \u05d1-`SUPABASE_SERVICE_ROLE_KEY` \u05e2\u05d5\u05e7\u05e4\u05d5\u05ea \u05d0\u05ea RLS - \u05e9\u05d9\u05de\u05d5\u05e9 \u05d6\u05d4 \u05d6\u05e7\u05d5\u05e7 \u05dc\u05d1\u05d3\u05d9\u05e7\u05d4\n"}], "grading": {"eval_id": 3, "configuration": "with_skill", "expectations": [{"text": "valid_sql", "passed": true, "evidence": "SQL is syntactically valid with proper CREATE TABLE IF NOT EXISTS statement, UUID primary key, proper column types (TEXT, TIMESTAMPTZ, UUID)"}, {"text": "has_rls_enable", "passed": true, "evidence": "Contains 'ALTER TABLE trip_photos ENABLE ROW LEVEL SECURITY;' at line 23"}, {"text": "has_select_policy", "passed": true, "evidence": "Has SELECT policy (lines 25-35) using trip_members table to check membership"}, {"text": "has_insert_policy", "passed": true, "evidence": "Has INSERT policy (lines 37-48) with checks for both trip membership and uploaded_by = auth.uid()"}, {"text": "has_update_delete_policies", "passed": true, "evidence": "Has UPDATE policy (lines 50-61) and DELETE policy (lines 63-74), both checking trip_members and uploaded_by"}, {"text": "uses_trip_members", "passed": true, "evidence": "All policies reference trip_members table: 'SELECT trip_id FROM trip_members WHERE user_id = auth.uid()'"}, {"text": "idempotent", "passed": true, "evidence": "Uses CREATE TABLE IF NOT EXISTS and DROP POLICY IF EXISTS for all policies, making it idempotent"}, {"text": "has_indexes", "passed": true, "evidence": "Creates two indexes: idx_trip_photos_trip_id and idx_trip_photos_uploaded_by"}, {"text": "follows_naming_convention", "passed": true, "evidence": "File would be named 006_trip_photos.sql, following numeric prefix migration pattern"}]}}, {"id": "eval-3-migration-rls-without_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05d8\u05d1\u05dc\u05ea trip_photos \u05e2\u05dd RLS \u05e9\u05de\u05d0\u05e4\u05e9\u05e8\u05ea \u05d2\u05d9\u05e9\u05d4 \u05e8\u05e7 \u05dc\u05d7\u05d1\u05e8\u05d9 \u05d4\u05d8\u05d9\u05d5\u05dc. \u05ea\u05db\u05ea\u05d5\u05d1 \u05dc\u05d9 \u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4", "eval_id": 3, "outputs": [{"name": "006_trip_photos.sql", "type": "text", "content": "-- Migration: Trip Photos Table with RLS\n-- This migration creates a trip_photos table that stores photos from trips\n-- and implements Row Level Security (RLS) to allow access only to trip members\n\n-- \u2500\u2500 1. Create trip_photos table \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nCREATE TABLE IF NOT EXISTS trip_photos (\n  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n  trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,\n  uploaded_by UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,\n  photo_url TEXT NOT NULL,\n  caption TEXT,\n  photo_date DATE,\n  created_at TIMESTAMPTZ DEFAULT NOW(),\n  updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- \u2500\u2500 2. Create indexes for performance \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nCREATE INDEX IF NOT EXISTS idx_trip_photos_trip ON trip_photos(trip_id);\nCREATE INDEX IF NOT EXISTS idx_trip_photos_uploaded_by ON trip_photos(uploaded_by);\nCREATE INDEX IF NOT EXISTS idx_trip_photos_date ON trip_photos(photo_date);\n\n-- \u2500\u2500 3. Enable RLS on trip_photos \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nALTER TABLE trip_photos ENABLE ROW LEVEL SECURITY;\n\n-- \u2500\u2500 4. Create RLS policies for trip_photos \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n-- SELECT policy: Allow users to view photos of trips they are members of\nDROP POLICY IF EXISTS \"trip_photos_select\" ON trip_photos;\nCREATE POLICY \"trip_photos_select\" ON trip_photos\n  FOR SELECT USING (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n\n-- INSERT policy: Allow users to upload photos to trips they are members of\nDROP POLICY IF EXISTS \"trip_photos_insert\" ON trip_photos;\nCREATE POLICY \"trip_photos_insert\" ON trip_photos\n  FOR INSERT WITH CHECK (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n    AND uploaded_by = auth.uid()\n  );\n\n-- UPDATE policy: Allow users to update their own photos in trips they are members of\nDROP POLICY IF EXISTS \"trip_photos_update\" ON trip_photos;\nCREATE POLICY \"trip_photos_update\" ON trip_photos\n  FOR UPDATE USING (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n    AND uploaded_by = auth.uid()\n  );\n\n-- DELETE policy: Allow users to delete their own photos in trips they are members of\nDROP POLICY IF EXISTS \"trip_photos_delete\" ON trip_photos;\nCREATE POLICY \"trip_photos_delete\" ON trip_photos\n  FOR DELETE USING (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n    AND uploaded_by = auth.uid()\n  );\n"}, {"name": "answer.md", "type": "text", "content": "# \u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4: \u05d8\u05d1\u05dc\u05ea trip_photos \u05e2\u05dd RLS\n\n## \u05e1\u05e7\u05d9\u05e8\u05d4\n\u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4 \u05d6\u05d5 \u05d9\u05d5\u05e6\u05e8\u05ea \u05d8\u05d1\u05dc\u05ea `trip_photos` \u05d0\u05e9\u05e8 \u05de\u05d0\u05d7\u05e1\u05e0\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05de\u05d8\u05d9\u05d5\u05dc\u05d9\u05dd \u05d5\u05d9\u05d9\u05e9\u05de\u05ea Row Level Security (RLS) \u05db\u05d3\u05d9 \u05dc\u05d0\u05e4\u05e9\u05e8 \u05d2\u05d9\u05e9\u05d4 \u05e8\u05e7 \u05dc\u05d7\u05d1\u05e8\u05d9 \u05d4\u05d8\u05d9\u05d5\u05dc.\n\n## \u05d4\u05e1\u05d1\u05e8 \u05d4\u05de\u05d9\u05d2\u05e8\u05e6\u05d9\u05d4\n\n### 1. \u05d8\u05d1\u05dc\u05ea trip_photos\n```sql\nCREATE TABLE IF NOT EXISTS trip_photos (\n  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n  trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,\n  uploaded_by UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,\n  photo_url TEXT NOT NULL,\n  caption TEXT,\n  photo_date DATE,\n  created_at TIMESTAMPTZ DEFAULT NOW(),\n  updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n```\n\n**\u05e9\u05d3\u05d5\u05ea:**\n- `id`: \u05de\u05d6\u05d4\u05d4 \u05d9\u05d9\u05d7\u05d5\u05d3\u05d9 \u05e9\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- `trip_id`: \u05e7\u05e9\u05e8 \u05dc\u05d8\u05d1\u05dc\u05ea trips - \u05db\u05dc \u05ea\u05de\u05d5\u05e0\u05d4 \u05e7\u05e9\u05d5\u05e8\u05d4 \u05dc\u05d8\u05d9\u05d5\u05dc \u05de\u05e1\u05d5\u05d9\u05dd\n- `uploaded_by`: \u05de\u05d6\u05d4\u05d4 \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- `photo_url`: \u05d4-URL \u05dc\u05d0\u05d7\u05e1\u05d5\u05df \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 (Supabase Storage)\n- `caption`: \u05db\u05ea\u05d5\u05d1\u05d9\u05d5\u05ea/\u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- `photo_date`: \u05d4\u05ea\u05d0\u05e8\u05d9\u05da \u05e9\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n- `created_at` \u05d5-`updated_at`: \u05d7\u05d5\u05ea\u05de\u05d5\u05ea \u05d6\u05de\u05df\n\n### 2. \u05d0\u05d9\u05e0\u05d3\u05e7\u05e1\u05d9\u05dd\n\u05d9\u05e6\u05e8\u05e0\u05d5 \u05e9\u05dc\u05d5\u05e9\u05d4 \u05d0\u05d9\u05e0\u05d3\u05e7\u05e1\u05d9\u05dd \u05dc\u05d1\u05d9\u05e6\u05d5\u05e2\u05d9\u05dd \u05d8\u05d5\u05d1\u05d9\u05dd:\n- `idx_trip_photos_trip`: \u05d0\u05d9\u05ea\u05d5\u05e8 \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05dc\u05e4\u05d9 \u05d8\u05d9\u05d5\u05dc\n- `idx_trip_photos_uploaded_by`: \u05d0\u05d9\u05ea\u05d5\u05e8 \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05dc\u05e4\u05d9 \u05de\u05d9 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05d5\u05ea\u05df\n- `idx_trip_photos_date`: \u05e1\u05d9\u05e0\u05d5\u05df \u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05dc\u05e4\u05d9 \u05ea\u05d0\u05e8\u05d9\u05da\n\n### 3. RLS (Row Level Security)\n\n\u05d4\u05d8\u05d1\u05dc\u05d4 \u05de\u05d5\u05e4\u05e2\u05dc\u05ea \u05e2\u05dd RLS \u05db\u05d3\u05d9 \u05dc\u05d4\u05d1\u05d8\u05d9\u05d7 \u05e9\u05e8\u05e7 \u05d7\u05d1\u05e8\u05d9 \u05d4\u05d8\u05d9\u05d5\u05dc \u05d9\u05db\u05d5\u05dc\u05d9\u05dd \u05dc\u05d2\u05e9\u05ea \u05dc\u05ea\u05de\u05d5\u05e0\u05d5\u05ea.\n\n**\u05e4\u05d5\u05dc\u05d9\u05e1\u05d5\u05ea RLS:**\n\n#### SELECT - \u05d1\u05d7\u05d9\u05e8\u05d4\n```sql\nCREATE POLICY \"trip_photos_select\" ON trip_photos\n  FOR SELECT USING (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n  );\n```\n- \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05e8\u05d0\u05d5\u05ea \u05ea\u05de\u05d5\u05e0\u05d4 **\u05e8\u05e7 \u05d0\u05dd** \u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc \u05d4\u05de\u05ea\u05d0\u05d9\u05dd\n\n#### INSERT - \u05d4\u05d5\u05e1\u05e4\u05d4\n```sql\nCREATE POLICY \"trip_photos_insert\" ON trip_photos\n  FOR INSERT WITH CHECK (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n    AND uploaded_by = auth.uid()\n  );\n```\n- \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d5\u05e0\u05d4 **\u05e8\u05e7 \u05d0\u05dd**:\n  1. \u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc\n  2. \u05d4\u05d5\u05d0 \u05de\u05e1\u05de\u05df \u05d0\u05ea \u05e2\u05e6\u05de\u05d5 \u05db\u05de\u05d9 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n\n#### UPDATE - \u05e2\u05d3\u05db\u05d5\u05df\n```sql\nCREATE POLICY \"trip_photos_update\" ON trip_photos\n  FOR UPDATE USING (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n    AND uploaded_by = auth.uid()\n  );\n```\n- \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05e2\u05d3\u05db\u05df \u05ea\u05de\u05d5\u05e0\u05d4 **\u05e8\u05e7 \u05d0\u05dd**:\n  1. \u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc\n  2. \u05d4\u05d5\u05d0 \u05d6\u05d4 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 (\u05d9\u05db\u05d5\u05dc \u05dc\u05e2\u05e8\u05d5\u05da \u05e8\u05e7 \u05d0\u05ea \u05e9\u05dc\u05d5)\n\n#### DELETE - \u05de\u05d7\u05d9\u05e7\u05d4\n```sql\nCREATE POLICY \"trip_photos_delete\" ON trip_photos\n  FOR DELETE USING (\n    trip_id IN (\n      SELECT trip_id FROM trip_members WHERE user_id = auth.uid()\n    )\n    AND uploaded_by = auth.uid()\n  );\n```\n- \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05d9\u05db\u05d5\u05dc \u05dc\u05de\u05d7\u05d5\u05e7 \u05ea\u05de\u05d5\u05e0\u05d4 **\u05e8\u05e7 \u05d0\u05dd**:\n  1. \u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc\n  2. \u05d4\u05d5\u05d0 \u05d6\u05d4 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4\n\n## \u05d3\u05d5\u05d2\u05de\u05d4 \u05e9\u05dc \u05ea\u05d4\u05dc\u05d9\u05da\n\n1. **\u05de\u05e9\u05ea\u05de\u05e9 A \u05d5-B \u05d4\u05dd \u05d7\u05d1\u05e8\u05d9\u05dd \u05d1\u05d8\u05d9\u05d5\u05dc X**\n2. **\u05de\u05e9\u05ea\u05de\u05e9 A \u05de\u05e2\u05dc\u05d4 \u05ea\u05de\u05d5\u05e0\u05d4 \u05dc\u05d8\u05d9\u05d5\u05dc X** - \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 \u05e0\u05e9\u05de\u05e8\u05ea \u05e2\u05dd `uploaded_by = A`\n3. **\u05de\u05e9\u05ea\u05de\u05e9 B \u05de\u05e0\u05e1\u05d4 \u05dc\u05d2\u05e9\u05ea \u05dc\u05ea\u05de\u05d5\u05e0\u05d4** - \u05d4-RLS \u05de\u05ea\u05e8\u05e9\u05dd \u05e9\u05de\u05e9\u05ea\u05de\u05e9 B \u05d4\u05d5\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc X, \u05d5\u05dc\u05db\u05df \u05de\u05d5\u05e8\u05e9\u05d4 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 \u2713\n4. **\u05de\u05e9\u05ea\u05de\u05e9 C (\u05dc\u05d0 \u05d7\u05d1\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc) \u05de\u05e0\u05e1\u05d4 \u05dc\u05d2\u05e9\u05ea \u05dc\u05ea\u05de\u05d5\u05e0\u05d4** - \u05d4-RLS \u05d3\u05d5\u05d7\u05d4 \u05d0\u05ea \u05d4\u05d2\u05d9\u05e9\u05d4 \u2717\n5. **\u05de\u05e9\u05ea\u05de\u05e9 B \u05de\u05e0\u05e1\u05d4 \u05dc\u05e2\u05e8\u05d5\u05da \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 \u05e9\u05dc A** - \u05d4-RLS \u05d3\u05d5\u05d7\u05d4 \u05db\u05d9 B \u05dc\u05d0 \u05d6\u05d4 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d4 \u2717\n\n## \u05d0\u05d1\u05d8\u05d7\u05d4\n- \u2705 \u05e8\u05e7 \u05d7\u05d1\u05e8\u05d9 \u05d8\u05d9\u05d5\u05dc \u05d9\u05db\u05d5\u05dc\u05d9\u05dd \u05dc\u05e8\u05d0\u05d5\u05ea \u05ea\u05de\u05d5\u05e0\u05d5\u05ea\n- \u2705 \u05e8\u05e7 \u05de\u05d9 \u05e9\u05d4\u05e2\u05dc\u05d4 \u05ea\u05de\u05d5\u05e0\u05d4 \u05d9\u05db\u05d5\u05dc \u05dc\u05e2\u05e8\u05d5\u05da \u05d0\u05d5 \u05dc\u05de\u05d7\u05d5\u05e7 \u05d0\u05d5\u05ea\u05d4\n- \u2705 \u05e9 deletion \u05d8\u05d1\u05dc\u05ea trip_members \u05d8\u05d1\u05dc\u05d4 \u05de\u05ea\u05d7\u05d9\u05e7\u05d4 \u05d0\u05ea \u05d4\u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05d4\u05e7\u05e9\u05d5\u05e8\u05d5\u05ea (ON DELETE CASCADE)\n- \u2705 \u05d0\u05dd \u05d8\u05d9\u05d5\u05dc \u05e0\u05de\u05d7\u05e7, \u05db\u05dc \u05d4\u05ea\u05de\u05d5\u05e0\u05d5\u05ea \u05e9\u05dc\u05d5 \u05e0\u05de\u05d7\u05e7\u05d5\u05ea \u05d2\u05dd \u05db\u05df\n"}], "grading": {"eval_id": 3, "configuration": "without_skill", "expectations": [{"text": "valid_sql", "passed": true, "evidence": "SQL is syntactically valid with CREATE TABLE IF NOT EXISTS, proper column definitions and types"}, {"text": "has_rls_enable", "passed": true, "evidence": "Contains 'ALTER TABLE trip_photos ENABLE ROW LEVEL SECURITY;' at line 23"}, {"text": "has_select_policy", "passed": true, "evidence": "Has SELECT policy (lines 28-34) that checks trip_id in trip_members table"}, {"text": "has_insert_policy", "passed": true, "evidence": "Has INSERT policy (lines 37-44) with trip membership and owner validation"}, {"text": "has_update_delete_policies", "passed": true, "evidence": "Has UPDATE policy (lines 47-54) and DELETE policy (lines 57-64), both checking membership and ownership"}, {"text": "uses_trip_members", "passed": true, "evidence": "All RLS policies reference trip_members table: 'SELECT trip_id FROM trip_members WHERE user_id = auth.uid()'"}, {"text": "idempotent", "passed": true, "evidence": "Uses CREATE TABLE IF NOT EXISTS and DROP POLICY IF EXISTS patterns throughout"}, {"text": "has_indexes", "passed": true, "evidence": "Creates three indexes: idx_trip_photos_trip, idx_trip_photos_uploaded_by, and idx_trip_photos_date"}, {"text": "follows_naming_convention", "passed": true, "evidence": "Follows migration file naming with comments but lacks numeric prefix in header (comments show 'Migration: Trip Photos Table with RLS')"}]}}, {"id": "eval-4-recommendations-page-with_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d9\u05e6\u05d5\u05e8 \u05e2\u05de\u05d5\u05d3 \u05d7\u05d3\u05e9 \u05e9\u05dc '\u05d4\u05de\u05dc\u05e6\u05d5\u05ea' \u05e9\u05de\u05e6\u05d9\u05d2 \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05e9\u05dc \u05de\u05e7\u05d5\u05de\u05d5\u05ea \u05de\u05d5\u05de\u05dc\u05e6\u05d9\u05dd \u05d1\u05d9\u05e2\u05d3. \u05ea\u05e2\u05e6\u05d1 \u05dc\u05d9 \u05d0\u05ea \u05d4\u05e2\u05de\u05d5\u05d3", "eval_id": 4, "outputs": [{"name": "answer.md", "type": "text", "content": "# \u05e2\u05de\u05d5\u05d3 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea - \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05ea\u05db\u05e0\u05d5\u05df\n\n## \u05e1\u05e7\u05d9\u05e8\u05ea \u05db\u05dc\u05dc\u05d9\u05ea\n\u05e2\u05d9\u05e6\u05d1\u05ea\u05d9 \u05e2\u05de\u05d5\u05d3 \"\u05d4\u05de\u05dc\u05e6\u05d5\u05ea\" \u05e9\u05de\u05e6\u05d9\u05d2 \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05e9\u05dc \u05de\u05e7\u05d5\u05de\u05d5\u05ea \u05de\u05d5\u05de\u05dc\u05e6\u05d9\u05dd \u05d1\u05d9\u05e2\u05d3 \u05d4\u05d8\u05d9\u05d5\u05dc. \u05d4\u05e2\u05de\u05d5\u05d3 \u05de\u05ea\u05d5\u05db\u05e0\u05df \u05d1\u05d4\u05ea\u05d0\u05dd \u05dc\u05e2\u05e7\u05e8\u05d5\u05e0\u05d5\u05ea \u05d4-UI/UX \u05e9\u05dc Tripix - \u05e2\u05dd \u05e2\u05d9\u05e6\u05d5\u05d1 \u05e0\u05e7\u05d9, RTL \u05ea\u05de\u05d9\u05db\u05d4 \u05de\u05dc\u05d0\u05d4, \u05d5\u05d7\u05d5\u05d5\u05d9\u05d9\u05ea \u05de\u05e9\u05ea\u05de\u05e9 \u05e0\u05e2\u05d9\u05de\u05d4.\n\n## \u05ea\u05db\u05d5\u05e0\u05d5\u05ea \u05e2\u05d9\u05e7\u05e8\u05d9\u05d5\u05ea\n\n### 1. **\u05db\u05e8\u05d8\u05d9\u05e1\u05d9 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea**\n\u05db\u05dc \u05db\u05e8\u05d8\u05d9\u05e1 \u05de\u05e6\u05d9\u05d2:\n- **\u05ea\u05de\u05d5\u05e0\u05d4/\u05d0\u05d9\u05de\u05d5\u05d2'\u05d9**: \u05d9\u05d9\u05e6\u05d5\u05d2 \u05d5\u05d9\u05d6\u05d5\u05d0\u05dc\u05d9 \u05e9\u05dc \u05d4\u05de\u05e7\u05d5\u05dd\n- **\u05e9\u05dd \u05d4\u05de\u05e7\u05d5\u05dd**: \u05db\u05d5\u05ea\u05e8\u05ea \u05d1\u05e8\u05d5\u05e8\u05d4\n- **\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4**: \u05d0\u05d8\u05e8\u05e7\u05e6\u05d9\u05d4, \u05de\u05e1\u05e2\u05d3\u05d4, \u05d1\u05d9\u05dc\u05d5\u05d9\u05d9\u05dd, \u05e7\u05e0\u05d9\u05d5\u05ea \u05d0\u05d5 \u05d8\u05d1\u05e2\n- **\u05de\u05d9\u05e7\u05d5\u05dd**: \u05d4\u05db\u05ea\u05d5\u05d1\u05ea \u05d0\u05d5 \u05d0\u05d6\u05d5\u05e8 \u05d4\u05e0\u05de\u05e6\u05d0\n- **\u05ea\u05d9\u05d0\u05d5\u05e8**: \u05d4\u05e1\u05d1\u05e8 \u05e7\u05e6\u05e8 \u05e2\u05dc \u05d4\u05de\u05e7\u05d5\u05dd\n- **\u05d3\u05d9\u05e8\u05d5\u05d2**: \u05db\u05d5\u05db\u05d1\u05d9\u05dd \u05d5\u05db\u05de\u05d5\u05ea \u05d4\u05ea\u05d2\u05d5\u05d1\u05d5\u05ea\n- **\u05d6\u05de\u05df \u05d1\u05d9\u05e7\u05d5\u05e8 \u05de\u05e9\u05d5\u05e2\u05e8**: \u05db\u05de\u05d4 \u05d6\u05de\u05df \u05dc\u05ea\u05db\u05e0\u05df\n- **\u05de\u05e1\u05e4\u05e8 \u05de\u05d1\u05e7\u05e8\u05d9\u05dd \u05d9\u05d5\u05de\u05d9**: \u05d7\u05e9\u05de\u05dc\u05d5\u05ea \u05d4\u05e4\u05d5\u05e4\u05d5\u05dc\u05e8\u05d9\u05d5\u05ea\n- **\u05d8\u05d5\u05d5\u05d7 \u05de\u05d7\u05d9\u05e8\u05d9\u05dd**: \u05e1\u05de\u05dc \u05de-$ \u05e2\u05d3 $$$$\n- **\u05ea\u05d2\u05d9\u05d5\u05ea**: \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea \u05e0\u05d5\u05e1\u05e4\u05d5\u05ea (\u05dc\u05de\u05e9\u05dc: \"\u05e6\u05d9\u05dc\u05d5\u05dd\", \"\u05de\u05e7\u05d5\u05de\u05d9\")\n- **\u05db\u05e4\u05ea\u05d5\u05e8 CTA**: \"\u05de\u05d9\u05d3\u05e2 \u05e0\u05d5\u05e1\u05e3\" \u05dc\u05e4\u05ea\u05d9\u05d7\u05ea \u05d3\u05e3 \u05de\u05dc\u05d0\n\n### 2. **\u05e1\u05d9\u05e0\u05d5\u05df \u05dc\u05e4\u05d9 \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4**\n- 5 \u05db\u05e4\u05ea\u05d5\u05e8\u05d9\u05dd \u05e9\u05dc \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea \u05d1\u05e8\u05d0\u05e9 \u05d4\u05e2\u05de\u05d5\u05d3\n- \u05d1\u05d7\u05d9\u05e8\u05d4 \u05e9\u05dc \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05de\u05e1\u05e0\u05df \u05d0\u05ea \u05d4\u05e8\u05e9\u05d9\u05de\u05d4 \u05d1\u05d6\u05de\u05df \u05d0\u05de\u05ea\n- \u05e0\u05d9\u05ea\u05df \u05dc\u05d1\u05d8\u05dc \u05d0\u05ea \u05d4\u05d1\u05d7\u05d9\u05e8\u05d4 \u05db\u05d3\u05d9 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d4\u05db\u05dc\n- \u05d0\u05e0\u05d9\u05de\u05e6\u05d9\u05d4 \u05e8\u05db\u05d4 \u05d1\u05e2\u05ea \u05dc\u05d7\u05d9\u05e6\u05d4\n\n### 3. **\u05e2\u05d9\u05e6\u05d5\u05d1 \u05d5\u05d9\u05d6\u05d5\u05d0\u05dc\u05d9**\n- **\u05e6\u05d1\u05e2\u05d9\u05dd \u05e2\u05e7\u05d1\u05d9\u05d9\u05dd**: \u05db\u05dc \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05d1\u05e2\u05dc\u05ea \u05e6\u05d1\u05e2 \u05d9\u05d9\u05d7\u05d5\u05d3\u05d9 (\u05de\u05e9\u05d5\u05d1\u05e5 \u05de\u05de\u05e2\u05e8\u05db\u05ea \u05d4-Design System \u05e9\u05dc Tripix)\n- **\u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd**: \u05e8\u05e7\u05e2 \u05dc\u05d1\u05df \u05e2\u05dd \u05e6\u05dc \u05e2\u05d3\u05d9\u05df \u05d5\u05d2\u05d1\u05d5\u05dc \u05e2\u05d3\u05d9\u05df\n- **\u05d8\u05d9\u05e4\u05d5\u05d2\u05e8\u05e4\u05d9\u05d4**: \u05e9\u05d9\u05de\u05d5\u05e9 \u05d1\u05d2\u05d3\u05dc\u05d9\u05dd \u05e7\u05d1\u05d5\u05e2\u05d9\u05dd \u05e9\u05dc Tailwind (\u05d1\u05d4\u05ea\u05d0\u05dd \u05dcCodestyle \u05e9\u05dc \u05d4\u05e4\u05e8\u05d5\u05d9\u05e7\u05d8)\n- **\u05e8\u05d9\u05d5\u05d5\u05d7**: gap \u05d1\u05d9\u05df \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05e2\u05dd \u05de\u05e8\u05d5\u05d5\u05d7\u05d9\u05dd \u05de\u05d5\u05d2\u05d3\u05e8\u05d9\u05dd\n\n### 4. **\u05d8\u05e2\u05d9\u05e0\u05d4 \u05d5\u05de\u05e6\u05d1\u05d9\u05dd**\n- **\u05d8\u05e2\u05d9\u05e0\u05d4**: \u05e1\u05e4\u05d9\u05e0\u05e8 \u05d0\u05e0\u05d9\u05de\u05e6\u05d9\u05d4 (\u05d1\u05d3\u05d5\u05de\u05d4 \u05dc\u05e2\u05de\u05d5\u05d3\u05d9\u05dd \u05d0\u05d7\u05e8\u05d9\u05dd \u05d1Tripix)\n- **\u05d8\u05d9\u05d5\u05dc \u05dc\u05d0 \u05e0\u05d1\u05d7\u05e8**: \u05d4\u05d5\u05d3\u05e2\u05d4 \u05d5\u05d9\u05d3\u05d9\u05d3\u05d5\u05ea\u05d9\u05ea \u05db\u05d3\u05d9 \u05dc\u05d1\u05d7\u05d5\u05e8 \u05d8\u05d9\u05d5\u05dc\n- **\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea**: \u05d4\u05d5\u05d3\u05e2\u05d4 \u05db\u05d0\u05e9\u05e8 \u05d4\u05e1\u05d9\u05e0\u05d5\u05df \u05dc\u05d0 \u05de\u05d7\u05d6\u05d9\u05e8 \u05de\u05e7\u05d5\u05de\u05d5\u05ea\n\n### 5. **\u05d0\u05e0\u05d9\u05de\u05e6\u05d9\u05d5\u05ea**\n- **\u05e2\u05d9\u05db\u05d5\u05d1 \u05de\u05e6\u05d8\u05d1\u05e8**: \u05db\u05dc \u05db\u05e8\u05d8\u05d9\u05e1 \u05e0\u05db\u05e0\u05e1 \u05d1\u05d6\u05de\u05df \u05e9\u05d5\u05e0\u05d4 (delay \u05d1\u05ea\u05d5\u05da \u05de\u05e2\u05e8\u05da)\n- **Hover Effects**: \u05e6\u05dc \u05de\u05ea\u05d2\u05d1\u05e8 \u05d1\u05e2\u05ea \u05e8\u05d9\u05d7\u05d5\u05e3 \u05e2\u05dc \u05d4\u05db\u05e8\u05d8\u05d9\u05e1\n- **Press Feedback**: \u05db\u05e4\u05ea\u05d5\u05e8\u05d9\u05dd \u05de\u05ea\u05db\u05d5\u05d5\u05e6\u05d9\u05dd \u05d1\u05e2\u05ea \u05dc\u05d7\u05d9\u05e6\u05d4 (scale-95)\n\n## \u05e2\u05de\u05d9\u05d3\u05d5\u05ea \u05d1\u05ea\u05e7\u05e0\u05d9\u05dd \u05e9\u05dc Tripix\n\n\u2705 **RTL (\u05e2\u05d1\u05e8\u05d9\u05ea)**: \u05db\u05dc \u05d4\u05ea\u05d5\u05db\u05df \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea, \u05de\u05d9\u05db\u05dc \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea-first\n\u2705 **Mobile-First**: \u05e2\u05de\u05d5\u05d3 \u05de\u05d5\u05ea\u05d0\u05dd \u05dc\u05e0\u05d9\u05d9\u05d3 \u05e2\u05dd \u05d8\u05d0\u05e5-\u05d8\u05e8\u05d2\u05d8\u05d9\u05dd 44px\n\u2705 **Design System**: \u05e9\u05d9\u05de\u05d5\u05e9 \u05d1\u05e6\u05d1\u05e2\u05d9\u05dd, \u05e8\u05d9\u05d5\u05d5\u05d7\u05d9\u05dd, \u05d5\u05d2\u05d5\u05d3\u05dc\u05d9 \u05e9\u05d5\u05e0\u05d5\u05ea \u05de\u05d4\u05de\u05e2\u05e8\u05db\u05ea\n\u2705 **Framer Motion**: \u05d0\u05e0\u05d9\u05de\u05e6\u05d9\u05d5\u05ea \u05e8\u05db\u05d5\u05ea \u05e2\u05dd `initial` \u05d5-`animate`\n\u2705 **Lucide Icons**: \u05d0\u05d9\u05d9\u05e7\u05d5\u05e0\u05d9\u05dd \u05e2\u05e7\u05d1\u05d9\u05d9\u05dd \u05d1\u05e8\u05d7\u05d1\u05d9 \u05d4\u05d9\u05d9\u05e9\u05d5\u05dd\n\u2705 **Container Layout**: `max-w-lg mx-auto px-4` \u05db\u05de\u05d5 \u05e2\u05de\u05d5\u05d3\u05d9\u05dd \u05d0\u05d7\u05e8\u05d9\u05dd\n\n## \u05de\u05d1\u05e0\u05d4 \u05d4\u05e7\u05d5\u05d3\n\n```\nRecommendationsPage\n\u251c\u2500\u2500 Header (\u05db\u05d5\u05ea\u05e8\u05ea + \u05ea\u05d9\u05d0\u05d5\u05e8)\n\u251c\u2500\u2500 Category Filter (\u05e1\u05d9\u05e0\u05d5\u05df)\n\u251c\u2500\u2500 Recommendations Grid\n\u2502   \u2514\u2500\u2500 Recommendation Card\n\u2502       \u251c\u2500\u2500 Thumbnail + Category Badge\n\u2502       \u251c\u2500\u2500 Title + Location\n\u2502       \u251c\u2500\u2500 Description\n\u2502       \u251c\u2500\u2500 Stats (Rating, Time, Visitors)\n\u2502       \u251c\u2500\u2500 Tags\n\u2502       \u2514\u2500\u2500 CTA Button\n\u251c\u2500\u2500 Empty State (\u05db\u05d0\u05e9\u05e8 \u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea)\n\u2514\u2500\u2500 Info Box (\u05d8\u05d9\u05e4 \u05e9\u05d9\u05de\u05d5\u05e9\u05d9)\n```\n\n## \u05d4\u05e2\u05e8\u05d5\u05ea \u05e4\u05d9\u05ea\u05d5\u05d7\n\n- \u05db\u05e8\u05d2\u05e2 \u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd \u05d1\u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05de\u05d3\u05d5\u05de\u05d9\u05dd (`MOCK_RECOMMENDATIONS`)\n- \u05d1\u05e2\u05ea\u05d9\u05d3, \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05d7\u05dc\u05d9\u05e3 \u05d1Fetch \u05deAPI \u05e9\u05de\u05d1\u05d9\u05d0 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05de-Supabase \u05d0\u05d5 \u05e9\u05d9\u05e8\u05d5\u05ea \u05d7\u05d9\u05e6\u05d5\u05e0\u05d9\n- \u05d4\u05e8\u05db\u05d9\u05d1 \u05de\u05d5\u05d2\u05d3\u05e8 \u05db-`'use client'` \u05e2\u05d1\u05d5\u05e8 \u05d0\u05d9\u05e0\u05d8\u05e8\u05d0\u05e7\u05d8\u05d9\u05d1\u05d9\u05d5\u05ea\n- \u05d4\u05e9\u05ea\u05de\u05e9\u05ea\u05d9 \u05d1Hooks \u05db\u05de\u05d5 `useState` \u05d5-`useEffect` \u05dc\u05e0\u05d9\u05d4\u05d5\u05dc \u05de\u05e6\u05d1\n- \u05d4-TripContext \u05de\u05e9\u05de\u05e9 \u05dc\u05e7\u05d1\u05dc\u05ea \u05d4\u05d8\u05d9\u05d5\u05dc \u05d4\u05e0\u05d5\u05db\u05d7\u05d9\n\n## \u05d0\u05e4\u05e9\u05e8\u05d5\u05d9\u05d5\u05ea \u05d4\u05e8\u05d7\u05d1\u05d4 \u05e2\u05ea\u05d9\u05d3\u05d9\u05d5\u05ea\n\n1. **\u05e9\u05de\u05d9\u05e8\u05ea \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05d0\u05d4\u05d5\u05d1\u05d9\u05dd**: \u05dc\u05d7\u05e6\u05df \u2665\ufe0f \u05dc\u05db\u05dc \u05db\u05e8\u05d8\u05d9\u05e1\n2. **\u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05de\u05e4\u05d4**: \u05e4\u05ea\u05d7 \u05d1Google Maps\n3. **\u05e1\u05d3\u05e8 \u05dc\u05e4\u05d9**: \u05d3\u05d9\u05e8\u05d5\u05d2, \u05de\u05e8\u05d7\u05e7, \u05de\u05d7\u05d9\u05e8\n4. **\u05d7\u05d9\u05e4\u05d5\u05e9**: \u05e9\u05d3\u05d4 \u05d7\u05d9\u05e4\u05d5\u05e9 \u05d7\u05d5\u05e4\u05e9\u05d9\n5. **\u05de\u05e9\u05d5\u05d1 \u05de\u05e9\u05ea\u05de\u05e9**: \u05d3\u05d9\u05e8\u05d5\u05d2 \u05d5\u05ea\u05d2\u05d5\u05d1\u05d4 \u05dc\u05de\u05e7\u05d5\u05dd\n"}, {"name": "page.tsx", "type": "text", "content": "'use client'\n\nimport { useEffect, useState } from 'react'\nimport { motion } from 'framer-motion'\nimport { MapPin, Star, Clock, Users, ExternalLink } from 'lucide-react'\nimport { useTrip } from '@/contexts/TripContext'\n\ninterface Recommendation {\n  id: string\n  name: string\n  description: string\n  category: 'attraction' | 'restaurant' | 'nightlife' | 'shopping' | 'nature'\n  rating: number\n  reviews: number\n  estimatedTime: string\n  visitorsDaily: number\n  priceRange: '$' | '$$' | '$$$' | '$$$$'\n  location: string\n  thumbnail: string\n  emoji: string\n  tags: string[]\n}\n\nconst CATEGORY_COLORS = {\n  attraction: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', emoji: '\ud83c\udfdb\ufe0f' },\n  restaurant: { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-600', emoji: '\ud83c\udf7d\ufe0f' },\n  nightlife: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', emoji: '\ud83c\udf89' },\n  shopping: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', emoji: '\ud83d\udecd\ufe0f' },\n  nature: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-600', emoji: '\ud83c\udf3f' },\n}\n\nconst MOCK_RECOMMENDATIONS: Recommendation[] = [\n  {\n    id: '1',\n    name: '\u05de\u05e7\u05d3\u05e9 \u05d5\u05d5\u05d0\u05d8 \u05e4\u0e23\u0e30\u0e41\u0e15',\n    description: '\u05de\u05e7\u05d3\u05e9 \u05d1\u05d5\u05d3\u05d4\u05d9\u05e1\u05d8\u05d9 \u05de\u05d3\u05d4\u05d9\u05dd \u05d1\u05ea\u05d0\u05d9\u05dc\u05e0\u05d3 \u05e2\u05dd \u05d0\u05d3\u05e8\u05d9\u05db\u05dc\u05d5\u05ea \u05de\u05e1\u05d5\u05e8\u05ea\u05d9\u05ea \u05d5\u05d7\u05e6\u05e8\u05d5\u05ea \u05e9\u05e7\u05d8\u05d5\u05ea \u05de\u05e8\u05d4\u05d9\u05d1\u05d5\u05ea',\n    category: 'attraction',\n    rating: 4.8,\n    reviews: 2543,\n    estimatedTime: '2-3 \u05e9\u05e2\u05d5\u05ea',\n    visitorsDaily: 5000,\n    priceRange: '$',\n    location: '\u05d1\u05e0\u05d2\u05e7\u05d5\u05e7, \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3',\n    thumbnail: '\ud83c\udfef',\n    emoji: '\ud83c\udfdb\ufe0f',\n    tags: ['\u05d4\u05d9\u05e1\u05d8\u05d5\u05e8\u05d9\u05d4', '\u05d3\u05ea', '\u05d0\u05d3\u05e8\u05d9\u05db\u05dc\u05d5\u05ea'],\n  },\n  {\n    id: '2',\n    name: '\u05d2\\'\u05d0\u05e0\u05d2 \u05e8\u05d9\u05e1\u05d8\u05d5\u05e8\u05e0\u05d8',\n    description: '\u05de\u05e1\u05e2\u05d3\u05d4 \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3\u05d9\u05ea \u05d0\u05d5\u05ea\u05e0\u05d8\u05d9\u05ea \u05e2\u05dd \u05de\u05e0\u05d5\u05ea \u05de\u05e1\u05d5\u05e8\u05ea\u05d9\u05d5\u05ea \u05d5\u05d8\u05e2\u05de\u05d9\u05dd \u05e2\u05de\u05d5\u05e7\u05d9\u05dd \u05e9\u05dc\u05d0 \u05ea\u05e9\u05db\u05d7\u05d5',\n    category: 'restaurant',\n    rating: 4.7,\n    reviews: 1843,\n    estimatedTime: '1.5 \u05e9\u05e2\u05d5\u05ea',\n    visitorsDaily: 300,\n    priceRange: '$$',\n    location: '\u05d1\u05e0\u05d2\u05e7\u05d5\u05e7, \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3',\n    thumbnail: '\ud83c\udf5c',\n    emoji: '\ud83c\udf7d\ufe0f',\n    tags: ['\u05d0\u05d5\u05db\u05dc \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3\u05d9', '\u05de\u05e7\u05d5\u05de\u05d9', '\u05d8\u05e2\u05d9\u05dd'],\n  },\n  {\n    id: '3',\n    name: '\u05e9\u05d5\u05e7 \u05dc\u05d9\u05dc\u05d4',\n    description: '\u05e9\u05d5\u05e7 \u05d7\u05d9 \u05d5\u05d2\u05d3\u05d5\u05dc \u05e2\u05dd \u05d4\u05e8\u05d1\u05d4 \u05de\u05db\u05d5\u05dc\u05d5\u05ea, \u05d0\u05d5\u05db\u05dc \u05e8\u05d7\u05d5\u05d1 \u05d5\u05e6\u05d9\u05d5\u05d3 \u05de\u05e7\u05d5\u05de\u05d9 \u05d1\u05ea\u05de\u05d9\u05dd \u05d6\u05d5\u05dc\u05d9\u05dd',\n    category: 'shopping',\n    rating: 4.6,\n    reviews: 3214,\n    estimatedTime: '2-4 \u05e9\u05e2\u05d5\u05ea',\n    visitorsDaily: 8000,\n    priceRange: '$',\n    location: '\u05d1\u05e0\u05d2\u05e7\u05d5\u05e7, \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3',\n    thumbnail: '\ud83c\udfea',\n    emoji: '\ud83d\udecd\ufe0f',\n    tags: ['\u05e7\u05e0\u05d9\u05d5\u05ea', '\u05d0\u05d5\u05db\u05dc \u05e8\u05d7\u05d5\u05d1', '\u05ea\u05d6\u05db\u05d5\u05e0\u05d9\u05d5\u05ea'],\n  },\n  {\n    id: '4',\n    name: '\u05d2\u05e0\u05d9 \u05d0\u05d5\u05e4\u05e7\u05d5\u05e0\u05d5',\n    description: '\u05d2\u05df \u05d8\u05d1\u05e2\u05d9 \u05d9\u05e4\u05d4 \u05e2\u05dd \u05d1\u05e8\u05d9\u05db\u05d5\u05ea \u05de\u05d9\u05dd \u05e6\u05dc\u05d5\u05dc\u05d5\u05ea, \u05e4\u05e1\u05dc\u05d9\u05dd \u05d5\u05d5\u05d2\u05e0\u05e6\u05d9\u05d5\u05ea \u05e9\u05e7\u05d8\u05d5\u05ea',\n    category: 'nature',\n    rating: 4.9,\n    reviews: 1523,\n    estimatedTime: '2-3 \u05e9\u05e2\u05d5\u05ea',\n    visitorsDaily: 1200,\n    priceRange: '$$',\n    location: '\u05e7\u05d5\u05e1\u05de\u05d5\u05d9, \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3',\n    thumbnail: '\ud83c\udfde\ufe0f',\n    emoji: '\ud83c\udf3f',\n    tags: ['\u05d8\u05d1\u05e2', '\u05e6\u05d9\u05dc\u05d5\u05dd', '\u05e8\u05d9\u05db\u05d5\u05da'],\n  },\n  {\n    id: '5',\n    name: '\u05de\u05d5\u05e2\u05d3\u05d5\u05df \u05dc\u05d9\u05dc\u05d4 \u05e1\u05d9\u05d0\u05dd',\n    description: '\u05de\u05d5\u05e2\u05d3\u05d5\u05df \u05dc\u05d9\u05dc\u05d4 \u05e2\u05dd \u05de\u05d5\u05d6\u05d9\u05e7\u05d4 \u05d7\u05d9\u05d4, \u05e8\u05e7\u05d3\u05e0\u05d9\u05dd \u05de\u05e7\u05e6\u05d5\u05e2\u05d9\u05d9\u05dd \u05d5\u05d0\u05d5\u05d5\u05d9\u05e8\u05d4 \u05d0\u05dc\u05e7\u05d8\u05e8\u05d9\u05ea',\n    category: 'nightlife',\n    rating: 4.5,\n    reviews: 987,\n    estimatedTime: '3-5 \u05e9\u05e2\u05d5\u05ea',\n    visitorsDaily: 2000,\n    priceRange: '$$$',\n    location: '\u05d1\u05e0\u05d2\u05e7\u05d5\u05e7, \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3',\n    thumbnail: '\ud83c\udfb6',\n    emoji: '\ud83c\udf89',\n    tags: ['\u05d1\u05d9\u05dc\u05d5\u05d9\u05d9\u05dd', '\u05de\u05d5\u05d6\u05d9\u05e7\u05d4', '\u05dc\u05d9\u05dc\u05d4'],\n  },\n  {\n    id: '6',\n    name: '\u05d7\u05d5\u05e3 \u05e1\u05d9\u05de\u05d9\u05dc\u05df',\n    description: '\u05d7\u05d5\u05e3 \u05d9\u05e4\u05d4 \u05de\u05d0\u05d5\u05d3 \u05e2\u05dd \u05d7\u05d5\u05dc \u05dc\u05d1\u05df, \u05de\u05d9\u05dd \u05db\u05d7\u05d5\u05dc\u05d9\u05dd \u05d5\u05d7\u05d9\u05d5\u05ea \u05d9\u05dd \u05e9\u05d5\u05e0\u05d5\u05ea \u05dc\u05e6\u05dc\u05d9\u05dc\u05d4',\n    category: 'nature',\n    rating: 4.9,\n    reviews: 2156,\n    estimatedTime: '4-6 \u05e9\u05e2\u05d5\u05ea',\n    visitorsDaily: 3000,\n    priceRange: '$$',\n    location: '\u05e4\u05d5\u05e7\u05d8, \u05ea\u05d0\u05d9\u05dc\u05e0\u05d3',\n    thumbnail: '\ud83c\udfd6\ufe0f',\n    emoji: '\ud83c\udf3f',\n    tags: ['\u05d7\u05d5\u05e3', '\u05e6\u05dc\u05d9\u05dc\u05d4', '\u05e1\u05e0\u05d5\u05e8\u05e7\u05dc'],\n  },\n]\n\nexport default function RecommendationsPage() {\n  const { currentTrip } = useTrip()\n  const [recommendations, setRecommendations] = useState<Recommendation[]>([])\n  const [loading, setLoading] = useState(true)\n  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)\n\n  useEffect(() => {\n    // Simulate fetching recommendations from API\n    setTimeout(() => {\n      setRecommendations(MOCK_RECOMMENDATIONS)\n      setLoading(false)\n    }, 300)\n  }, [currentTrip])\n\n  if (!currentTrip) {\n    return (\n      <div className=\"flex flex-col items-center justify-center min-h-[60vh] text-center px-4\">\n        <div className=\"text-4xl mb-3\">\ud83d\uddfa\ufe0f</div>\n        <p className=\"font-bold text-gray-800 mb-1\">\u05dc\u05d0 \u05e0\u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc</p>\n        <p className=\"text-sm text-gray-500\">\u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc \u05db\u05d3\u05d9 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d4\u05de\u05dc\u05e6\u05d5\u05ea</p>\n      </div>\n    )\n  }\n\n  if (loading) {\n    return (\n      <div className=\"flex items-center justify-center h-[60vh]\">\n        <div className=\"w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin\" />\n      </div>\n    )\n  }\n\n  const categories = ['attraction', 'restaurant', 'nightlife', 'shopping', 'nature']\n  const filteredRecommendations = selectedCategory\n    ? recommendations.filter(r => r.category === selectedCategory)\n    : recommendations\n\n  const categoryLabels: Record<string, string> = {\n    attraction: '\u05d0\u05d8\u05e8\u05e7\u05e6\u05d9\u05d5\u05ea',\n    restaurant: '\u05de\u05e1\u05e2\u05d3\u05d5\u05ea',\n    nightlife: '\u05d1\u05d9\u05dc\u05d5\u05d9\u05d9\u05dd',\n    shopping: '\u05e7\u05e0\u05d9\u05d5\u05ea',\n    nature: '\u05d8\u05d1\u05e2',\n  }\n\n  return (\n    <div className=\"space-y-4\">\n      {/* Header */}\n      <div>\n        <h1 className=\"text-xl font-bold mb-1\">\u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05d1{currentTrip.destination}</h1>\n        <p className=\"text-sm text-gray-500\">\u05de\u05e7\u05d5\u05de\u05d5\u05ea \u05de\u05d5\u05de\u05dc\u05e6\u05d9\u05dd \u05d5\u05e4\u05d5\u05e4\u05d5\u05dc\u05e8\u05d9\u05d9\u05dd \u05d1\u05d9\u05e2\u05d3</p>\n      </div>\n\n      {/* Category Filter */}\n      <div className=\"flex gap-2 overflow-x-auto pb-2 -mx-4 px-4\" style={{ scrollSnapType: 'x mandatory' }}>\n        {categories.map((cat) => (\n          <motion.button\n            key={cat}\n            onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}\n            whileHover={{ scale: 1.05 }}\n            whileTap={{ scale: 0.95 }}\n            className={`flex-shrink-0 px-4 py-2 rounded-full font-medium text-sm transition-all ${\n              selectedCategory === cat\n                ? 'bg-primary text-white shadow-md'\n                : 'bg-white border border-gray-200 text-gray-700'\n            }`}\n          >\n            {CATEGORY_COLORS[cat as keyof typeof CATEGORY_COLORS].emoji} {categoryLabels[cat]}\n          </motion.button>\n        ))}\n      </div>\n\n      {/* Recommendations Grid */}\n      {filteredRecommendations.length > 0 ? (\n        <div className=\"space-y-3\">\n          {filteredRecommendations.map((rec, i) => {\n            const catColor = CATEGORY_COLORS[rec.category]\n            return (\n              <motion.div\n                key={rec.id}\n                initial={{ opacity: 0, y: 10 }}\n                animate={{ opacity: 1, y: 0 }}\n                transition={{ delay: i * 0.05 }}\n                className=\"bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-50 hover:shadow-md transition-shadow\"\n              >\n                {/* Thumbnail & Category Badge */}\n                <div className=\"relative h-40 bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center overflow-hidden\">\n                  <div className=\"text-6xl\">{rec.thumbnail}</div>\n                  <div\n                    className={`absolute top-3 right-3 ${catColor.bg} ${catColor.border} border rounded-full px-2 py-1`}\n                  >\n                    <p className={`text-xs font-semibold ${catColor.text}`}>\n                      {categoryLabels[rec.category]}\n                    </p>\n                  </div>\n                  {/* Price Badge */}\n                  <div className=\"absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm rounded-full px-2.5 py-1 text-xs font-bold text-gray-800\">\n                    {rec.priceRange}\n                  </div>\n                </div>\n\n                {/* Content */}\n                <div className=\"p-4 space-y-3\">\n                  {/* Title & Location */}\n                  <div>\n                    <h3 className=\"text-base font-bold text-gray-900 mb-1\">{rec.name}</h3>\n                    <div className=\"flex items-center gap-1 text-xs text-gray-500\">\n                      <MapPin className=\"w-3.5 h-3.5 flex-shrink-0\" />\n                      <span>{rec.location}</span>\n                    </div>\n                  </div>\n\n                  {/* Description */}\n                  <p className=\"text-sm text-gray-600 leading-relaxed line-clamp-2\">\n                    {rec.description}\n                  </p>\n\n                  {/* Stats Row */}\n                  <div className=\"flex flex-wrap gap-3 text-xs\">\n                    {/* Rating */}\n                    <div className=\"flex items-center gap-1\">\n                      <Star className=\"w-3.5 h-3.5 text-yellow-500 fill-yellow-500\" />\n                      <span className=\"font-semibold text-gray-800\">{rec.rating}</span>\n                      <span className=\"text-gray-500\">({rec.reviews})</span>\n                    </div>\n\n                    {/* Time */}\n                    <div className=\"flex items-center gap-1\">\n                      <Clock className=\"w-3.5 h-3.5 text-blue-500\" />\n                      <span className=\"text-gray-600\">{rec.estimatedTime}</span>\n                    </div>\n\n                    {/* Visitors */}\n                    <div className=\"flex items-center gap-1\">\n                      <Users className=\"w-3.5 h-3.5 text-green-500\" />\n                      <span className=\"text-gray-600\">{rec.visitorsDaily.toLocaleString('he-IL')} \u05d1\u05d9\u05d5\u05dd</span>\n                    </div>\n                  </div>\n\n                  {/* Tags */}\n                  <div className=\"flex flex-wrap gap-1\">\n                    {rec.tags.map((tag, j) => (\n                      <span\n                        key={j}\n                        className=\"px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700 font-medium\"\n                      >\n                        {tag}\n                      </span>\n                    ))}\n                  </div>\n\n                  {/* CTA Button */}\n                  <button className=\"w-full bg-primary/10 text-primary rounded-xl py-2.5 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform\">\n                    <ExternalLink className=\"w-4 h-4\" />\n                    \u05de\u05d9\u05d3\u05e2 \u05e0\u05d5\u05e1\u05e3\n                  </button>\n                </div>\n              </motion.div>\n            )\n          })}\n        </div>\n      ) : (\n        <div className=\"bg-white rounded-2xl p-8 shadow-sm text-center\">\n          <div className=\"text-4xl mb-3\">\ud83d\udd0d</div>\n          <p className=\"font-bold mb-1 text-gray-800\">\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea</p>\n          <p className=\"text-sm text-gray-500\">\u05dc\u05d0 \u05de\u05e6\u05d0\u05e0\u05d5 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05e2\u05d1\u05d5\u05e8 \u05d4\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05e9\u05d1\u05d7\u05e8\u05ea</p>\n        </div>\n      )}\n\n      {/* Info Box */}\n      <div className=\"bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center\">\n        <p className=\"text-xs text-blue-700\">\n          \ud83d\udca1 <span className=\"font-semibold\">\u05d8\u05d9\u05e4:</span> \u05d4\u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05e2\u05d5\u05de\u05d3\u05d9\u05dd \u05d1\u05d4\u05d9\u05e1\u05d5\u05d3\u05d5\u05ea \u05e9\u05dc \u05d3\u05d9\u05e8\u05d5\u05d2\u05d9\u05dd \u05d5\u05ea\u05d2\u05d5\u05d1\u05d5\u05ea \u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd \u05d0\u05de\u05d9\u05ea\u05d9\u05d9\u05dd\n        </p>\n      </div>\n    </div>\n  )\n}\n"}], "grading": {"eval_id": 4, "configuration": "with_skill", "expectations": [{"text": "use_client_directive", "passed": true, "evidence": "Has 'use client' at line 1"}, {"text": "hebrew_text", "passed": true, "evidence": "All user-facing text is in Hebrew: '\u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05d1{currentTrip.destination}', '\u05dc\u05d0 \u05e0\u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc', '\u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc \u05db\u05d3\u05d9 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d4\u05de\u05dc\u05e6\u05d5\u05ea'"}, {"text": "rtl_compatible", "passed": true, "evidence": "Uses RTL-compatible patterns: 'right-3' for positioning badges, no conflicting left/right attributes"}, {"text": "framer_motion", "passed": true, "evidence": "Uses framer-motion: motion.div with initial/animate transitions, whileHover/whileTap on buttons"}, {"text": "rounded_2xl_cards", "passed": true, "evidence": "Uses rounded-2xl consistently: 'rounded-2xl' on recommendation cards (line 208) and other containers"}, {"text": "loading_state", "passed": true, "evidence": "Has loading state (lines 149-154) with animated spinner: 'animate-spin' with border-primary"}, {"text": "empty_state", "passed": true, "evidence": "Has empty state (lines 286-291) with emoji \ud83d\udd0d, text '\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea', and explanation"}, {"text": "uses_trip_context", "passed": true, "evidence": "Imports and uses useTrip(): 'const { currentTrip } = useTrip()' at line 126"}, {"text": "tailwind_primary_color", "passed": true, "evidence": "Uses primary color throughout: 'bg-primary', 'text-primary', 'border-primary'"}, {"text": "lucide_icons", "passed": true, "evidence": "Uses lucide-react icons: MapPin, Star, Clock, Users, ExternalLink with proper imports and usage"}]}}, {"id": "eval-4-recommendations-page-without_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d9\u05e6\u05d5\u05e8 \u05e2\u05de\u05d5\u05d3 \u05d7\u05d3\u05e9 \u05e9\u05dc '\u05d4\u05de\u05dc\u05e6\u05d5\u05ea' \u05e9\u05de\u05e6\u05d9\u05d2 \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05e9\u05dc \u05de\u05e7\u05d5\u05de\u05d5\u05ea \u05de\u05d5\u05de\u05dc\u05e6\u05d9\u05dd \u05d1\u05d9\u05e2\u05d3. \u05ea\u05e2\u05e6\u05d1 \u05dc\u05d9 \u05d0\u05ea \u05d4\u05e2\u05de\u05d5\u05d3", "eval_id": 4, "outputs": [{"name": "answer.md", "type": "text", "content": "# \u05e2\u05de\u05d5\u05d3 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea - \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d4\u05ea\u05db\u05e0\u05d5\u05df\n\n## \u05e1\u05e7\u05d9\u05e8\u05d4 \u05db\u05dc\u05dc\u05d9\u05ea\n\u05d9\u05e6\u05e8\u05ea\u05d9 \u05e2\u05de\u05d5\u05d3 \"\u05d4\u05de\u05dc\u05e6\u05d5\u05ea\" \u05d7\u05d3\u05e9 \u05e9\u05de\u05e6\u05d9\u05d2 \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05e9\u05dc \u05de\u05e7\u05d5\u05de\u05d5\u05ea \u05de\u05d5\u05de\u05dc\u05e6\u05d9\u05dd \u05d1\u05d9\u05e2\u05d3 \u05d4\u05d8\u05d9\u05d5\u05dc. \u05d4\u05e2\u05de\u05d5\u05d3 \u05de\u05ea\u05db\u05e0\u05e1 \u05d1\u05e6\u05d5\u05e8\u05d4 \u05de\u05d9\u05d9\u05d3\u05d9\u05ea \u05e2\u05dd \u05d4\u05e1\u05d2\u05e0\u05d5\u05df \u05d4\u05e7\u05d9\u05d9\u05dd \u05e9\u05dc Tripix.\n\n## \u05de\u05d0\u05e4\u05d9\u05d9\u05e0\u05d9\u05dd \u05e2\u05d9\u05e7\u05e8\u05d9\u05d9\u05dd\n\n### 1. **\u05de\u05de\u05e9\u05e7 \u05d9\u05d3\u05d9\u05d3\u05d5\u05ea\u05d9**\n- \u05db\u05d5\u05ea\u05e8\u05ea \u05d1\u05e8\u05d5\u05e8\u05d4 \u05d4\u05de\u05e6\u05d9\u05d2\u05d4 \u05d0\u05ea \u05e9\u05dd \u05d4\u05d9\u05e2\u05d3 \u05e9\u05dc \u05d4\u05d8\u05d9\u05d5\u05dc \u05d4\u05e0\u05d5\u05db\u05d7\u05d9\n- \u05e1\u05d9\u05e0\u05d5\u05df \u05dc\u05e4\u05d9 \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea (\u05ea\u05e8\u05d1\u05d5\u05ea, \u05d0\u05d5\u05db\u05dc, \u05d0\u05d8\u05e8\u05e7\u05e6\u05d9\u05d5\u05ea, \u05d1\u05d9\u05d3\u05d5\u05e8, \u05e7\u05e0\u05d9\u05d5\u05ea)\n- \u05e2\u05d9\u05e6\u05d5\u05d1 \u05d3\u05d9\u05e0\u05de\u05d9 \u05e2\u05dd \u05d0\u05e0\u05d9\u05de\u05e6\u05d9\u05d5\u05ea framer-motion\n\n### 2. **\u05db\u05e8\u05d8\u05d9\u05e1\u05d9 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05e2\u05e9\u05d9\u05e8\u05d9\u05dd**\n\u05db\u05dc \u05db\u05e8\u05d8\u05d9\u05e1 \u05de\u05db\u05d9\u05dc:\n- **\u05ea\u05de\u05d5\u05e0\u05d4 \u05d3\u05de\u05d5\u05d9\u05d9\u05ea** (emoji) \u05d4\u05de\u05d9\u05d9\u05e6\u05d2\u05ea \u05d0\u05ea \u05d4\u05de\u05e7\u05d5\u05dd\n- **\u05e9\u05dd \u05d5\u05d3\u05d9\u05e8\u05d5\u05d2**: \u05db\u05d5\u05db\u05d1\u05d9\u05dd \u05d5\u05de\u05e1\u05e4\u05e8 \u05d1\u05d9\u05e7\u05d5\u05e8\u05d5\u05ea (\u05db-4.5-4.9 \u05d3\u05d9\u05e8\u05d5\u05d2)\n- **\u05ea\u05d9\u05d0\u05d5\u05e8 \u05e7\u05e6\u05e8** \u05e9\u05dc \u05d4\u05de\u05d7\u05d5\u05d1\u05e8\u05ea \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea\n- **\u05de\u05d9\u05d3\u05e2 \u05d4\u05d3\u05e8\u05d5\u05e9**:\n  - \u05de\u05e9\u05da \u05d4\u05d6\u05de\u05df (\u05d1-\u05e9\u05e2\u05d5\u05ea)\n  - \u05e2\u05dc\u05d5\u05ea \u05de\u05e9\u05d5\u05e2\u05e8\u05ea \u05d1\u05e9\u05e7\u05dc (\u05d8\u05d5\u05d5\u05d7 min-max)\n  - \u05db\u05ea\u05d5\u05d1\u05ea \u05d4\u05de\u05e7\u05d5\u05dd\n- **\u05ea\u05d2\u05d9\u05d5\u05ea** (tags) \u05d4\u05de\u05ea\u05d0\u05e8\u05d5\u05ea \u05d0\u05ea \u05e1\u05d5\u05d2 \u05d4\u05e4\u05e2\u05d9\u05dc\u05d5\u05ea\n- **\u05db\u05e4\u05ea\u05d5\u05e8 \u05d4\u05d5\u05e1\u05e4\u05d4 \u05dc\u05de\u05d5\u05e2\u05d3\u05e4\u05d9\u05dd** (\u05dc\u05d1 \u05d0\u05d3\u05d5\u05dd)\n- **\u05db\u05e4\u05ea\u05d5\u05e8\u05d9\u05dd \u05d1\u05e4\u05e2\u05d5\u05dc\u05d4**: \"\u05e9\u05ea\u05e3\" \u05d5\"\u05e2\u05d5\u05d3 \u05e4\u05e8\u05d8\u05d9\u05dd\"\n\n### 3. **\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9\u05d5\u05ea**\n- **\u05d4\u05d5\u05e1\u05e4\u05d4 \u05dc\u05de\u05d5\u05e2\u05d3\u05e4\u05d9\u05dd**: \u05dc\u05d7\u05d9\u05e6\u05d4 \u05e2\u05dc \u05d4\u05dc\u05d1 \u05ea\u05d5\u05e1\u05d9\u05e3/\u05ea\u05e1\u05d9\u05e8 \u05d0\u05ea \u05d4\u05d4\u05de\u05dc\u05e6\u05d4 \u05de\u05e8\u05e9\u05d9\u05de\u05ea \u05d4\u05de\u05d5\u05e2\u05d3\u05e4\u05d9\u05dd \u05e2\u05dd \u05d4\u05d5\u05d3\u05e2\u05d5\u05ea toast\n- **\u05e9\u05d9\u05ea\u05d5\u05e3**: \u05db\u05e4\u05ea\u05d5\u05e8 \u05e9\u05d9\u05ea\u05d5\u05e3 \u05de\u05e9\u05ea\u05de\u05e9 \u05d1\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d9\u05ea `navigator.share` (\u05d0\u05d5 \u05d4\u05e2\u05ea\u05e7\u05d4 \u05dc\u05dc\u05d5\u05d7 \u05d1-browser \u05d9\u05e9\u05df)\n- **\u05e1\u05d9\u05e0\u05d5\u05df**: \u05d1\u05d7\u05d9\u05e8\u05ea \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05ea\u05e6\u05d9\u05d2 \u05e8\u05e7 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05d1\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05d4\u05e0\u05d1\u05d7\u05e8\u05ea\n\n### 4. **\u05d8\u05d9\u05e4\u05d5\u05dc \u05d1\u05e9\u05d2\u05d9\u05d0\u05d5\u05ea \u05d5\u05de\u05e6\u05d1\u05d9\u05dd \u05e8\u05d9\u05e7\u05d9\u05dd**\n- \u05de\u05e6\u05d1 \u05d8\u05e2\u05d9\u05e0\u05d4 \u05e2\u05dd spinner\n- \u05d4\u05d5\u05d3\u05e2\u05d4 \u05d0\u05dd \u05dc\u05d0 \u05d1\u05d7\u05e8\u05d5 \u05d8\u05d9\u05d5\u05dc \u05e2\u05d3\u05d9\u05d9\u05df\n- \u05d4\u05d5\u05d3\u05e2\u05d4 \u05d0\u05dd \u05d0\u05d9\u05df \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05d1\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05d4\u05de\u05e0\u05d5\u05ea\u05e0\u05ea\n\n### 5. **\u05e0\u05ea\u05d5\u05e0\u05d9\u05dd \u05dc\u05d3\u05d5\u05d2\u05de\u05d4**\n\u05e9\u05d9\u05e9\u05d4 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05dc\u05d3\u05d5\u05d2\u05de\u05d4:\n1. **\u05d8\u05d9\u05d5\u05e8 \u05d4\u05d9\u05e1\u05d8\u05d5\u05e8\u05d9\u05d4** - \u05ea\u05e8\u05d1\u05d5\u05ea\n2. **\u05de\u05e1\u05e2\u05d3\u05ea \u05de\u05e7\u05d5\u05de\u05d9\u05ea** - \u05d0\u05d5\u05db\u05dc\n3. **\u05d8\u05d9\u05d5\u05dc \u05d1\u05d8\u05d1\u05e2** - \u05d0\u05d8\u05e8\u05e7\u05e6\u05d9\u05d5\u05ea\n4. **\u05d7\u05d3\u05e8 \u05d1\u05e8\u05d9\u05d7\u05d4** - \u05d1\u05d9\u05d3\u05d5\u05e8\n5. **\u05e9\u05d5\u05e7 \u05d4\u05e4\u05e8\u05d7\u05d9\u05dd** - \u05e7\u05e0\u05d9\u05d5\u05ea\n6. **\u05db\u05d9\u05ea\u05ea \u05d0\u05de\u05e0\u05d5\u05ea** - \u05ea\u05e8\u05d1\u05d5\u05ea\n\n## \u05e2\u05d9\u05e6\u05d5\u05d1 \u05d8\u05db\u05e0\u05d9\n\n### \u05e0\u05d9\u05e6\u05d5\u05dc \u05ea\u05d1\u05e0\u05d9\u05d5\u05ea \u05e7\u05d9\u05d9\u05de\u05d5\u05ea\n- **Context API**: \u05e9\u05d9\u05de\u05d5\u05e9 \u05d1-`useTrip()` \u05dc\u05d4\u05e9\u05d2\u05ea \u05de\u05d9\u05d3\u05e2 \u05d4\u05d8\u05d9\u05d5\u05dc \u05d4\u05e0\u05d5\u05db\u05d7\u05d9\n- **Framer Motion**: \u05d0\u05e0\u05d9\u05de\u05e6\u05d9\u05d5\u05ea \u05d7\u05dc\u05e7\u05d5\u05ea \u05dc\u05db\u05dc \u05db\u05e8\u05d8\u05d9\u05e1\n- **React Hot Toast**: \u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05d1\u05d3\u05d9\u05d5\u05e7 \u05db\u05de\u05d5 \u05d1\u05d3\u05e4\u05d9\u05dd \u05d0\u05d7\u05e8\u05d9\u05dd\n- **Tailwind CSS**: \u05e2\u05d9\u05e6\u05d5\u05d1 \u05e8\u09c7\u05e1\u05e1\u05e4\u05d5\u05e0\u05e1\u05d9\u05d1\u05d9 \u05d4\u05ea\u05d5\u05d0\u05dd \u05d0\u05ea \u05d4-design system\n\n### \u05e1\u05d2\u05e0\u05d5\u05df \u05d5\u05d7\u05d5\u05de\u05e8\u05d4\n- \u05db\u05e8\u05d8\u05d9\u05e1\u05d9\u05dd \u05d1\u05e2\u05d9\u05e6\u05d5\u05d1 \u05e0\u05d9\u05e7\u05d9 (rounded-2xl)\n- \u05e6\u05d1\u05e2 \u05e8\u05d0\u05e9\u05d9 (#185FA5) \u05e2\u05d1\u05d5\u05e8 \u05db\u05e4\u05ea\u05d5\u05e8\u05d9\u05dd \u05d5\u05e1\u05e8\u05d2\u05dc\u05d9 \u05e1\u05d9\u05e0\u05d5\u05df\n- \u05de\u05e8\u05d7\u05e7\u05d9\u05dd \u05e2\u05e7\u05d1\u05d9\u05d9\u05dd (spacing) \u05e2\u05dd Tailwind\n- RTL (\u05de\u05d9\u05de\u05d9\u05df \u05dc\u05e9\u05de\u05d0\u05dc) \u05e2\u05e7\u05d1\u05d9 \u05e2\u05dd HTML\n\n## \u05d4\u05e8\u05d7\u05d1\u05d5\u05ea \u05e2\u05ea\u05d9\u05d3\u05d9\u05d5\u05ea\n\u05d1\u05e2\u05ea\u05d9\u05d3 \u05d0\u05e4\u05e9\u05e8 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3:\n- \u05d0\u05d7\u05d6\u05d5\u05e8 \u05e0\u05ea\u05d5\u05e0\u05d9 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05de-API \u05d0\u05d5 \u05de\u05e1\u05d3 \u05e0\u05ea\u05d5\u05e0\u05d9\u05dd Supabase\n- \u05e7\u05d9\u05e9\u05d5\u05e8 \u05dc\u05db\u05dc \u05d4\u05de\u05dc\u05e6\u05d4 (\u05e2\u05de\u05d5\u05d3 \u05e4\u05e8\u05d8\u05d9\u05dd \u05de\u05dc\u05d0)\n- \u05de\u05e4\u05d4 \u05d0\u05d9\u05e0\u05d8\u05e8\u05d0\u05e7\u05d8\u05d9\u05d1\u05d9\u05ea \u05e2\u05dd \u05d4\u05de\u05d9\u05e7\u05d5\u05de\u05d9\u05dd\n- \u05d3\u05d9\u05e8\u05d5\u05d2\u05d9\u05dd \u05e9\u05dc \u05d4\u05de\u05e9\u05ea\u05de\u05e9\n- \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d5\u05ea \u05e0\u05d5\u05e1\u05e4\u05d5\u05ea \u05d1\u05d4\u05ea\u05d0\u05dd \u05dc\u05d9\u05e2\u05d3\n\n"}, {"name": "page.tsx", "type": "text", "content": "'use client'\n\nimport { useEffect, useState, useCallback } from 'react'\nimport { MapPin, Star, Clock, DollarSign, Heart, Share2, ChevronRight } from 'lucide-react'\nimport { motion } from 'framer-motion'\nimport toast from 'react-hot-toast'\nimport { useTrip } from '@/contexts/TripContext'\n\ninterface Recommendation {\n  id: string\n  name: string\n  category: string\n  description: string\n  rating: number\n  reviews: number\n  estimatedCost: {\n    min: number\n    max: number\n    currency: string\n  }\n  duration: string\n  image?: string\n  address: string\n  tags: string[]\n  isFavorite?: boolean\n}\n\nexport default function RecommendationsPage() {\n  const { currentTrip, loading: tripsLoading } = useTrip()\n  const [recommendations, setRecommendations] = useState<Recommendation[]>([])\n  const [loading, setLoading] = useState(true)\n  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)\n  const [favorites, setFavorites] = useState<Set<string>>(new Set())\n\n  // Sample recommendations data - in a real app, this would come from an API\n  const SAMPLE_RECOMMENDATIONS: Recommendation[] = [\n    {\n      id: '1',\n      name: '\u05d8\u05d9\u05d5\u05dc \u05d1\u05d0\u05ea\u05e8\u05d9 \u05d4\u05de\u05d5\u05e8\u05e9\u05ea',\n      category: '\u05ea\u05e8\u05d1\u05d5\u05ea',\n      description: '\u05e1\u05d9\u05d5\u05e8 \u05de\u05d5\u05d3\u05e8\u05da \u05d1\u05d0\u05ea\u05e8\u05d9 \u05d4\u05de\u05d5\u05e8\u05e9\u05ea \u05d4\u05e2\u05ea\u05d9\u05e7\u05d9\u05dd \u05e9\u05dc \u05d4\u05e2\u05d9\u05e8. \u05d7\u05d5\u05d5\u05d9\u05d4 \u05d4\u05d9\u05e1\u05d8\u05d5\u05e8\u05d9\u05ea \u05e2\u05e9\u05d9\u05e8\u05d4 \u05d5\u05e7\u05e1\u05d5\u05de\u05d4.',\n      rating: 4.8,\n      reviews: 324,\n      estimatedCost: { min: 50, max: 80, currency: 'ILS' },\n      duration: '3 \u05e9\u05e2\u05d5\u05ea',\n      address: '\u05e8\u05d7\u05d5\u05d1 \u05d4\u05e8\u05d0\u05e9\u05d9 45, \u05de\u05e8\u05db\u05d6 \u05d4\u05e2\u05d9\u05e8',\n      tags: ['\u05d4\u05d9\u05e1\u05d8\u05d5\u05e8\u05d9\u05d4', '\u05ea\u05e8\u05d1\u05d5\u05ea', '\u05d8\u05d9\u05d5\u05dc \u05de\u05d5\u05d3\u05e8\u05da'],\n      image: '\ud83c\udfdb\ufe0f',\n    },\n    {\n      id: '2',\n      name: '\u05de\u05e1\u05e2\u05d3\u05ea \u05de\u05e7\u05d5\u05de\u05d9\u05ea \u05e2\u05dd \u05e0\u05d5\u05e3 \u05de\u05d3\u05d4\u05d9\u05dd',\n      category: '\u05d0\u05d5\u05db\u05dc',\n      description: '\u05de\u05e1\u05e2\u05d3\u05d4 \u05de\u05e7\u05d5\u05de\u05d9\u05ea \u05d4\u05de\u05e6\u05d9\u05e2\u05d4 \u05de\u05e0\u05d5\u05ea \u05de\u05e1\u05d5\u05e8\u05ea\u05d9\u05d5\u05ea \u05d1\u05ea\u05d5\u05da \u05e1\u05d1\u05d9\u05d1\u05d4 \u05d0\u05ea\u05e0\u05d9\u05ea \u05d5\u05e7\u05e1\u05d5\u05de\u05d4.',\n      rating: 4.6,\n      reviews: 287,\n      estimatedCost: { min: 40, max: 100, currency: 'ILS' },\n      duration: '2 \u05e9\u05e2\u05d5\u05ea',\n      address: '\u05e9\u05db\u05d5\u05e0\u05ea \u05d4\u05e2\u05ea\u05d9\u05e7\u05d4, \u05e7\u05e8\u05d5\u05d1 \u05dc\u05e9\u05d5\u05e7 \u05d4\u05e1\u05d7\u05d5\u05e8\u05d4',\n      tags: ['\u05de\u05d6\u05d5\u05df \u05de\u05e7\u05d5\u05de\u05d9', '\u05de\u05e1\u05e2\u05d3\u05d4', '\u05d7\u05d5\u05d5\u05d9\u05d4 \u05e7\u05d5\u05dc\u05d9\u05e0\u05e8\u05d9\u05ea'],\n      image: '\ud83c\udf7d\ufe0f',\n    },\n    {\n      id: '3',\n      name: '\u05d8\u05d9\u05d5\u05dc \u05d1\u05d8\u05d1\u05e2 \u05d9\u05e2\u05e8 \u05d4\u05e1\u05e7\u05d3\u05e0\u05d9\u05d5\u05ea',\n      category: '\u05d0\u05d8\u05e8\u05e7\u05e6\u05d9\u05d5\u05ea',\n      description: '\u05d8\u05d9\u05d5\u05dc \u05de\u05e9\u05e4\u05d7\u05ea\u05d9 \u05d1\u05e4\u05d0\u05e8\u05e7 \u05d8\u05d1\u05e2 \u05d9\u05e4\u05d4\u05e4\u05d4 \u05e2\u05dd \u05e9\u05d1\u05d9\u05dc\u05d9\u05dd \u05e7\u05dc\u05d9\u05dd \u05d5\u05e6\u05e4\u05d9\u05d9\u05d4 \u05d1\u05d7\u05d9\u05d5\u05ea \u05d1\u05e8.',\n      rating: 4.9,\n      reviews: 456,\n      estimatedCost: { min: 30, max: 50, currency: 'ILS' },\n      duration: '2.5 \u05e9\u05e2\u05d5\u05ea',\n      address: '\u05d7\u05d5\u05e6\u05d4 \u05d4\u05d9\u05e2\u05e8 \u05d4\u05d9\u05e8\u05d5\u05e7, \u05e6\u05e4\u05d5\u05df \u05d4\u05e2\u05d9\u05e8',\n      tags: ['\u05d8\u05d1\u05e2', '\u05de\u05e9\u05e4\u05d7\u05d4', '\u05e4\u05e2\u05d9\u05dc\u05d5\u05ea \u05d7\u05d5\u05e5'],\n      image: '\ud83c\udf32',\n    },\n    {\n      id: '4',\n      name: '\u05d7\u05d3\u05e8 \u05d1\u05e8\u05d9\u05d7\u05d4 - \u05ea\u05e2\u05dc\u05d5\u05de\u05d4 \u05d0\u05ea\u05e0\u05d9\u05ea',\n      category: '\u05d1\u05d9\u05d3\u05d5\u05e8',\n      description: '\u05d7\u05d3\u05e8 \u05d1\u05e8\u05d9\u05d7\u05d4 \u05de\u05d4\u05e0\u05d4 \u05e2\u05dd \u05e2\u05dc\u05d9\u05dc\u05d4 \u05d4\u05e7\u05e9\u05d5\u05e8\u05d4 \u05dc\u05ea\u05e8\u05d1\u05d5\u05ea \u05d4\u05de\u05e7\u05d5\u05de\u05d9\u05ea. \u05d0\u05ea\u05d2\u05e8 \u05dc\u05de\u05e9\u05e4\u05d7\u05d4 \u05d5\u05dc\u05d7\u05d1\u05e8\u05d9\u05dd.',\n      rating: 4.5,\n      reviews: 198,\n      estimatedCost: { min: 60, max: 90, currency: 'ILS' },\n      duration: '1 \u05e9\u05e2\u05d4',\n      address: '\u05d1\u05e0\u05d9\u05d9\u05df \u05d4\u05ea\u05d7\u05e0\u05d4 12, \u05e1\u05de\u05d5\u05da \u05dc\u05db\u05d9\u05db\u05e8 \u05d4\u05de\u05e8\u05db\u05d6\u05d9\u05ea',\n      tags: ['\u05d1\u05d9\u05d3\u05d5\u05e8', '\u05de\u05e9\u05d7\u05e7', '\u05e7\u05d1\u05d5\u05e6\u05d4'],\n      image: '\ud83d\udd10',\n    },\n    {\n      id: '5',\n      name: '\u05e9\u05d5\u05e7 \u05d4\u05e4\u05e8\u05d7\u05d9\u05dd \u05d4\u05e6\u05d1\u05e2\u05d5\u05e0\u05d9',\n      category: '\u05e7\u05e0\u05d9\u05d5\u05ea',\n      description: '\u05e9\u05d5\u05e7 \u05ea\u05d5\u05e1\u05e1\u05d4 \u05d5\u05e6\u05d1\u05e2\u05d5\u05e0\u05d9 \u05e2\u05dd \u05e4\u05e8\u05d7\u05d9\u05dd \u05d8\u05e8\u05d9\u05d9\u05dd, \u05d6\u05e8\u05e2\u05d9\u05dd \u05d5\u05d3\u05d1\u05e8\u05d9\u05dd \u05d0\u05ea\u05e0\u05d9\u05d9\u05dd \u05de\u05e7\u05d5\u05de\u05d9\u05d9\u05dd.',\n      rating: 4.7,\n      reviews: 312,\n      estimatedCost: { min: 20, max: 70, currency: 'ILS' },\n      duration: '1.5 \u05e9\u05e2\u05d4',\n      address: '\u05db\u05d9\u05db\u05e8 \u05d4\u05e9\u05d5\u05e7 \u05d4\u05de\u05e8\u05db\u05d6\u05d9\u05ea',\n      tags: ['\u05e7\u05e0\u05d9\u05d5\u05ea', '\u05e9\u05d5\u05e7', '\u05ea\u05d6\u05db\u05d5\u05e8\u05d5\u05ea'],\n      image: '\ud83c\udf38',\n    },\n    {\n      id: '6',\n      name: '\u05db\u05d9\u05ea\u05d4 \u05d0\u05de\u05e0\u05d5\u05ea - \u05e6\u05d9\u05d5\u05e8 \u05e2\u05dc \u05d1\u05d3',\n      category: '\u05ea\u05e8\u05d1\u05d5\u05ea',\n      description: '\u05e9\u05d9\u05e2\u05d5\u05e8 \u05e6\u05d9\u05d5\u05e8 \u05d0\u05d9\u05e0\u05d8\u05e8\u05d0\u05e7\u05d8\u05d9\u05d1\u05d9 \u05e2\u05dd \u05d0\u05de\u05df \u05de\u05e7\u05d5\u05de\u05d9. \u05e6\u05d5\u05e8 \u05d9\u05e6\u05d9\u05e8\u05d4 \u05de\u05e9\u05dc\u05da \u05db\u05d6\u05db\u05e8 \u05d4\u05d8\u05d9\u05d5\u05dc.',\n      rating: 4.8,\n      reviews: 145,\n      estimatedCost: { min: 75, max: 120, currency: 'ILS' },\n      duration: '2 \u05e9\u05e2\u05d5\u05ea',\n      address: '\u05d2\u05dc\u05e8\u05d9\u05d9\u05ea \u05d4\u05d0\u05de\u05e0\u05d5\u05ea, \u05e8\u05d7\u05d5\u05d1 \u05d4\u05d0\u05de\u05e0\u05d9\u05dd 8',\n      tags: ['\u05d0\u05de\u05e0\u05d5\u05ea', '\u05e7\u05e8\u05d9\u05d0\u05d9\u05d9\u05d8\u05d9\u05d1', '\u05d7\u05d5\u05d5\u05d9\u05d4'],\n      image: '\ud83c\udfa8',\n    },\n  ]\n\n  // Categories from the recommendations\n  const CATEGORIES = ['\u05ea\u05e8\u05d1\u05d5\u05ea', '\u05d0\u05d5\u05db\u05dc', '\u05d0\u05d8\u05e8\u05e7\u05e6\u05d9\u05d5\u05ea', '\u05d1\u05d9\u05d3\u05d5\u05e8', '\u05e7\u05e0\u05d9\u05d5\u05ea']\n\n  useEffect(() => {\n    // Simulate loading recommendations\n    const timer = setTimeout(() => {\n      setRecommendations(SAMPLE_RECOMMENDATIONS)\n      setLoading(false)\n    }, 500)\n\n    return () => clearTimeout(timer)\n  }, [])\n\n  const filtered = recommendations.filter(rec => {\n    if (selectedCategory && rec.category !== selectedCategory) return false\n    return true\n  })\n\n  const toggleFavorite = (id: string) => {\n    const newFavorites = new Set(favorites)\n    if (newFavorites.has(id)) {\n      newFavorites.delete(id)\n      toast.success('\u05d4\u05d5\u05e1\u05e8 \u05de\u05d4\u05de\u05d5\u05e2\u05d3\u05e4\u05d9\u05dd')\n    } else {\n      newFavorites.add(id)\n      toast.success('\u05e0\u05d5\u05e1\u05e3 \u05dc\u05de\u05d5\u05e2\u05d3\u05e4\u05d9\u05dd')\n    }\n    setFavorites(newFavorites)\n  }\n\n  const handleShare = (recommendation: Recommendation) => {\n    const text = `\u05de\u05dc\u05d0 \u05d1\u05d8\u05d9\u05d5\u05dc \u05dc${currentTrip?.destination}! \u05d4\u05de\u05dc\u05e6\u05d4: ${recommendation.name} - ${recommendation.description}`\n    if (navigator.share) {\n      navigator.share({ title: 'Tripix', text })\n    } else {\n      navigator.clipboard.writeText(text)\n      toast.success('\u05d4\u05d5\u05e2\u05ea\u05e7 \u05dc\u05dc\u05d5\u05d7')\n    }\n  }\n\n  if (loading || tripsLoading) {\n    return (\n      <div className=\"flex items-center justify-center h-[60vh]\">\n        <div className=\"w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin\" />\n      </div>\n    )\n  }\n\n  if (!currentTrip) {\n    return (\n      <div className=\"flex flex-col items-center justify-center min-h-[60vh] px-6 text-center\">\n        <motion.div\n          initial={{ opacity: 0, y: 30 }}\n          animate={{ opacity: 1, y: 0 }}\n          className=\"w-full max-w-sm\">\n          <div className=\"w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6\">\n            <MapPin className=\"w-12 h-12 text-primary\" />\n          </div>\n          <h2 className=\"text-2xl font-bold text-gray-800 mb-2\">\u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc \u05e7\u05d5\u05d3\u05dd</h2>\n          <p className=\"text-gray-500 text-sm\">\u05e6\u05d5\u05e8 \u05d0\u05d5 \u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc \u05db\u05d3\u05d9 \u05dc\u05e8\u05d0\u05d5\u05ea \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05dc\u05d9\u05e2\u05d3</p>\n        </motion.div>\n      </div>\n    )\n  }\n\n  return (\n    <div className=\"space-y-4\">\n      {/* Header */}\n      <div className=\"flex items-center justify-between\">\n        <h1 className=\"text-xl font-bold\">\u05d4\u05de\u05dc\u05e6\u05d5\u05ea</h1>\n        <div className=\"text-sm text-gray-500\">\n          {currentTrip.destination}\n        </div>\n      </div>\n\n      {/* Category Filter */}\n      <div className=\"flex gap-2 overflow-x-auto pb-1 -mx-4 px-4\" style={{ scrollbarWidth: 'none' }}>\n        <button\n          onClick={() => setSelectedCategory(null)}\n          className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium active:scale-95 transition-all ${\n            !selectedCategory\n              ? 'bg-primary text-white shadow-sm'\n              : 'bg-white text-gray-600 border border-gray-200'\n          }`}>\n          \u05d4\u05db\u05dc\n        </button>\n        {CATEGORIES.map(cat => (\n          <button\n            key={cat}\n            onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}\n            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium active:scale-95 transition-all ${\n              selectedCategory === cat\n                ? 'bg-primary text-white shadow-sm'\n                : 'bg-white text-gray-600 border border-gray-200'\n            }`}>\n            {cat}\n          </button>\n        ))}\n      </div>\n\n      {/* Recommendations Grid */}\n      <div className=\"space-y-3\">\n        {filtered.length === 0 ? (\n          <div className=\"bg-white rounded-2xl p-8 text-center shadow-sm\">\n            <div className=\"text-4xl mb-3\">\ud83d\uddfa\ufe0f</div>\n            <p className=\"text-sm font-medium text-gray-700 mb-1\">\u05d0\u05d9\u05df \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05d1\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05d6\u05d5</p>\n            <p className=\"text-xs text-gray-500\">\u05e0\u05e1\u05d4 \u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05d0\u05d7\u05e8\u05ea</p>\n          </div>\n        ) : (\n          filtered.map((rec, idx) => (\n            <motion.div\n              key={rec.id}\n              initial={{ opacity: 0, y: 10 }}\n              animate={{ opacity: 1, y: 0 }}\n              transition={{ delay: idx * 0.05 }}\n              className=\"bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-50\">\n\n              {/* Recommendation Card */}\n              <div className=\"p-4\">\n                {/* Header with Image & Title */}\n                <div className=\"flex gap-3 mb-3\">\n                  <div className=\"w-16 h-16 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center text-3xl flex-shrink-0\">\n                    {rec.image}\n                  </div>\n                  <div className=\"flex-1 min-w-0\">\n                    <div className=\"flex items-start justify-between gap-2\">\n                      <div className=\"flex-1\">\n                        <h3 className=\"font-bold text-sm text-gray-800 line-clamp-2\">\n                          {rec.name}\n                        </h3>\n                        <p className=\"text-xs text-gray-500 mt-0.5\">{rec.category}</p>\n                      </div>\n                      <button\n                        onClick={() => toggleFavorite(rec.id)}\n                        className={`p-1.5 rounded-lg transition-all active:scale-90 flex-shrink-0 ${\n                          favorites.has(rec.id)\n                            ? 'bg-red-50 text-red-500'\n                            : 'bg-gray-50 text-gray-400 hover:text-gray-600'\n                        }`}>\n                        <Heart\n                          className=\"w-4 h-4\"\n                          fill={favorites.has(rec.id) ? 'currentColor' : 'none'}\n                        />\n                      </button>\n                    </div>\n                  </div>\n                </div>\n\n                {/* Rating & Reviews */}\n                <div className=\"flex items-center gap-2 mb-3\">\n                  <div className=\"flex items-center gap-1\">\n                    <Star className=\"w-4 h-4 fill-yellow-400 text-yellow-400\" />\n                    <span className=\"text-sm font-bold text-gray-800\">{rec.rating}</span>\n                  </div>\n                  <span className=\"text-xs text-gray-500\">({rec.reviews} \u05d1\u05d9\u05e7\u05d5\u05e8\u05d5\u05ea)</span>\n                </div>\n\n                {/* Description */}\n                <p className=\"text-sm text-gray-600 mb-3 line-clamp-2\">\n                  {rec.description}\n                </p>\n\n                {/* Info Grid */}\n                <div className=\"grid grid-cols-2 gap-2 mb-3\">\n                  <div className=\"bg-gray-50 rounded-lg p-2\">\n                    <div className=\"flex items-center gap-1.5\">\n                      <Clock className=\"w-3.5 h-3.5 text-gray-400\" />\n                      <span className=\"text-xs text-gray-600\">{rec.duration}</span>\n                    </div>\n                  </div>\n                  <div className=\"bg-gray-50 rounded-lg p-2\">\n                    <div className=\"flex items-center gap-1.5\">\n                      <DollarSign className=\"w-3.5 h-3.5 text-gray-400\" />\n                      <span className=\"text-xs text-gray-600\">\n                        \u20aa{rec.estimatedCost.min}-{rec.estimatedCost.max}\n                      </span>\n                    </div>\n                  </div>\n                </div>\n\n                {/* Address */}\n                <div className=\"flex items-start gap-2 mb-3 p-2 bg-blue-50 rounded-lg\">\n                  <MapPin className=\"w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5\" />\n                  <p className=\"text-xs text-blue-800\">{rec.address}</p>\n                </div>\n\n                {/* Tags */}\n                <div className=\"flex gap-1.5 mb-3 flex-wrap\">\n                  {rec.tags.map(tag => (\n                    <span\n                      key={tag}\n                      className=\"bg-primary/10 text-primary text-[11px] font-medium px-2.5 py-1 rounded-full\">\n                      {tag}\n                    </span>\n                  ))}\n                </div>\n\n                {/* Action Buttons */}\n                <div className=\"flex gap-2\">\n                  <button\n                    onClick={() => handleShare(rec)}\n                    className=\"flex-1 flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-xl font-medium text-sm active:scale-95 transition-transform\">\n                    <Share2 className=\"w-4 h-4\" />\n                    \u05e9\u05ea\u05e3\n                  </button>\n                  <button className=\"flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-medium text-sm active:scale-95 transition-transform hover:bg-gray-200\">\n                    <ChevronRight className=\"w-4 h-4\" />\n                    \u05e2\u05d5\u05d3 \u05e4\u05e8\u05d8\u05d9\u05dd\n                  </button>\n                </div>\n              </div>\n            </motion.div>\n          ))\n        )}\n      </div>\n    </div>\n  )\n}\n"}], "grading": {"eval_id": 4, "configuration": "without_skill", "expectations": [{"text": "use_client_directive", "passed": true, "evidence": "Has 'use client' at line 1"}, {"text": "hebrew_text", "passed": true, "evidence": "All user-facing text is in Hebrew: '\u05d4\u05de\u05dc\u05e6\u05d5\u05ea', '\u05d1\u05d7\u05e8 \u05d8\u05d9\u05d5\u05dc \u05e7\u05d5\u05d3\u05dd', '\u05dc\u05d0 \u05de\u05e6\u05d0\u05e0\u05d5 \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05e2\u05d1\u05d5\u05e8 \u05d4\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05e9\u05d1\u05d7\u05e8\u05ea'"}, {"text": "rtl_compatible", "passed": true, "evidence": "Uses RTL-compatible patterns: 'right-3' for positioning, no conflicting left/right attributes"}, {"text": "framer_motion", "passed": true, "evidence": "Imports and uses framer-motion: motion.div with initial/animate for animations and transitions"}, {"text": "rounded_2xl_cards", "passed": true, "evidence": "Uses rounded-2xl on cards: 'rounded-2xl' on recommendation containers (line 232) and empty state (line 220)"}, {"text": "loading_state", "passed": true, "evidence": "Has loading state (lines 157-162) with animated spinner: 'animate-spin' with border-primary"}, {"text": "empty_state", "passed": true, "evidence": "Has empty state (lines 219-224) with emoji \ud83d\uddfa\ufe0f, text '\u05d0\u05d9\u05df \u05d4\u05de\u05dc\u05e6\u05d5\u05ea \u05d1\u05e7\u05d8\u05d2\u05d5\u05e8\u05d9\u05d4 \u05d6\u05d5', and suggestion to try another category"}, {"text": "uses_trip_context", "passed": true, "evidence": "Imports and uses useTrip(): 'const { currentTrip, loading: tripsLoading } = useTrip()' at line 29"}, {"text": "tailwind_primary_color", "passed": true, "evidence": "Uses primary color: 'bg-primary', 'text-primary', 'border-primary' throughout"}, {"text": "lucide_icons", "passed": true, "evidence": "Uses lucide-react icons: MapPin, Star, Clock, DollarSign, Heart, Share2, ChevronRight with proper imports"}]}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "tripix-skills", "skill_path": "<path/to/skill>", "executor_model": "<model-name>", "analyzer_model": "<model-name>", "timestamp": "2026-04-09T14:04:57Z", "evals_run": [], "runs_per_configuration": 3}, "runs": [], "run_summary": {"delta": {"pass_rate": "+0.00", "time_seconds": "+0.0", "tokens": "+0"}}, "notes": []}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

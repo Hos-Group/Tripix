@@ -1,5 +1,9 @@
-export type Category = 'flight' | 'ferry' | 'taxi' | 'hotel' | 'activity' | 'food' | 'shopping' | 'other'
-export type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP'
+export type Category =
+  | 'flight' | 'ferry' | 'taxi' | 'hotel' | 'activity' | 'food' | 'shopping' | 'other'
+  | 'car_rental' | 'insurance' | 'visa' | 'sim' | 'pharmacy' | 'spa'
+  | 'nightlife' | 'museum' | 'sport' | 'parking' | 'train' | 'tips' | 'travel_gear' | 'laundry'
+
+export type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP' | 'JPY' | 'AED' | 'SGD' | 'TRY' | 'CHF' | 'AUD' | 'CAD'
 export type DocType = 'passport' | 'flight' | 'hotel' | 'ferry' | 'activity' | 'insurance' | 'visa' | 'other'
 export type TravelerId = 'omer' | 'wife' | 'baby' | 'all'
 export type ExpenseSource = 'manual' | 'scan' | 'document' | 'voice'
@@ -69,25 +73,46 @@ export interface DocTypeMeta {
 }
 
 export const CATEGORY_META: Record<Category, CategoryMeta> = {
-  flight:   { label: 'טיסה',    icon: '✈️', color: '#378ADD' },
-  ferry:    { label: 'מעבורת',  icon: '⛴️', color: '#1D9E75' },
-  taxi:     { label: 'מונית',   icon: '🚕', color: '#EF9F27' },
-  hotel:    { label: 'לינה',    icon: '🏨', color: '#639922' },
-  activity: { label: 'פעילות',  icon: '🎯', color: '#7F77DD' },
-  food:     { label: 'אוכל',    icon: '🍜', color: '#D4537E' },
-  shopping: { label: 'קניות',   icon: '🛍️', color: '#D85A30' },
-  other:    { label: 'אחר',     icon: '📌', color: '#888780' },
+  // Transport
+  flight:       { label: 'טיסה',           icon: '✈️',  color: '#2563EB' },
+  train:        { label: 'רכבת',           icon: '🚂',  color: '#7C3AED' },
+  ferry:        { label: 'מעבורת',         icon: '⛴️',  color: '#0891B2' },
+  taxi:         { label: 'מונית / Uber',   icon: '🚕',  color: '#D97706' },
+  car_rental:   { label: 'השכרת רכב',      icon: '🚗',  color: '#EA580C' },
+  parking:      { label: 'חניה',           icon: '🅿️',  color: '#64748B' },
+  // Accommodation
+  hotel:        { label: 'לינה',           icon: '🏨',  color: '#059669' },
+  // Activities & Entertainment
+  activity:     { label: 'פעילות / סיור', icon: '🎯',  color: '#7F77DD' },
+  museum:       { label: 'מוזיאון / תרבות',icon: '🏛️', color: '#4F46E5' },
+  sport:        { label: 'ספורט',          icon: '🏄',  color: '#16A34A' },
+  nightlife:    { label: 'בילוי לילי',     icon: '🎭',  color: '#9333EA' },
+  spa:          { label: 'ספא / בריאות',  icon: '💆',  color: '#EC4899' },
+  // Food & Drink
+  food:         { label: 'אוכל ושתייה',   icon: '🍜',  color: '#D4537E' },
+  // Shopping & Essentials
+  shopping:     { label: 'קניות',          icon: '🛍️', color: '#D85A30' },
+  travel_gear:  { label: 'ציוד נסיעה',    icon: '🎒',  color: '#92400E' },
+  pharmacy:     { label: 'בית מרקחת',      icon: '💊',  color: '#DC2626' },
+  sim:          { label: 'כרטיס SIM',      icon: '📱',  color: '#0EA5E9' },
+  laundry:      { label: 'כביסה',          icon: '👕',  color: '#78716C' },
+  // Financial
+  insurance:    { label: 'ביטוח',          icon: '🛡️', color: '#1D9E75' },
+  visa:         { label: 'ויזה / אשרה',   icon: '📋',  color: '#6366F1' },
+  tips:         { label: 'טיפים',          icon: '💵',  color: '#B45309' },
+  // Other
+  other:        { label: 'אחר',            icon: '📌',  color: '#888780' },
 }
 
 export const DOC_TYPE_META: Record<DocType, DocTypeMeta> = {
-  passport:  { label: 'דרכון',       icon: '🛂' },
-  flight:    { label: 'כרטיס טיסה',  icon: '✈️' },
-  hotel:     { label: 'הזמנת מלון',  icon: '🏨' },
-  ferry:     { label: 'מעבורת',      icon: '⛴️' },
-  activity:  { label: 'פעילות',      icon: '🎯' },
-  insurance: { label: 'ביטוח',       icon: '🛡️' },
-  visa:      { label: 'ויזה',        icon: '📋' },
-  other:     { label: 'אחר',         icon: '📄' },
+  passport:  { label: 'דרכון',         icon: '🛂' },
+  flight:    { label: 'כרטיס טיסה',   icon: '✈️' },
+  hotel:     { label: 'הזמנת לינה',   icon: '🏨' },
+  ferry:     { label: 'מעבורת',        icon: '⛴️' },
+  activity:  { label: 'פעילות',        icon: '🎯' },
+  insurance: { label: 'ביטוח',         icon: '🛡️' },
+  visa:      { label: 'ויזה / אשרה',  icon: '📋' },
+  other:     { label: 'אחר',           icon: '📄' },
 }
 
 export const TRAVELER_META: Record<TravelerId, string> = {
@@ -134,7 +159,7 @@ export interface MemberBalance {
   member: TripMember
   totalPaid: number
   totalOwed: number
-  balance: number // positive = others owe them, negative = they owe others
+  balance: number
 }
 
 export interface DebtSummary {
@@ -144,18 +169,18 @@ export interface DebtSummary {
 }
 
 export const TRIP_TYPE_META: Record<TripType, { label: string; icon: string; color: string }> = {
-  personal:     { label: 'אישי',         icon: '🧳', color: '#185FA5' },
-  bachelor:     { label: 'מסיבת רווקים',  icon: '🎉', color: '#D85A30' },
-  bachelorette: { label: 'מסיבת רווקות', icon: '💃', color: '#D4537E' },
-  ski:          { label: 'טיול סקי',      icon: '⛷️', color: '#579BFC' },
-  family:       { label: 'טיול משפחות',   icon: '👨‍👩‍👧‍👦', color: '#639922' },
-  friends:      { label: 'טיול חברים',    icon: '🤝', color: '#EF9F27' },
-  couples:      { label: 'טיול זוגות',    icon: '💑', color: '#7F77DD' },
-  work:         { label: 'טיול עבודה',    icon: '💼', color: '#888780' },
-  other:        { label: 'אחר',          icon: '✨', color: '#1D9E75' },
+  personal:     { label: 'אישי',            icon: '🧳', color: '#185FA5' },
+  bachelor:     { label: 'מסיבת רווקים',   icon: '🎉', color: '#D85A30' },
+  bachelorette: { label: 'מסיבת רווקות',  icon: '💃', color: '#D4537E' },
+  ski:          { label: 'נסיעת סקי',      icon: '⛷️', color: '#579BFC' },
+  family:       { label: 'נסיעה משפחתית',  icon: '👨‍👩‍👧‍👦', color: '#639922' },
+  friends:      { label: 'נסיעה עם חברים', icon: '🤝', color: '#EF9F27' },
+  couples:      { label: 'נסיעה זוגית',    icon: '💑', color: '#7F77DD' },
+  work:         { label: 'נסיעת עסקים',    icon: '💼', color: '#888780' },
+  other:        { label: 'אחר',             icon: '✨', color: '#1D9E75' },
 }
 
-export const CURRENCIES: Currency[] = ['ILS', 'USD', 'THB', 'EUR', 'GBP']
+export const CURRENCIES: Currency[] = ['ILS', 'USD', 'THB', 'EUR', 'GBP', 'JPY', 'AED', 'SGD', 'TRY', 'CHF', 'AUD', 'CAD']
 
 export const CURRENCY_SYMBOL: Record<Currency, string> = {
   ILS: '₪',
@@ -163,4 +188,11 @@ export const CURRENCY_SYMBOL: Record<Currency, string> = {
   THB: '฿',
   EUR: '€',
   GBP: '£',
+  JPY: '¥',
+  AED: 'د.إ',
+  SGD: 'S$',
+  TRY: '₺',
+  CHF: 'Fr',
+  AUD: 'A$',
+  CAD: 'C$',
 }

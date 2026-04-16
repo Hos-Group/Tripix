@@ -11,12 +11,19 @@ import { format } from 'date-fns'
 import { convertToILS } from '@/lib/rates'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 
-const CATEGORIES: Category[] = ['food', 'taxi', 'activity', 'shopping', 'hotel', 'flight', 'ferry', 'other']
+const CATEGORIES: Category[] = [
+  'food', 'hotel', 'flight', 'taxi', 'activity', 'shopping',
+  'car_rental', 'train', 'ferry', 'museum', 'sport', 'nightlife',
+  'spa', 'pharmacy', 'sim', 'insurance', 'visa', 'tips',
+  'travel_gear', 'laundry', 'parking', 'other',
+]
 
 export default function ExpensesPage() {
   const { currentTrip } = useTrip()
   const { user } = useAuth()
+  const { t, dir } = useLanguage()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -54,11 +61,11 @@ export default function ExpensesPage() {
 
   const handleSubmit = async () => {
     if (!title.trim() || !amount || !expenseDate) {
-      toast.error('נא למלא שם, סכום ותאריך')
+      toast.error(t('exp_fill_required'))
       return
     }
     setSaving(true)
-    if (!currentTrip) { toast.error('בחר טיול קודם'); setSaving(false); return }
+    if (!currentTrip) { toast.error(t('exp_select_trip')); setSaving(false); return }
 
     const amountIls = await convertToILS(parseFloat(amount), currency, expenseDate)
     const { error } = await supabase.from('expenses').insert({
@@ -75,9 +82,9 @@ export default function ExpensesPage() {
     })
 
     if (error) {
-      toast.error('שגיאה בשמירה')
+      toast.error(t('exp_error_save'))
     } else {
-      toast.success('ההוצאה נשמרה!')
+      toast.success(t('exp_saved'))
       setTitle(''); setAmount(''); setNotes(''); setShowForm(false)
       fetchExpenses()
     }
@@ -85,11 +92,11 @@ export default function ExpensesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const confirmed = window.confirm('אתה בטוח שאתה רוצה למחוק?')
+    const confirmed = window.confirm(t('exp_confirm_delete'))
     if (!confirmed) return
     const { error } = await supabase.from('expenses').delete().eq('id', id)
-    if (error) { toast.error('שגיאה במחיקה') }
-    else { toast.success('נמחק'); setExpenses(prev => prev.filter(e => e.id !== id)) }
+    if (error) { toast.error(t('exp_error_delete')) }
+    else { toast.success(t('exp_deleted')); setExpenses(prev => prev.filter(e => e.id !== id)) }
   }
 
   const filtered = expenses.filter(e => {
@@ -119,7 +126,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="page-enter space-y-4">
+    <div className="page-enter space-y-4" dir={dir}>
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between pt-1">
@@ -166,7 +173,7 @@ export default function ExpensesPage() {
             <p className="text-sm font-bold text-gray-800 mb-1">הוצאה חדשה</p>
 
             {/* Title */}
-            <input type="text" placeholder="שם ההוצאה" value={title}
+            <input type="text" placeholder={t('exp_name')} value={title}
               onChange={e => setTitle(e.target.value)}
               className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all"
             />
@@ -197,7 +204,7 @@ export default function ExpensesPage() {
 
             {/* Amount + Currency */}
             <div className="flex gap-2">
-              <input type="number" placeholder="סכום" value={amount}
+              <input type="number" placeholder={t('exp_amount')} value={amount}
                 onChange={e => setAmount(e.target.value)}
                 className="flex-1 bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all"
               />
@@ -213,7 +220,7 @@ export default function ExpensesPage() {
             </div>
 
             {/* Notes */}
-            <input type="text" placeholder="הערות (אופציונלי)" value={notes}
+            <input type="text" placeholder={t('exp_notes')} value={notes}
               onChange={e => setNotes(e.target.value)}
               className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all"
             />
@@ -231,7 +238,7 @@ export default function ExpensesPage() {
       {/* ── Search ── */}
       <div className="relative">
         <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input type="text" placeholder="חיפוש הוצאות..." value={search}
+        <input type="text" placeholder={t('exp_search')} value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full bg-white rounded-2xl pr-10 pl-4 py-3 text-sm font-medium shadow-card outline-none focus:ring-2 ring-primary/20 transition-all"
         />

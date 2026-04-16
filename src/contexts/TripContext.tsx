@@ -24,38 +24,51 @@ const TripContext = createContext<TripContextType>({
 export function TripProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [trips, setTrips] = useState<Trip[]>([])
-  const [currentTripId, setCurrentTripId] = useState<string | null>(null)
+  const [currentTripId, setCurrentTripId] = useState<string | null>(() => {
+    // Init from localStorage once — avoids dependency loop
+    if (typeof window !== 'undefined') return localStorage.getItem('tripix_current_trip')
+    return null
+  })
   const [loading, setLoading] = useState(true)
 
+  // refreshTrips does NOT depend on currentTripId — avoids infinite loop
   const refreshTrips = useCallback(async () => {
     if (!user) {
       setTrips([])
-      setCurrentTripId(null)
       setLoading(false)
       return
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('trips')
       .select('*')
+      .eq('user_id', user.id)
       .order('start_date', { ascending: false })
+
+    if (error) {
+      console.error('[TripContext] fetch error:', error.message)
+      setLoading(false)
+      return
+    }
 
     const tripList = (data || []) as Trip[]
     setTrips(tripList)
 
-    // Auto-select first trip if none selected
-    if (!currentTripId && tripList.length > 0) {
-      const saved = localStorage.getItem('tripix_current_trip')
-      const validSaved = saved && tripList.find(t => t.id === saved)
-      setCurrentTripId(validSaved ? saved : tripList[0].id)
-    }
+    // Auto-select: prefer saved ID, else first trip — read localStorage here, not state
+    setCurrentTripId(prev => {
+      if (prev && tripList.find(t => t.id === prev)) return prev  // still valid
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('tripix_current_trip') : null
+      if (saved && tripList.find(t => t.id === saved)) return saved
+      return tripList[0]?.id ?? prev
+    })
 
     setLoading(false)
-  }, [currentTripId, user])
+  }, [user])   // ← only user, NOT currentTripId
 
-  // Re-fetch trips whenever user changes (login/logout)
+  // Re-fetch only when user changes (login/logout)
   useEffect(() => { refreshTrips() }, [user, refreshTrips])
 
+  // Persist selected trip to localStorage whenever it changes
   useEffect(() => {
     if (currentTripId) localStorage.setItem('tripix_current_trip', currentTripId)
   }, [currentTripId])

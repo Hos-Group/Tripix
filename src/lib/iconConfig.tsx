@@ -1,11 +1,16 @@
-import { Plane, Ship, Car, Building2, Zap, ShieldCheck, FileCheck, FileText, CreditCard, UtensilsCrossed, ShoppingBag, MoreHorizontal, Star, LogOut } from 'lucide-react'
+import {
+  Plane, Ship, Car, Building2, Zap, ShieldCheck, FileCheck, FileText,
+  CreditCard, UtensilsCrossed, ShoppingBag, MoreHorizontal, Star, LogOut,
+  Train, ParkingSquare, Ticket, Dumbbell, Music2, Sparkles, Pill,
+  Smartphone, Shirt, Wallet, Package, Coffee,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DocType, Category } from '@/types'
 
 interface IconConfig {
   Icon: LucideIcon
-  gradient: string  // CSS gradient string for background
-  textColor: string // color for the icon itself (always white)
+  gradient: string
+  textColor: string
 }
 
 export const DOC_TYPE_ICON: Record<DocType, IconConfig> = {
@@ -13,33 +18,56 @@ export const DOC_TYPE_ICON: Record<DocType, IconConfig> = {
   flight:    { Icon: Plane,       gradient: 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)', textColor: 'white' },
   hotel:     { Icon: Building2,   gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
   ferry:     { Icon: Ship,        gradient: 'linear-gradient(135deg, #0891B2 0%, #38BDF8 100%)', textColor: 'white' },
-  activity:  { Icon: Zap,         gradient: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)', textColor: 'white' },
+  activity:  { Icon: Ticket,      gradient: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)', textColor: 'white' },
   insurance: { Icon: ShieldCheck, gradient: 'linear-gradient(135deg, #16A34A 0%, #4ADE80 100%)', textColor: 'white' },
   visa:      { Icon: FileCheck,   gradient: 'linear-gradient(135deg, #4F46E5 0%, #818CF8 100%)', textColor: 'white' },
   other:     { Icon: FileText,    gradient: 'linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%)', textColor: 'white' },
 }
 
 export const CATEGORY_ICON: Record<Category, IconConfig> = {
-  flight:   { Icon: Plane,           gradient: 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)', textColor: 'white' },
-  ferry:    { Icon: Ship,            gradient: 'linear-gradient(135deg, #0891B2 0%, #38BDF8 100%)', textColor: 'white' },
-  taxi:     { Icon: Car,             gradient: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)', textColor: 'white' },
-  hotel:    { Icon: Building2,       gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
-  activity: { Icon: Zap,             gradient: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)', textColor: 'white' },
-  food:     { Icon: UtensilsCrossed, gradient: 'linear-gradient(135deg, #E11D48 0%, #FB7185 100%)', textColor: 'white' },
-  shopping: { Icon: ShoppingBag,     gradient: 'linear-gradient(135deg, #EA580C 0%, #FB923C 100%)', textColor: 'white' },
-  other:    { Icon: MoreHorizontal,  gradient: 'linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%)', textColor: 'white' },
+  // Transport
+  flight:       { Icon: Plane,           gradient: 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)', textColor: 'white' },
+  train:        { Icon: Train,           gradient: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)', textColor: 'white' },
+  ferry:        { Icon: Ship,            gradient: 'linear-gradient(135deg, #0891B2 0%, #38BDF8 100%)', textColor: 'white' },
+  taxi:         { Icon: Car,             gradient: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)', textColor: 'white' },
+  car_rental:   { Icon: Car,             gradient: 'linear-gradient(135deg, #EA580C 0%, #FB923C 100%)', textColor: 'white' },
+  parking:      { Icon: ParkingSquare,   gradient: 'linear-gradient(135deg, #475569 0%, #94A3B8 100%)', textColor: 'white' },
+  // Accommodation
+  hotel:        { Icon: Building2,       gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
+  // Activities & Entertainment
+  activity:     { Icon: Ticket,          gradient: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)', textColor: 'white' },
+  museum:       { Icon: Zap,             gradient: 'linear-gradient(135deg, #4F46E5 0%, #818CF8 100%)', textColor: 'white' },
+  sport:        { Icon: Dumbbell,        gradient: 'linear-gradient(135deg, #16A34A 0%, #4ADE80 100%)', textColor: 'white' },
+  nightlife:    { Icon: Music2,          gradient: 'linear-gradient(135deg, #9333EA 0%, #C084FC 100%)', textColor: 'white' },
+  spa:          { Icon: Sparkles,        gradient: 'linear-gradient(135deg, #DB2777 0%, #F472B6 100%)', textColor: 'white' },
+  // Food & Drink
+  food:         { Icon: UtensilsCrossed, gradient: 'linear-gradient(135deg, #E11D48 0%, #FB7185 100%)', textColor: 'white' },
+  // Shopping & Essentials
+  shopping:     { Icon: ShoppingBag,     gradient: 'linear-gradient(135deg, #EA580C 0%, #FB923C 100%)', textColor: 'white' },
+  travel_gear:  { Icon: Package,         gradient: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)', textColor: 'white' },
+  pharmacy:     { Icon: Pill,            gradient: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', textColor: 'white' },
+  sim:          { Icon: Smartphone,      gradient: 'linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%)', textColor: 'white' },
+  laundry:      { Icon: Shirt,           gradient: 'linear-gradient(135deg, #78716C 0%, #A8A29E 100%)', textColor: 'white' },
+  // Financial
+  insurance:    { Icon: ShieldCheck,     gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
+  visa:         { Icon: FileCheck,       gradient: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)', textColor: 'white' },
+  tips:         { Icon: Wallet,          gradient: 'linear-gradient(135deg, #B45309 0%, #F59E0B 100%)', textColor: 'white' },
+  // Other
+  other:        { Icon: MoreHorizontal,  gradient: 'linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%)', textColor: 'white' },
 }
 
 export const DOC_EVENT_ICON: Record<string, IconConfig> = {
-  flight:          { Icon: Plane,    gradient: 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)', textColor: 'white' },
-  car_pickup:      { Icon: Car,      gradient: 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', textColor: 'white' },
-  car_dropoff:     { Icon: Car,      gradient: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', textColor: 'white' },
-  hotel_checkin:   { Icon: Building2,gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
-  hotel_stay:      { Icon: Building2,gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
-  hotel_checkout:  { Icon: LogOut,   gradient: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', textColor: 'white' },
+  flight:          { Icon: Plane,     gradient: 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)', textColor: 'white' },
+  car_pickup:      { Icon: Car,       gradient: 'linear-gradient(135deg, #D97706 0%, #F59E0B 100%)', textColor: 'white' },
+  car_dropoff:     { Icon: Car,       gradient: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', textColor: 'white' },
+  hotel_checkin:   { Icon: Building2, gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
+  hotel_stay:      { Icon: Building2, gradient: 'linear-gradient(135deg, #059669 0%, #34D399 100%)', textColor: 'white' },
+  hotel_checkout:  { Icon: LogOut,    gradient: 'linear-gradient(135deg, #DC2626 0%, #F87171 100%)', textColor: 'white' },
+  train:           { Icon: Train,     gradient: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)', textColor: 'white' },
+  activity:        { Icon: Ticket,    gradient: 'linear-gradient(135deg, #D97706 0%, #FCD34D 100%)', textColor: 'white' },
 }
 
-/** Renders a styled icon badge for a DocType — use in document cards */
+/** Renders a styled icon badge for a DocType */
 export function DocTypeIconBadge({ type, size = 'md' }: { type: DocType; size?: 'sm' | 'md' | 'lg' }) {
   const config = DOC_TYPE_ICON[type] || DOC_TYPE_ICON.other
   const { Icon, gradient } = config
@@ -73,7 +101,6 @@ export function DocEventIconBadge({ type, size = 8 }: { type: string; size?: num
   const sizeClass = `w-${size} h-${size}`
   const iconSizeClass = `w-${Math.floor(size * 0.5)} h-${Math.floor(size * 0.5)}`
   if (!config) {
-    // Fallback: Star for service events
     return (
       <div className={`${sizeClass} rounded-xl flex items-center justify-center flex-shrink-0`}
         style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' }}>

@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const { trip_id, display_name, email, role } = body
     const { data, error } = await supabase.from('trip_members').insert({
       trip_id,
-      user_id: crypto.randomUUID(), // placeholder for non-registered users
+      user_id: null,   // null for non-registered / guest members
       display_name,
       email: email || null,
       role: role || 'member',

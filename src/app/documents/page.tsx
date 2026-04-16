@@ -12,6 +12,7 @@ import { DocTypeIconBadge } from '@/lib/iconConfig'
 import DocumentViewer from '@/components/DocumentViewer'
 import { loadTravelers, getTravelerName, type Traveler } from '@/lib/travelers'
 import { useTrip } from '@/contexts/TripContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 const DOC_TYPES: DocType[] = ['passport', 'flight', 'hotel', 'ferry', 'activity', 'insurance', 'visa', 'other']
 
@@ -136,6 +137,7 @@ function buildDisplayItems(docs: Document[]): DisplayItem[] {
 
 export default function DocumentsPage() {
   const { currentTrip } = useTrip()
+  const { t, dir } = useLanguage()
   const [travelers, setTravelers] = useState<Traveler[]>([])
 
   useEffect(() => {
@@ -174,7 +176,7 @@ export default function DocumentsPage() {
   }, [])
 
   // ── Gmail sync state ────────────────────────────────────────────────────
-  const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string }[] | null>(null)
+  const [gmailConnections, setGmailConnections] = useState<{ id: string; gmail_address: string; watch_active: boolean; watch_expiry: string | null }[] | null>(null)
   const [gmailScanning,    setGmailScanning]    = useState(false)
   const [gmailResult,      setGmailResult]      = useState<{
     scanned:            number
@@ -186,6 +188,7 @@ export default function DocumentsPage() {
     filteredDuplicate?: number
     failedDB?:          number
     lastDbError?:       string
+    connectionError?:   string
   } | null>(null)
   const [gmailError,  setGmailError]  = useState<string | null>(null)
   const [newDocIds,   setNewDocIds]   = useState<Set<string>>(new Set())
@@ -217,10 +220,15 @@ export default function DocumentsPage() {
       if (!user) { setGmailConnections([]); return }
       const { data } = await supabase
         .from('gmail_connections')
-        .select('id, gmail_address')
+        .select('id, gmail_address, watch_active, watch_expiry')
         .eq('user_id', user.id)
         .order('gmail_address')
-      setGmailConnections(data || [])
+      setGmailConnections((data || []).map(r => ({
+        id:           r.id,
+        gmail_address: r.gmail_address,
+        watch_active: r.watch_active ?? false,
+        watch_expiry: r.watch_expiry ?? null,
+      })))
     } catch {
       setGmailConnections([])
     }
@@ -501,16 +509,31 @@ export default function DocumentsPage() {
         <motion.div key="connected"
           initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-l from-emerald-50 to-blue-50 border border-emerald-100 rounded-2xl p-4 space-y-3">
+          {/* ── Header row ──────────────────────────────────────────── */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">
               <Mail className="w-5 h-5 text-emerald-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-800">Gmail מחובר ✅</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-gray-800">Gmail מחובר ✅</p>
+                {/* Auto-sync status badge */}
+                {gmailConnections.some(c => c.watch_active) ? (
+                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    סנכרון אוטומטי פעיל
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] font-medium px-2 py-0.5 rounded-full">
+                    ⏱ סריקה יומית
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-1 mt-0.5">
                 {gmailConnections.map(c => (
                   <span key={c.id} className="text-[10px] bg-white/80 text-gray-500 px-2 py-0.5 rounded-full border border-gray-100 truncate max-w-[180px]" dir="ltr">
                     {c.gmail_address}
+                    {c.watch_active && <span className="mr-1 text-emerald-400">●</span>}
                   </span>
                 ))}
               </div>
@@ -521,7 +544,22 @@ export default function DocumentsPage() {
           </div>
           {gmailResult && (
             <div className="bg-white/70 rounded-xl px-3 py-2.5 text-xs space-y-2">
-              {gmailResult.created > 0 ? (
+              {/* ── Connection error — token expired / revoked ── */}
+              {gmailResult.connectionError ? (
+                <div className="space-y-2">
+                  <p className="text-red-600 font-semibold">
+                    🔌 {gmailResult.connectionError}
+                  </p>
+                  <Link
+                    href="/settings"
+                    className="flex items-center justify-center gap-1.5 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg active:scale-95 transition-transform"
+                    style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
+                  >
+                    <Mail className="w-3 h-3" />
+                    חבר מחדש Gmail
+                  </Link>
+                </div>
+              ) : gmailResult.created > 0 ? (
                 <>
                   <p className="text-emerald-700 font-semibold">
                     ✅ נוצרו {gmailResult.created} מסמכים מתוך {gmailResult.scanned} מיילים
@@ -540,12 +578,20 @@ export default function DocumentsPage() {
                   )}
                 </>
               ) : gmailResult.scanned === 0 ? (
-                <p className="text-amber-600 font-medium">
-                  ⚠️ לא נמצאו מיילים תואמים — נסה שוב מאוחר יותר
-                </p>
+                <div className="space-y-1">
+                  <p className="text-amber-600 font-medium">
+                    ⚠️ לא נמצאו מיילים תואמים לנסיעה זו
+                  </p>
+                  <p className="text-gray-400">
+                    אפשרות 1: עדיין לא קיבלת אישורי הזמנה
+                  </p>
+                  <p className="text-gray-400">
+                    אפשרות 2: האישורים נמצאים בתיבת דואר נוספת — חבר חשבון Gmail נוסף בהגדרות
+                  </p>
+                </div>
               ) : (
                 <p className="text-gray-600 font-medium">
-                  סרקנו {gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים לטיול זה
+                  סרקנו {gmailResult.scanned} מיילים — לא נמצאו מסמכים חדשים לנסיעה זו
                 </p>
               )}
               {gmailResult.scanned > 0 && (
@@ -557,7 +603,7 @@ export default function DocumentsPage() {
                     <p className="text-gray-400">🗺️ {gmailResult.filteredWrongDest} הזמנות ליעד אחר</p>
                   )}
                   {(gmailResult.filteredWrongDate ?? 0) > 0 && (
-                    <p className="text-gray-400">📅 {gmailResult.filteredWrongDate} הזמנות מחוץ לתאריכי הטיול</p>
+                    <p className="text-gray-400">📅 {gmailResult.filteredWrongDate} הזמנות מחוץ לתאריכי הנסיעה</p>
                   )}
                   {(gmailResult.filteredDuplicate ?? 0) > 0 && (
                     <p className="text-gray-400">🔄 {gmailResult.filteredDuplicate} כבר קיימים במערכת</p>
@@ -581,7 +627,7 @@ export default function DocumentsPage() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
               <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
                 <span>📬</span>
-                מיילים שאולי קשורים לטיול — מה לעשות עם הם?
+                מיילים שאולי קשורים לנסיעה — מה לעשות עם הם?
               </p>
               <div className="space-y-2">
                 {pendingReview.map(item => (
@@ -624,7 +670,7 @@ export default function DocumentsPage() {
             className="w-full flex items-center justify-center gap-2 bg-primary text-white rounded-xl py-2.5 text-sm font-semibold active:scale-95 transition-all disabled:opacity-50">
             {gmailScanning
               ? <><span className="animate-spin">⏳</span> סורק מיילים...</>
-              : <><Mail className="w-4 h-4" /> משוך מסמכים מ-Gmail לטיול זה</>}
+              : <><Mail className="w-4 h-4" /> משוך מסמכים מ-Gmail לנסיעה זו</>}
           </button>
           {!gmailScanning && (
             <p className="text-[10px] text-gray-400 text-center">
@@ -638,9 +684,9 @@ export default function DocumentsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4" dir={dir}>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">כספת מסמכים</h1>
+          <h1 className="text-xl font-bold">{t('doc_title')}</h1>
           <Link href="/scan"
             className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1">
             <Plus className="w-4 h-4" /> העלאה
@@ -1092,11 +1138,11 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-4 pb-32" onClick={() => pendingDeleteId && setPendingDeleteId(null)}>
+    <div className="space-y-4 pb-32" dir={dir} onClick={() => pendingDeleteId && setPendingDeleteId(null)}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black gradient-text">כספת מסמכים</h1>
+          <h1 className="text-xl font-black gradient-text">{t('doc_title')}</h1>
           <p className="text-xs text-gray-400 mt-0.5">{documents.length} מסמכים שמורים</p>
         </div>
         <div className="flex items-center gap-2">
@@ -1191,7 +1237,7 @@ export default function DocumentsPage() {
             style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
             <FolderOpen className="w-8 h-8 text-white" />
           </div>
-          <p className="font-bold text-gray-800 mb-1">הכספת ריקה</p>
+          <p className="font-bold text-gray-800 mb-1">{t('doc_no_docs')}</p>
           <p className="text-sm text-gray-400 mb-4">הוסף מסמכי הזמנה, דרכונים וכרטיסי טיסה</p>
           <Link href="/scan" className="inline-flex items-center gap-2 btn-cta px-6 py-3 text-sm">
             <Plus className="w-4 h-4" /> הוסף מסמך ראשון

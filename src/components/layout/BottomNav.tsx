@@ -5,20 +5,22 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, Receipt, ScanLine, FolderOpen, CalendarDays } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTrip } from '@/contexts/TripContext'
-
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'ראשי',    icon: LayoutDashboard },
-  { href: '/expenses',  label: 'הוצאות',  icon: Receipt,       tour: 'expenses-nav' },
-  { href: '/scan',      label: 'סרוק',    icon: ScanLine,      isFab: true, tour: 'scan-btn' },
-  { href: '/documents', label: 'מסמכים',  icon: FolderOpen,    tour: 'docs-nav' },
-  { href: '/timeline',  label: 'ציר זמן', icon: CalendarDays,  tour: 'timeline-nav' },
-]
+import { useLanguage } from '@/contexts/LanguageContext'
 
 const HIDDEN_PATHS = ['/onboarding', '/auth/login', '/auth/signup']
 
 export default function BottomNav() {
   const pathname = usePathname()
   const { trips, loading } = useTrip()
+  const { t, dir } = useLanguage()
+
+  const NAV_ITEMS = [
+    { href: '/dashboard', labelKey: 'nav_home' as const,      icon: LayoutDashboard },
+    { href: '/expenses',  labelKey: 'nav_expenses' as const,  icon: Receipt,       tour: 'expenses-nav' },
+    { href: '/scan',      labelKey: 'nav_scan' as const,      icon: ScanLine,      isFab: true, tour: 'scan-btn' },
+    { href: '/documents', labelKey: 'nav_documents' as const, icon: FolderOpen,    tour: 'docs-nav' },
+    { href: '/timeline',  labelKey: 'nav_timeline' as const,  icon: CalendarDays,  tour: 'timeline-nav' },
+  ]
 
   if (HIDDEN_PATHS.includes(pathname)) return null
   if (loading || trips.length === 0) return null
@@ -39,8 +41,8 @@ export default function BottomNav() {
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
+          const label = t(item.labelKey)
 
-          /* ── Scan FAB ── */
           if (item.isFab) {
             return (
               <Link key={item.href} href={item.href} data-tour={item.tour}
@@ -63,13 +65,12 @@ export default function BottomNav() {
                   'text-[10px] mt-1 font-semibold tracking-tight transition-colors duration-200',
                   isActive ? 'text-primary' : 'text-gray-400',
                 )}>
-                  {item.label}
+                  {label}
                 </span>
               </Link>
             )
           }
 
-          /* ── Regular nav item ── */
           return (
             <Link
               key={item.href}
@@ -77,15 +78,12 @@ export default function BottomNav() {
               data-tour={item.tour}
               className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-2xl active:scale-90 transition-all duration-150 relative"
             >
-              {/* Active dot */}
               {isActive && (
                 <span
                   className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
                   style={{ background: 'linear-gradient(90deg, #6C47FF, #9B7BFF)' }}
                 />
               )}
-
-              {/* Icon wrapper with pill highlight */}
               <div className={cn(
                 'w-9 h-7 rounded-xl flex items-center justify-center transition-all duration-200',
                 isActive ? 'bg-primary/10' : 'bg-transparent',
@@ -95,12 +93,11 @@ export default function BottomNav() {
                   isActive ? 'text-primary' : 'text-gray-400',
                 )} />
               </div>
-
               <span className={cn(
                 'text-[10px] font-semibold tracking-tight transition-colors duration-200',
                 isActive ? 'text-primary' : 'text-gray-400',
               )}>
-                {item.label}
+                {label}
               </span>
             </Link>
           )

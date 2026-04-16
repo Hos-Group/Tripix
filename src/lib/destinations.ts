@@ -160,6 +160,97 @@ export const DESTINATIONS: Record<string, DestinationConfig> = {
   Tonga: { country: 'Tonga', countryHe: 'טונגה', currency: 'TOP', currencySymbol: 'T$', timezone: 'Pacific/Tongatapu', emergencyPolice: '922', emergencyAmbulance: '933', emergencyFire: '999', languages: ['Tongan','English'], plugType: 'I', drivingSide: 'left', tipCustom: 'לא מקובל' },
   Vanuatu: { country: 'Vanuatu', countryHe: 'ונואטו', currency: 'VUV', currencySymbol: 'VT', timezone: 'Pacific/Efate', emergencyPolice: '112', emergencyAmbulance: '112', emergencyFire: '112', languages: ['Bislama','English','French'], plugType: 'I', drivingSide: 'right', tipCustom: 'לא מקובל' },
   PapuaNewGuinea: { country: 'Papua New Guinea', countryHe: 'פפואה גינאה החדשה', currency: 'PGK', currencySymbol: 'K', timezone: 'Pacific/Port_Moresby', emergencyPolice: '112', emergencyAmbulance: '112', emergencyFire: '112', languages: ['English','Tok Pisin'], plugType: 'I', drivingSide: 'left', tipCustom: 'לא מקובל' },
+  SolomonIslands: { country: 'Solomon Islands', countryHe: 'איי שלמה', currency: 'SBD', currencySymbol: 'SI$', timezone: 'Pacific/Guadalcanal', emergencyPolice: '999', emergencyAmbulance: '999', emergencyFire: '999', languages: ['English'], plugType: 'I', drivingSide: 'left', tipCustom: 'לא מקובל' },
+  Kiribati: { country: 'Kiribati', countryHe: 'קיריבאטי', currency: 'AUD', currencySymbol: 'A$', timezone: 'Pacific/Tarawa', emergencyPolice: '999', emergencyAmbulance: '994', emergencyFire: '994', languages: ['English','Gilbertese'], plugType: 'I', drivingSide: 'left', tipCustom: 'לא מקובל' },
+  Palau: { country: 'Palau', countryHe: 'פלאו', currency: 'USD', currencySymbol: '$', timezone: 'Pacific/Palau', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English','Palauan'], plugType: 'A/B', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  Micronesia: { country: 'Micronesia', countryHe: 'מיקרונזיה', currency: 'USD', currencySymbol: '$', timezone: 'Pacific/Pohnpei', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English'], plugType: 'A/B', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  MarshallIslands: { country: 'Marshall Islands', countryHe: 'איי מרשל', currency: 'USD', currencySymbol: '$', timezone: 'Pacific/Majuro', emergencyPolice: '625', emergencyAmbulance: '625', emergencyFire: '625', languages: ['English','Marshallese'], plugType: 'A/B', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  Nauru: { country: 'Nauru', countryHe: 'נאורו', currency: 'AUD', currencySymbol: 'A$', timezone: 'Pacific/Nauru', emergencyPolice: '110', emergencyAmbulance: '111', emergencyFire: '112', languages: ['Nauruan','English'], plugType: 'I', drivingSide: 'left', tipCustom: 'לא מקובל' },
+  Tuvalu: { country: 'Tuvalu', countryHe: 'טובלו', currency: 'AUD', currencySymbol: 'A$', timezone: 'Pacific/Funafuti', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['Tuvaluan','English'], plugType: 'I', drivingSide: 'left', tipCustom: 'לא מקובל' },
+
+  // More Middle East & Asia
+  Iraq: { country: 'Iraq', countryHe: 'עיראק', currency: 'IQD', currencySymbol: 'ع.د', timezone: 'Asia/Baghdad', emergencyPolice: '104', emergencyAmbulance: '122', emergencyFire: '115', languages: ['Arabic','Kurdish'], plugType: 'C/D/G', drivingSide: 'right', tipCustom: '10%' },
+  Iran: { country: 'Iran', countryHe: 'איראן', currency: 'IRR', currencySymbol: '﷼', timezone: 'Asia/Tehran', emergencyPolice: '110', emergencyAmbulance: '115', emergencyFire: '125', languages: ['Persian'], plugType: 'C/F', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  Lebanon: { country: 'Lebanon', countryHe: 'לבנון', currency: 'LBP', currencySymbol: 'ل.ل', timezone: 'Asia/Beirut', emergencyPolice: '112', emergencyAmbulance: '140', emergencyFire: '175', languages: ['Arabic','French','English'], plugType: 'A/B/C/D', drivingSide: 'right', tipCustom: '10-15%' },
+  Syria: { country: 'Syria', countryHe: 'סוריה', currency: 'SYP', currencySymbol: '£S', timezone: 'Asia/Damascus', emergencyPolice: '112', emergencyAmbulance: '110', emergencyFire: '113', languages: ['Arabic'], plugType: 'C/E/L', drivingSide: 'right', tipCustom: '10%' },
+  Yemen: { country: 'Yemen', countryHe: 'תימן', currency: 'YER', currencySymbol: '﷼', timezone: 'Asia/Aden', emergencyPolice: '194', emergencyAmbulance: '191', emergencyFire: '191', languages: ['Arabic'], plugType: 'A/D/G', drivingSide: 'right', tipCustom: '10%' },
+  Afghanistan: { country: 'Afghanistan', countryHe: 'אפגניסטן', currency: 'AFN', currencySymbol: '؋', timezone: 'Asia/Kabul', emergencyPolice: '119', emergencyAmbulance: '112', emergencyFire: '112', languages: ['Pashto','Dari'], plugType: 'C/F', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  Kyrgyzstan: { country: 'Kyrgyzstan', countryHe: 'קירגיזסטן', currency: 'KGS', currencySymbol: 'сом', timezone: 'Asia/Bishkek', emergencyPolice: '102', emergencyAmbulance: '103', emergencyFire: '101', languages: ['Kyrgyz','Russian'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+  Tajikistan: { country: 'Tajikistan', countryHe: 'טג\'יקיסטן', currency: 'TJS', currencySymbol: 'SM', timezone: 'Asia/Dushanbe', emergencyPolice: '02', emergencyAmbulance: '03', emergencyFire: '01', languages: ['Tajik','Russian'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+  Turkmenistan: { country: 'Turkmenistan', countryHe: 'טורקמניסטן', currency: 'TMT', currencySymbol: 'T', timezone: 'Asia/Ashgabat', emergencyPolice: '02', emergencyAmbulance: '03', emergencyFire: '01', languages: ['Turkmen','Russian'], plugType: 'C/F', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  Brunei: { country: 'Brunei', countryHe: 'ברוניי', currency: 'BND', currencySymbol: 'B$', timezone: 'Asia/Brunei', emergencyPolice: '993', emergencyAmbulance: '991', emergencyFire: '995', languages: ['Malay','English'], plugType: 'G', drivingSide: 'left', tipCustom: 'לא מקובל' },
+  EastTimor: { country: 'East Timor', countryHe: 'טימור-לסטה', currency: 'USD', currencySymbol: '$', timezone: 'Asia/Dili', emergencyPolice: '112', emergencyAmbulance: '112', emergencyFire: '112', languages: ['Portuguese','Tetum'], plugType: 'C/E/F/I', drivingSide: 'left', tipCustom: '10%' },
+  Bhutan: { country: 'Bhutan', countryHe: 'בהוטן', currency: 'BTN', currencySymbol: 'Nu', timezone: 'Asia/Thimphu', emergencyPolice: '113', emergencyAmbulance: '112', emergencyFire: '110', languages: ['Dzongkha'], plugType: 'D/F/G', drivingSide: 'left', tipCustom: '10%' },
+
+  // More Europe
+  Russia: { country: 'Russia', countryHe: 'רוסיה', currency: 'RUB', currencySymbol: '₽', timezone: 'Europe/Moscow', emergencyPolice: '102', emergencyAmbulance: '103', emergencyFire: '101', languages: ['Russian'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10-15%' },
+  Belarus: { country: 'Belarus', countryHe: 'בלארוס', currency: 'BYN', currencySymbol: 'Br', timezone: 'Europe/Minsk', emergencyPolice: '102', emergencyAmbulance: '103', emergencyFire: '101', languages: ['Belarusian','Russian'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+  Kosovo: { country: 'Kosovo', countryHe: 'קוסובו', currency: 'EUR', currencySymbol: '€', timezone: 'Europe/Belgrade', emergencyPolice: '192', emergencyAmbulance: '194', emergencyFire: '193', languages: ['Albanian','Serbian'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+  Andorra: { country: 'Andorra', countryHe: 'אנדורה', currency: 'EUR', currencySymbol: '€', timezone: 'Europe/Andorra', emergencyPolice: '110', emergencyAmbulance: '116', emergencyFire: '118', languages: ['Catalan'], plugType: 'C/F', drivingSide: 'right', tipCustom: '5-10%' },
+  Liechtenstein: { country: 'Liechtenstein', countryHe: 'ליכטנשטיין', currency: 'CHF', currencySymbol: 'CHF', timezone: 'Europe/Vaduz', emergencyPolice: '117', emergencyAmbulance: '144', emergencyFire: '118', languages: ['German'], plugType: 'C/J', drivingSide: 'right', tipCustom: 'כלול בחשבון' },
+  SanMarino: { country: 'San Marino', countryHe: 'סן מרינו', currency: 'EUR', currencySymbol: '€', timezone: 'Europe/San_Marino', emergencyPolice: '112', emergencyAmbulance: '118', emergencyFire: '115', languages: ['Italian'], plugType: 'C/F/L', drivingSide: 'right', tipCustom: '10%' },
+  Vatican: { country: 'Vatican', countryHe: 'הוותיקן', currency: 'EUR', currencySymbol: '€', timezone: 'Europe/Vatican', emergencyPolice: '112', emergencyAmbulance: '118', emergencyFire: '115', languages: ['Italian','Latin'], plugType: 'C/F/L', drivingSide: 'right', tipCustom: '10%' },
+
+  // More Americas
+  Venezuela: { country: 'Venezuela', countryHe: 'ונצואלה', currency: 'VES', currencySymbol: 'Bs.S', timezone: 'America/Caracas', emergencyPolice: '171', emergencyAmbulance: '171', emergencyFire: '171', languages: ['Spanish'], plugType: 'A/B', drivingSide: 'right', tipCustom: '10%' },
+  Belize: { country: 'Belize', countryHe: 'בליז', currency: 'BZD', currencySymbol: 'BZ$', timezone: 'America/Belize', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English','Spanish'], plugType: 'A/B', drivingSide: 'right', tipCustom: '10%' },
+  ElSalvador: { country: 'El Salvador', countryHe: 'אל סלבדור', currency: 'USD', currencySymbol: '$', timezone: 'America/El_Salvador', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '913', languages: ['Spanish'], plugType: 'A/B', drivingSide: 'right', tipCustom: '10%' },
+  Haiti: { country: 'Haiti', countryHe: 'האיטי', currency: 'HTG', currencySymbol: 'G', timezone: 'America/Port-au-Prince', emergencyPolice: '114', emergencyAmbulance: '116', emergencyFire: '118', languages: ['Haitian Creole','French'], plugType: 'A/B', drivingSide: 'right', tipCustom: '10%' },
+  Barbados: { country: 'Barbados', countryHe: 'ברבדוס', currency: 'BBD', currencySymbol: 'Bds$', timezone: 'America/Barbados', emergencyPolice: '211', emergencyAmbulance: '511', emergencyFire: '311', languages: ['English'], plugType: 'A/B', drivingSide: 'left', tipCustom: '10-15%' },
+  Grenada: { country: 'Grenada', countryHe: 'גרנדה', currency: 'XCD', currencySymbol: 'EC$', timezone: 'America/Grenada', emergencyPolice: '911', emergencyAmbulance: '434', emergencyFire: '911', languages: ['English'], plugType: 'G', drivingSide: 'left', tipCustom: '10%' },
+  SaintLucia: { country: 'Saint Lucia', countryHe: 'סנט לוסיה', currency: 'XCD', currencySymbol: 'EC$', timezone: 'America/St_Lucia', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English'], plugType: 'G', drivingSide: 'left', tipCustom: '10%' },
+  Guyana: { country: 'Guyana', countryHe: 'גיאנה', currency: 'GYD', currencySymbol: 'G$', timezone: 'America/Guyana', emergencyPolice: '911', emergencyAmbulance: '913', emergencyFire: '912', languages: ['English'], plugType: 'A/B/D', drivingSide: 'left', tipCustom: '10%' },
+  Suriname: { country: 'Suriname', countryHe: 'סורינם', currency: 'SRD', currencySymbol: 'Sr$', timezone: 'America/Paramaribo', emergencyPolice: '115', emergencyAmbulance: '113', emergencyFire: '110', languages: ['Dutch'], plugType: 'A/B/C/F', drivingSide: 'right', tipCustom: '10%' },
+  SaintVincent: { country: 'Saint Vincent & the Grenadines', countryHe: 'סנט וינסנט', currency: 'XCD', currencySymbol: 'EC$', timezone: 'America/St_Vincent', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English'], plugType: 'A/B/G', drivingSide: 'left', tipCustom: '10%' },
+  Antigua: { country: 'Antigua & Barbuda', countryHe: 'אנטיגואה', currency: 'XCD', currencySymbol: 'EC$', timezone: 'America/Antigua', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English'], plugType: 'A/B', drivingSide: 'left', tipCustom: '10%' },
+  SaintKitts: { country: 'Saint Kitts & Nevis', countryHe: 'סנט קיטס', currency: 'XCD', currencySymbol: 'EC$', timezone: 'America/St_Kitts', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English'], plugType: 'A/B', drivingSide: 'left', tipCustom: '10%' },
+
+  // More Africa
+  Algeria: { country: 'Algeria', countryHe: 'אלג\'יריה', currency: 'DZD', currencySymbol: 'دج', timezone: 'Africa/Algiers', emergencyPolice: '17', emergencyAmbulance: '14', emergencyFire: '14', languages: ['Arabic','French'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+  Libya: { country: 'Libya', countryHe: 'לוב', currency: 'LYD', currencySymbol: 'LD', timezone: 'Africa/Tripoli', emergencyPolice: '193', emergencyAmbulance: '193', emergencyFire: '193', languages: ['Arabic'], plugType: 'C/L', drivingSide: 'right', tipCustom: 'לא מקובל' },
+  Sudan: { country: 'Sudan', countryHe: 'סודן', currency: 'SDG', currencySymbol: 'ج.س', timezone: 'Africa/Khartoum', emergencyPolice: '999', emergencyAmbulance: '999', emergencyFire: '999', languages: ['Arabic','English'], plugType: 'C/D', drivingSide: 'right', tipCustom: '10%' },
+  SouthSudan: { country: 'South Sudan', countryHe: 'דרום סודן', currency: 'SSP', currencySymbol: '£', timezone: 'Africa/Juba', emergencyPolice: '999', emergencyAmbulance: '999', emergencyFire: '999', languages: ['English'], plugType: 'C/D', drivingSide: 'right', tipCustom: '10%' },
+  Somalia: { country: 'Somalia', countryHe: 'סומליה', currency: 'SOS', currencySymbol: 'Sh', timezone: 'Africa/Mogadishu', emergencyPolice: '888', emergencyAmbulance: '888', emergencyFire: '888', languages: ['Somali','Arabic'], plugType: 'A/D', drivingSide: 'right', tipCustom: '10%' },
+  Eritrea: { country: 'Eritrea', countryHe: 'אריתריאה', currency: 'ERN', currencySymbol: 'Nkf', timezone: 'Africa/Asmara', emergencyPolice: '113', emergencyAmbulance: '114', emergencyFire: '115', languages: ['Tigrinya','Arabic','English'], plugType: 'C/L', drivingSide: 'right', tipCustom: '10%' },
+  Djibouti: { country: 'Djibouti', countryHe: 'ג\'יבוטי', currency: 'DJF', currencySymbol: 'Fdj', timezone: 'Africa/Djibouti', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '18', languages: ['French','Arabic'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Cameroon: { country: 'Cameroon', countryHe: 'קמרון', currency: 'XAF', currencySymbol: 'Fr', timezone: 'Africa/Douala', emergencyPolice: '117', emergencyAmbulance: '119', emergencyFire: '118', languages: ['French','English'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  DRC: { country: 'DR Congo', countryHe: 'קונגו (DRC)', currency: 'CDF', currencySymbol: 'FC', timezone: 'Africa/Kinshasa', emergencyPolice: '112', emergencyAmbulance: '912', emergencyFire: '118', languages: ['French','Lingala','Swahili'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Congo: { country: 'Republic of Congo', countryHe: 'קונגו-ברזאויל', currency: 'XAF', currencySymbol: 'Fr', timezone: 'Africa/Brazzaville', emergencyPolice: '117', emergencyAmbulance: '118', emergencyFire: '118', languages: ['French'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  CentralAfricanRepublic: { country: 'Central African Republic', countryHe: 'הרפובליקה המרכז-אפריקאית', currency: 'XAF', currencySymbol: 'Fr', timezone: 'Africa/Bangui', emergencyPolice: '117', emergencyAmbulance: '1220', emergencyFire: '118', languages: ['French','Sango'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Chad: { country: 'Chad', countryHe: 'צ\'אד', currency: 'XAF', currencySymbol: 'Fr', timezone: 'Africa/Ndjamena', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '18', languages: ['French','Arabic'], plugType: 'C/D/E/F', drivingSide: 'right', tipCustom: '10%' },
+  Niger: { country: 'Niger', countryHe: 'ניז\'ר', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Niamey', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '18', languages: ['French'], plugType: 'A/B/C/D/E/F', drivingSide: 'right', tipCustom: '10%' },
+  Mali: { country: 'Mali', countryHe: 'מאלי', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Bamako', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '18', languages: ['French'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  BurkinaFaso: { country: 'Burkina Faso', countryHe: 'בורקינה פאסו', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Ouagadougou', emergencyPolice: '17', emergencyAmbulance: '112', emergencyFire: '18', languages: ['French'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Senegal: { country: 'Senegal', countryHe: 'סנגל', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Dakar', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '18', languages: ['French'], plugType: 'C/D/E/K', drivingSide: 'right', tipCustom: '10%' },
+  Gambia: { country: 'Gambia', countryHe: 'גמביה', currency: 'GMD', currencySymbol: 'D', timezone: 'Africa/Banjul', emergencyPolice: '117', emergencyAmbulance: '116', emergencyFire: '118', languages: ['English'], plugType: 'G', drivingSide: 'right', tipCustom: '10%' },
+  Guinea: { country: 'Guinea', countryHe: 'גינאה', currency: 'GNF', currencySymbol: 'Fr', timezone: 'Africa/Conakry', emergencyPolice: '117', emergencyAmbulance: '118', emergencyFire: '118', languages: ['French'], plugType: 'C/F/K', drivingSide: 'right', tipCustom: '10%' },
+  GuineaBissau: { country: 'Guinea-Bissau', countryHe: 'גינאה-ביסאו', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Bissau', emergencyPolice: '117', emergencyAmbulance: '118', emergencyFire: '118', languages: ['Portuguese'], plugType: 'C', drivingSide: 'right', tipCustom: '10%' },
+  SierraLeone: { country: 'Sierra Leone', countryHe: 'סיירה לאונה', currency: 'SLL', currencySymbol: 'Le', timezone: 'Africa/Freetown', emergencyPolice: '999', emergencyAmbulance: '999', emergencyFire: '019', languages: ['English'], plugType: 'D/G', drivingSide: 'right', tipCustom: '10%' },
+  Liberia: { country: 'Liberia', countryHe: 'ליבריה', currency: 'LRD', currencySymbol: 'L$', timezone: 'Africa/Monrovia', emergencyPolice: '911', emergencyAmbulance: '911', emergencyFire: '911', languages: ['English'], plugType: 'A/B', drivingSide: 'right', tipCustom: '10%' },
+  IvoryCoast: { country: "Côte d'Ivoire", countryHe: "חוף השנהב", currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Abidjan', emergencyPolice: '111', emergencyAmbulance: '185', emergencyFire: '180', languages: ['French'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Togo: { country: 'Togo', countryHe: 'טוגו', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Lome', emergencyPolice: '117', emergencyAmbulance: '118', emergencyFire: '118', languages: ['French'], plugType: 'C', drivingSide: 'right', tipCustom: '10%' },
+  Benin: { country: 'Benin', countryHe: 'בנין', currency: 'XOF', currencySymbol: 'Fr', timezone: 'Africa/Porto-Novo', emergencyPolice: '117', emergencyAmbulance: '112', emergencyFire: '118', languages: ['French'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  EquatorialGuinea: { country: 'Equatorial Guinea', countryHe: 'גינאה המשוונית', currency: 'XAF', currencySymbol: 'Fr', timezone: 'Africa/Malabo', emergencyPolice: '112', emergencyAmbulance: '112', emergencyFire: '112', languages: ['Spanish','French','Portuguese'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Gabon: { country: 'Gabon', countryHe: 'גאבון', currency: 'XAF', currencySymbol: 'Fr', timezone: 'Africa/Libreville', emergencyPolice: '1730', emergencyAmbulance: '1300', emergencyFire: '18', languages: ['French'], plugType: 'C', drivingSide: 'right', tipCustom: '10%' },
+  Angola: { country: 'Angola', countryHe: 'אנגולה', currency: 'AOA', currencySymbol: 'Kz', timezone: 'Africa/Luanda', emergencyPolice: '113', emergencyAmbulance: '112', emergencyFire: '115', languages: ['Portuguese'], plugType: 'C', drivingSide: 'right', tipCustom: '10%' },
+  Zambia: { country: 'Zambia', countryHe: 'זמביה', currency: 'ZMW', currencySymbol: 'ZK', timezone: 'Africa/Lusaka', emergencyPolice: '991', emergencyAmbulance: '992', emergencyFire: '993', languages: ['English'], plugType: 'C/D/G', drivingSide: 'left', tipCustom: '10%' },
+  Zimbabwe: { country: 'Zimbabwe', countryHe: 'זימבבווה', currency: 'USD', currencySymbol: '$', timezone: 'Africa/Harare', emergencyPolice: '995', emergencyAmbulance: '994', emergencyFire: '993', languages: ['English','Shona','Ndebele'], plugType: 'D/G', drivingSide: 'left', tipCustom: '10%' },
+  Malawi: { country: 'Malawi', countryHe: 'מלאווי', currency: 'MWK', currencySymbol: 'MK', timezone: 'Africa/Blantyre', emergencyPolice: '999', emergencyAmbulance: '998', emergencyFire: '999', languages: ['English','Chichewa'], plugType: 'G', drivingSide: 'left', tipCustom: '10%' },
+  Lesotho: { country: 'Lesotho', countryHe: 'לסוטו', currency: 'LSL', currencySymbol: 'L', timezone: 'Africa/Maseru', emergencyPolice: '123', emergencyAmbulance: '121', emergencyFire: '122', languages: ['Sesotho','English'], plugType: 'M', drivingSide: 'left', tipCustom: '10%' },
+  Eswatini: { country: 'Eswatini', countryHe: 'אסוואטיני', currency: 'SZL', currencySymbol: 'L', timezone: 'Africa/Mbabane', emergencyPolice: '999', emergencyAmbulance: '977', emergencyFire: '933', languages: ['Swati','English'], plugType: 'M', drivingSide: 'left', tipCustom: '10%' },
+  CapeVerde: { country: 'Cape Verde', countryHe: 'כף ורדה', currency: 'CVE', currencySymbol: '$', timezone: 'Atlantic/Cape_Verde', emergencyPolice: '132', emergencyAmbulance: '130', emergencyFire: '131', languages: ['Portuguese'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+  Comoros: { country: 'Comoros', countryHe: 'קומורו', currency: 'KMF', currencySymbol: 'Fr', timezone: 'Indian/Comoro', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '18', languages: ['Comorian','Arabic','French'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  SaoTome: { country: 'São Tomé & Príncipe', countryHe: 'סאו טומה ופרינסיפה', currency: 'STN', currencySymbol: 'Db', timezone: 'Africa/Sao_Tome', emergencyPolice: '113', emergencyAmbulance: '112', emergencyFire: '112', languages: ['Portuguese'], plugType: 'C/F', drivingSide: 'right', tipCustom: '10%' },
+
+  // Missing Africa
+  Burundi: { country: 'Burundi', countryHe: 'בורונדי', currency: 'BIF', currencySymbol: 'Fr', timezone: 'Africa/Bujumbura', emergencyPolice: '117', emergencyAmbulance: '117', emergencyFire: '118', languages: ['Kirundi','French','English'], plugType: 'C/E', drivingSide: 'right', tipCustom: '10%' },
+  Mauritania: { country: 'Mauritania', countryHe: 'מאוריטניה', currency: 'MRU', currencySymbol: 'UM', timezone: 'Africa/Nouakchott', emergencyPolice: '17', emergencyAmbulance: '15', emergencyFire: '118', languages: ['Arabic','French'], plugType: 'C', drivingSide: 'right', tipCustom: '10%' },
+
+  // Missing Caribbean
+  Dominica: { country: 'Dominica', countryHe: 'דומיניקה', currency: 'XCD', currencySymbol: 'EC$', timezone: 'America/Dominica', emergencyPolice: '999', emergencyAmbulance: '999', emergencyFire: '999', languages: ['English'], plugType: 'D/G', drivingSide: 'left', tipCustom: '10%' },
+
+  // Missing Asia
+  NorthKorea: { country: 'North Korea', countryHe: 'צפון קוריאה', currency: 'KPW', currencySymbol: '₩', timezone: 'Asia/Pyongyang', emergencyPolice: '110', emergencyAmbulance: '119', emergencyFire: '119', languages: ['Korean'], plugType: 'A/C', drivingSide: 'right', tipCustom: 'לא מקובל' },
 }
 
 // Popular cities per country key
@@ -230,8 +321,138 @@ export const DESTINATION_CITIES: Record<string, string[]> = {
   NewZealand:      ['אוקלנד', 'קווינסטאון', 'כריסטצ\'רץ\'', 'ולינגטון', 'רוטורואה', 'הוקס ביי'],
 }
 
+// Countries with state/province sub-level → cities
+export const COUNTRY_STATES: Record<string, Record<string, string[]>> = {
+  USA: {
+    'קליפורניה':        ['לוס אנג\'לס', 'סן פרנסיסקו', 'סן דייגו', 'סנטה ברברה', 'פאלם ספרינגס', 'מונטרי'],
+    'ניו יורק':         ['ניו יורק סיטי', 'בופאלו', 'נייאגרה פולס', 'האמפטונס'],
+    'פלורידה':          ['מיאמי', 'אורלנדו', 'טמפה', 'פורט לודרדייל', 'קי ווסט', 'ג\'קסונוויל'],
+    'טקסס':             ['יוסטון', 'אוסטין', 'דאלאס', 'סן אנטוניו', 'אל פאסו'],
+    'הוואי':            ['הונולולו', 'מאואי', 'קאואי', 'ביג איילנד', 'לאנאי'],
+    'אריזונה':          ['פיניקס', 'סקוטסדייל', 'טוסון', 'גרנד קניון', 'סדונה'],
+    'נבדה':             ['לאס וגאס', 'ריינו', 'לייק טאהו'],
+    'קולורדו':          ['דנבר', 'אספן', 'וויל', 'בולדר', 'קולורדו ספרינגס'],
+    'וושינגטון DC':     ['וושינגטון DC', 'אלכסנדריה'],
+    'לואיזיאנה':        ['ניו אורלינס', 'באטון רוז\''],
+    'מסצ\'וסטס':        ['בוסטון', 'קייפ קוד', 'סיילם'],
+    'אילינוי':          ['שיקגו', 'ספרינגפילד'],
+    'וושינגטון':        ['סיאטל', 'ספוקאן', 'ולה ולה'],
+    'טנסי':             ['נשוויל', 'ממפיס', 'נוקסוויל'],
+    'ג\'ורג\'יה':       ['אטלנטה', 'סוואנה'],
+    'אורגון':           ['פורטלנד', 'בנד', 'אשלנד'],
+    'יוטה':             ['סולט לייק סיטי', 'פארק סיטי', 'מואב', 'ציון', 'ברייס קניון'],
+    'ניו מקסיקו':       ['סנטה פה', 'אלבוקרקי', 'טאוס'],
+    'קרוליינה הצפונית': ['שרלוט', 'אשוויל', 'ראלי'],
+    'פנסילבניה':        ['פילדלפיה', 'פיטסבורג', 'לנקסטר'],
+    'מינסוטה':          ['מיניאפוליס', 'סנט פול', 'דולות\''],
+    'מישיגן':           ['דטרויט', 'גרנד ראפידס', 'טרברס סיטי'],
+    'אלסקה':            ['אנקורג\'', 'פירבנקס', 'ג\'ונו', 'קטמאי'],
+    'מונטנה':           ['מיסולה', 'גלייסייר', 'ילוסטון'],
+    'קרוליינה הדרומית': ['צ\'ארלסטון', 'מירטל ביץ\''],
+  },
+  Canada: {
+    'אונטריו':           ['טורונטו', 'אוטווה', 'נייאגרה פולס', 'קינגסטון'],
+    'קוויבק':            ['מונטריאל', 'קוויבק סיטי', 'גספ', 'טרמבלאן'],
+    'בריטיש קולומביה':  ['ונקובר', 'ויקטוריה', 'וויסלר', 'קלואנה', 'קלגרי'],
+    'אלברטה':           ['קלגרי', 'אדמונטון', 'ג\'אספר', 'בניף', 'לייק לואיז'],
+    'מניטובה':          ['ווינימפג', 'צ\'רצ\'יל'],
+    'נובה סקוטיה':       ['הליפקס', 'קייפ ברטון'],
+    'סקצ\'ואן':         ['רג\'ינה', 'ססקטון'],
+  },
+  Australia: {
+    'ניו סאות\' ויילס': ['סידני', 'ניוקאסל', 'ביירון ביי', 'הנטר ואלי'],
+    'ויקטוריה':         ['מלבורן', 'גריאמפינס', 'מורנינגטון', 'ילס'],
+    'קווינסלנד':        ['בריסביין', 'גולד קוסט', 'קיירנס', 'האמילטון איילנד', 'סאנשיין קוסט'],
+    'אוסטרליה המערבית': ['פרת\'', 'ברום', 'מרגרט ריבר', 'אקסמות\''],
+    'דרום אוסטרליה':    ['אדלייד', 'אי קנגורו', 'ברוסה ואלי'],
+    'טסמניה':           ['הובארט', 'לאונסטון', 'קריידל מאונטין'],
+    'שטח הבירה':        ['קנברה'],
+    'הצפון':            ['דארווין', 'אולורו', 'קתרין'],
+  },
+}
+
+export function getCountryStates(countryKey: string): string[] {
+  return Object.keys(COUNTRY_STATES[countryKey] || {})
+}
+
+export function getStateCities(countryKey: string, state: string): string[] {
+  return COUNTRY_STATES[countryKey]?.[state] || []
+}
+
+export function hasStates(countryKey: string): boolean {
+  return countryKey in COUNTRY_STATES
+}
+
 export function getDestinationCities(destinationKey: string): string[] {
   return DESTINATION_CITIES[destinationKey] || []
+}
+
+// ─── Country flag emojis (keyed by DESTINATIONS key) ────────────────────────
+export const COUNTRY_FLAGS: Record<string, string> = {
+  // Middle East
+  Israel: '🇮🇱',
+  // Asia
+  Thailand: '🇹🇭', Japan: '🇯🇵', China: '🇨🇳', SouthKorea: '🇰🇷', India: '🇮🇳',
+  Vietnam: '🇻🇳', Indonesia: '🇮🇩', Philippines: '🇵🇭', Malaysia: '🇲🇾',
+  Singapore: '🇸🇬', Cambodia: '🇰🇭', SriLanka: '🇱🇰', Nepal: '🇳🇵',
+  Maldives: '🇲🇻', UAE: '🇦🇪', Jordan: '🇯🇴', Taiwan: '🇹🇼', HongKong: '🇭🇰',
+  Macau: '🇲🇴', Mongolia: '🇲🇳', Myanmar: '🇲🇲', Laos: '🇱🇦',
+  Bangladesh: '🇧🇩', Pakistan: '🇵🇰', Uzbekistan: '🇺🇿', Kazakhstan: '🇰🇿',
+  Azerbaijan: '🇦🇿', Oman: '🇴🇲', Bahrain: '🇧🇭', Qatar: '🇶🇦',
+  Kuwait: '🇰🇼', SaudiArabia: '🇸🇦', Iraq: '🇮🇶', Iran: '🇮🇷',
+  Lebanon: '🇱🇧', Syria: '🇸🇾', Yemen: '🇾🇪', Afghanistan: '🇦🇫',
+  Kyrgyzstan: '🇰🇬', Tajikistan: '🇹🇯', Turkmenistan: '🇹🇲',
+  Brunei: '🇧🇳', EastTimor: '🇹🇱', Bhutan: '🇧🇹', NorthKorea: '🇰🇵',
+  // Europe
+  Italy: '🇮🇹', France: '🇫🇷', Spain: '🇪🇸', Germany: '🇩🇪', UK: '🇬🇧',
+  Netherlands: '🇳🇱', Portugal: '🇵🇹', Greece: '🇬🇷', Turkey: '🇹🇷',
+  Croatia: '🇭🇷', CzechRepublic: '🇨🇿', Hungary: '🇭🇺', Austria: '🇦🇹',
+  Switzerland: '🇨🇭', Poland: '🇵🇱', Romania: '🇷🇴', Bulgaria: '🇧🇬',
+  Sweden: '🇸🇪', Norway: '🇳🇴', Denmark: '🇩🇰', Finland: '🇫🇮',
+  Iceland: '🇮🇸', Ireland: '🇮🇪', Belgium: '🇧🇪', Cyprus: '🇨🇾',
+  Montenegro: '🇲🇪', Albania: '🇦🇱', Georgia: '🇬🇪', Armenia: '🇦🇲',
+  Ukraine: '🇺🇦', Moldova: '🇲🇩', Russia: '🇷🇺', Belarus: '🇧🇾',
+  Serbia: '🇷🇸', NorthMacedonia: '🇲🇰', BosniaHerzegovina: '🇧🇦',
+  Slovenia: '🇸🇮', Slovakia: '🇸🇰', Lithuania: '🇱🇹', Latvia: '🇱🇻',
+  Estonia: '🇪🇪', Malta: '🇲🇹', Luxembourg: '🇱🇺', Monaco: '🇲🇨',
+  Kosovo: '🇽🇰', Andorra: '🇦🇩', Liechtenstein: '🇱🇮',
+  SanMarino: '🇸🇲', Vatican: '🇻🇦',
+  // Americas
+  USA: '🇺🇸', Canada: '🇨🇦', Mexico: '🇲🇽', Brazil: '🇧🇷',
+  Argentina: '🇦🇷', Colombia: '🇨🇴', Peru: '🇵🇪', Chile: '🇨🇱',
+  CostaRica: '🇨🇷', Cuba: '🇨🇺', DominicanRepublic: '🇩🇴',
+  Ecuador: '🇪🇨', Bolivia: '🇧🇴', Paraguay: '🇵🇾', Uruguay: '🇺🇾',
+  Panama: '🇵🇦', Guatemala: '🇬🇹', Honduras: '🇭🇳', Nicaragua: '🇳🇮',
+  Jamaica: '🇯🇲', Bahamas: '🇧🇸', TrinidadTobago: '🇹🇹',
+  Venezuela: '🇻🇪', Belize: '🇧🇿', ElSalvador: '🇸🇻', Haiti: '🇭🇹',
+  Barbados: '🇧🇧', Grenada: '🇬🇩', SaintLucia: '🇱🇨', Guyana: '🇬🇾',
+  Suriname: '🇸🇷', SaintVincent: '🇻🇨', Antigua: '🇦🇬',
+  SaintKitts: '🇰🇳', Dominica: '🇩🇲',
+  // Africa
+  Morocco: '🇲🇦', SouthAfrica: '🇿🇦', Kenya: '🇰🇪', Tanzania: '🇹🇿',
+  Egypt: '🇪🇬', Tunisia: '🇹🇳', Ghana: '🇬🇭', Nigeria: '🇳🇬',
+  Ethiopia: '🇪🇹', Rwanda: '🇷🇼', Uganda: '🇺🇬', Mozambique: '🇲🇿',
+  Namibia: '🇳🇦', Botswana: '🇧🇼', Madagascar: '🇲🇬', Mauritius: '🇲🇺',
+  Seychelles: '🇸🇨', Zanzibar: '🇹🇿', Algeria: '🇩🇿', Libya: '🇱🇾',
+  Sudan: '🇸🇩', SouthSudan: '🇸🇸', Somalia: '🇸🇴', Eritrea: '🇪🇷',
+  Djibouti: '🇩🇯', Cameroon: '🇨🇲', DRC: '🇨🇩', Congo: '🇨🇬',
+  CentralAfricanRepublic: '🇨🇫', Chad: '🇹🇩', Niger: '🇳🇪',
+  Mali: '🇲🇱', BurkinaFaso: '🇧🇫', Senegal: '🇸🇳', Gambia: '🇬🇲',
+  Guinea: '🇬🇳', GuineaBissau: '🇬🇼', SierraLeone: '🇸🇱',
+  Liberia: '🇱🇷', IvoryCoast: '🇨🇮', Togo: '🇹🇬', Benin: '🇧🇯',
+  EquatorialGuinea: '🇬🇶', Gabon: '🇬🇦', Angola: '🇦🇴',
+  Zambia: '🇿🇲', Zimbabwe: '🇿🇼', Malawi: '🇲🇼', Lesotho: '🇱🇸',
+  Eswatini: '🇸🇿', CapeVerde: '🇨🇻', Comoros: '🇰🇲', SaoTome: '🇸🇹',
+  Burundi: '🇧🇮', Mauritania: '🇲🇷',
+  // Oceania
+  Australia: '🇦🇺', NewZealand: '🇳🇿', Fiji: '🇫🇯', Tahiti: '🇵🇫',
+  Samoa: '🇼🇸', Tonga: '🇹🇴', Vanuatu: '🇻🇺', PapuaNewGuinea: '🇵🇬',
+  SolomonIslands: '🇸🇧', Kiribati: '🇰🇮', Palau: '🇵🇼',
+  Micronesia: '🇫🇲', MarshallIslands: '🇲🇭', Nauru: '🇳🇷', Tuvalu: '🇹🇻',
+}
+
+export function getCountryFlag(key: string): string {
+  return COUNTRY_FLAGS[key] || '🌍'
 }
 
 export function getDestinationConfig(destination: string): DestinationConfig | null {
@@ -248,19 +469,30 @@ export function getDestinationConfig(destination: string): DestinationConfig | n
 export function getDestinationList() {
   return Object.entries(DESTINATIONS)
     .map(([key, config]) => ({
-      id: key,
-      name: config.country,
+      id:     key,
+      name:   config.country,
       nameHe: config.countryHe,
       currency: config.currency,
+      flag:   COUNTRY_FLAGS[key] || '🌍',
     }))
     .sort((a, b) => a.nameHe.localeCompare(b.nameHe, 'he'))
 }
 
 export function searchDestinations(query: string) {
-  if (!query.trim()) return getDestinationList()
-  const lower = query.toLowerCase()
-  return getDestinationList().filter(d =>
-    d.name.toLowerCase().includes(lower) ||
-    d.nameHe.includes(query)
-  )
+  const list = getDestinationList()
+  if (!query.trim()) return list
+  const lower = query.toLowerCase().trim()
+  // Score: exact start of Hebrew name gets priority
+  return list
+    .map(d => {
+      let score = 0
+      if (d.nameHe.startsWith(query))                   score += 10
+      else if (d.nameHe.includes(query))                score += 5
+      if (d.name.toLowerCase().startsWith(lower))       score += 8
+      else if (d.name.toLowerCase().includes(lower))    score += 4
+      if (d.currency.toLowerCase().includes(lower))     score += 2
+      return { ...d, score }
+    })
+    .filter(d => d.score > 0)
+    .sort((a, b) => b.score - a.score)
 }

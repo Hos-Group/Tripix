@@ -1,20 +1,25 @@
 {
-  "name": "Tripix",
+  "name": "Tripix - מנהל נסיעות",
   "short_name": "Tripix",
-  "description": "מנהל טיולים חכם",
+  "description": "מנהל נסיעות חכם — ניהול הוצאות, מסמכים, ציר זמן וכלים לנסיעה",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#185FA5",
+  "theme_color": "#6C47FF",
   "background_color": "#ffffff",
   "lang": "he",
   "dir": "rtl",
+  "categories": ["travel", "finance", "productivity"],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "screenshots": [
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "narrow" }
+  ],
   "shortcuts": [
-    { "name": "סרוק קבלה", "url": "/scan", "description": "צלם קבלה מהירה" },
-    { "name": "הוסף הוצאה", "url": "/expenses", "description": "הוסף הוצאה ידנית" }
+    { "name": "סרוק קבלה", "short_name": "סרוק", "url": "/scan", "description": "צלם קבלה מהירה", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "הוסף הוצאה", "short_name": "הוצאה", "url": "/expenses", "description": "הוסף הוצאה ידנית", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

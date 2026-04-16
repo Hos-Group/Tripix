@@ -355,6 +355,176 @@ export async function getEmailAttachments(
   return collectPdfParts(msg.payload)
 }
 
+// ── Gmail profile (current historyId) ────────────────────────────────────────
+
+/**
+ * Fetch the current Gmail historyId for a user's account.
+ * Use this after an initial full scan to record a starting point
+ * for future incremental scans.
+ */
+export async function getCurrentHistoryId(accessToken: string): Promise<string | null> {
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) return null
+  const profile = await res.json() as { historyId?: string }
+  return profile.historyId || null
+}
+
+// ── Gmail Push Notifications (watch / history) ───────────────────────────────
+
+export interface GmailWatchResult {
+  /** Starting historyId — store this and use as startHistoryId in getGmailHistory */
+  historyId:  string
+  /** Unix timestamp in milliseconds (as string) — watch expires at this time */
+  expiration: string
+}
+
+/**
+ * Register Gmail push notifications via Google Cloud Pub/Sub.
+ * Must be called once per connected Gmail account and renewed every <7 days.
+ *
+ * Required environment variable:
+ *   GMAIL_PUBSUB_TOPIC — e.g. "projects/my-gcp-project/topics/gmail-push"
+ *
+ * The Pub/Sub subscription push endpoint must be configured to:
+ *   https://your-app.com/api/gmail/webhook?secret=GMAIL_WEBHOOK_SECRET
+ */
+export async function registerGmailWatch(
+  accessToken: string,
+): Promise<GmailWatchResult> {
+  const topicName = process.env.GMAIL_PUBSUB_TOPIC
+  if (!topicName) throw new Error('[gmailClient] GMAIL_PUBSUB_TOPIC not set')
+
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/watch', {
+    method:  'POST',
+    headers: {
+      Authorization:  `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      topicName,
+      // Only notify for INBOX changes (new emails)
+      labelIds:            ['INBOX'],
+      labelFilterBehavior: 'INCLUDE',
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`[gmailClient] watch registration failed (${res.status}): ${err}`)
+  }
+
+  return await res.json() as GmailWatchResult
+}
+
+/**
+ * Stop Gmail push notifications for the authenticated user.
+ * Call this when the user disconnects their Gmail account.
+ */
+export async function stopGmailWatch(accessToken: string): Promise<void> {
+  await fetch('https://gmail.googleapis.com/gmail/v1/users/me/stop', {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+}
+
+export interface GmailHistoryResult {
+  /** Message IDs that were added to INBOX since startHistoryId */
+  messageIds:      string[]
+  /** The latest historyId — store this for the next incremental scan */
+  latestHistoryId: string
+}
+
+/**
+ * Fetch Gmail history changes (new INBOX messages) since a given historyId.
+ * Use this in the webhook handler to get only the emails that arrived since
+ * the last notification.
+ *
+ * @param accessToken    Valid Gmail access token
+ * @param startHistoryId The historyId stored from the previous notification
+ */
+export async function getGmailHistory(
+  accessToken:    string,
+  startHistoryId: string,
+): Promise<GmailHistoryResult> {
+  const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/history')
+  url.searchParams.set('startHistoryId', startHistoryId)
+  url.searchParams.set('historyTypes',   'messageAdded')
+  url.searchParams.set('labelId',        'INBOX')
+  url.searchParams.set('maxResults',     '50')
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`[gmailClient] history list failed (${res.status}): ${text}`)
+  }
+
+  const data = await res.json() as {
+    history?:  Array<{ messagesAdded?: Array<{ message: { id: string } }> }>
+    historyId?: string
+  }
+
+  const seen       = new Set<string>()
+  const messageIds: string[] = []
+
+  for (const item of data.history || []) {
+    for (const added of item.messagesAdded || []) {
+      const id = added.message.id
+      if (!seen.has(id)) {
+        seen.add(id)
+        messageIds.push(id)
+      }
+    }
+  }
+
+  return {
+    messageIds,
+    latestHistoryId: data.historyId || startHistoryId,
+  }
+}
+
+/**
+ * Fetch lightweight metadata for a single message (subject, from, date, snippet).
+ * Used in the webhook handler to check messages before full body fetch + Claude parse.
+ */
+export async function getMessageMetadata(
+  accessToken: string,
+  messageId:   string,
+): Promise<GmailMessage | null> {
+  const url = new URL(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`,
+  )
+  url.searchParams.set('format',          'metadata')
+  url.searchParams.set('metadataHeaders', 'Subject')
+  url.searchParams.set('metadataHeaders', 'From')
+  url.searchParams.set('metadataHeaders', 'Date')
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!res.ok) return null
+
+  const msg = await res.json() as GmailMessageResource
+  const headers  = msg.payload?.headers || []
+  const getHeader = (name: string) =>
+    headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || ''
+
+  return {
+    id:      msg.id,
+    snippet: msg.snippet || '',
+    subject: getHeader('Subject'),
+    from:    getHeader('From'),
+    date:    getHeader('Date'),
+  }
+}
+
+// ── PDF Attachment helpers ────────────────────────────────────────────────────
+
 /**
  * Download a specific Gmail attachment and return standard base64.
  * Gmail returns URL-safe base64; this converts it to standard base64

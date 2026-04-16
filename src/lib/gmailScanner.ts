@@ -26,6 +26,9 @@ import {
   getEmailBody,
   getEmailAttachments,
   downloadAttachment,
+  getMessageMetadata,
+  getGmailHistory,
+  getCurrentHistoryId,
 } from './gmailClient'
 import {
   parseBookingEmail,
@@ -219,18 +222,34 @@ function checkTravelerSoftMatch(
  * trip participant are found even when they have different surnames.
  */
 function buildTripGmailQuery(
-  trip:      Pick<TripRow, 'destination'>,
+  trip:      Pick<TripRow, 'destination' | 'cities' | 'businessInfo'>,
   travelers: Array<{ id: string; name: string }>,
 ): string {
   const terms: string[] = []
 
-  // ── Destination aliases (single-word, max 5) ─────────────────────────────
+  // ── Destination aliases (single-word, max 6) ─────────────────────────────
   const countryKey = resolveTripCountry(trip.destination)
   if (countryKey) {
     const aliases = COUNTRY_CITY_MAP[countryKey]
       .filter(a => a.length >= 3 && !/\s/.test(a))
-      .slice(0, 5)
+      .slice(0, 6)
     terms.push(...aliases)
+  }
+
+  // ── Destination string itself (e.g. "Thailand", "Spain") ─────────────────
+  // Useful when COUNTRY_CITY_MAP doesn't have the destination (e.g. rare countries)
+  const destWords = trip.destination.split(/[\s,]+/).filter(w => w.length >= 4)
+  terms.push(...destWords.slice(0, 2))
+
+  // ── Specific cities in the trip (e.g. Bangkok, Chiang Mai) ───────────────
+  for (const city of (trip.cities || []).slice(0, 3)) {
+    const cityWords = city.split(/\s+/).filter(w => w.length >= 3)
+    if (cityWords.length === 1) {
+      terms.push(cityWords[0])
+    } else if (cityWords.length > 1) {
+      // Multi-word city: use first word as it's usually unique enough
+      terms.push(cityWords[0])
+    }
   }
 
   // ── Traveler name tokens (first name of each traveler) ───────────────────
@@ -241,7 +260,17 @@ function buildTripGmailQuery(
     if (tokens.length > 0) terms.push(tokens[0])   // first name only → avoids false positives
   }
 
-  return Array.from(new Set(terms)).join(' OR ')
+  // ── Business trip: company name words as additional search terms ──────────
+  // Helps find company invoices, receipts, and hotel confirmations sent to/about the company.
+  if (trip.businessInfo?.companyName) {
+    const companyWords = trip.businessInfo.companyName
+      .split(/[\s,./&-]+/)
+      .map(w => w.trim().toLowerCase())
+      .filter(w => w.length >= 3 && !/^(ltd|inc|llc|בע"מ|ומה|בעמ)$/.test(w))
+    terms.push(...companyWords.slice(0, 3))
+  }
+
+  return Array.from(new Set(terms.map(s => s.toLowerCase()))).join(' OR ')
 }
 
 /**
@@ -373,59 +402,89 @@ async function fetchBookingPage(url: string): Promise<string | null> {
   }
 }
 
+// ── Travel-core booking types — always linked to a specific place ─────────────
+// These MUST have a destination that matches the trip, or be explicitly linked
+// to it via date + traveler name evidence.
+const TRAVEL_CORE_TYPES = new Set(['hotel', 'flight', 'car_rental', 'ferry', 'activity', 'tour', 'insurance', 'inflight', 'sim', 'visa'])
+
+// ── Non-travel types — receipts, food, misc purchases ─────────────────────────
+// These are almost never relevant to a specific trip unless they're geo-tagged
+// to the exact destination country/city.
+const NON_TRAVEL_TYPES = new Set(['food', 'other'])
+
 /**
  * Check if a Claude-parsed booking is relevant to the given trip.
+ *
+ * Rules (in order):
+ *  1. Non-travel types (food/other) MUST have destination match — no destination = reject
+ *  2. Travel-core types with destination extracted — destination MUST match
+ *  3. Travel-core types with NO destination — must be within trip date window
+ *  4. Date window check — booking date must be within 365d before trip start .. 30d after end
+ *
  * Returns 'ok' | 'wrong_dest' | 'wrong_date'
  */
 function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_dest' | 'wrong_date' {
+  const city    = (booking.destination_city    || '').toLowerCase().trim()
+  const country = (booking.destination_country || '').toLowerCase().trim()
+  const hasExtractedDest = city.length >= 3 || country.length >= 3
+
   const tripCountry = resolveTripCountry(trip.destination)
+  const aliases     = tripCountry ? COUNTRY_CITY_MAP[tripCountry] : []
 
-  if (tripCountry) {
-    const aliases = COUNTRY_CITY_MAP[tripCountry]
-    const city    = (booking.destination_city    || '').toLowerCase().trim()
-    const country = (booking.destination_country || '').toLowerCase().trim()
+  const destMatches = (text: string) =>
+    text.length >= 3 &&
+    aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
 
-    if (city.length >= 3 || country.length >= 3) {
-      // At least one of city/country was extracted — must match trip destination
-      const matchesAlias = (text: string) =>
-        text.length >= 3 &&
-        aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
+  const destOk = hasExtractedDest
+    ? (destMatches(city) || destMatches(country))
+    : false  // no destination extracted → not confirmed
 
-      const destMatch = matchesAlias(city) || matchesAlias(country)
-
-      if (!destMatch) {
-        console.log(
-          `[gmailScanner/trip] ✗ dest mismatch: "${booking.vendor}" ` +
-          `city="${city}" country="${country}" ≠ trip="${trip.destination}"`,
-        )
-        return 'wrong_dest'
-      }
-    } else {
-      // No destination extracted by AI — only accept if confidence is very high (≥ 0.8)
-      // This prevents random high-confidence emails (newsletters, promos) from slipping through
-      if (booking.confidence < 0.8) {
-        console.log(
-          `[gmailScanner/trip] ✗ no destination + conf ${booking.confidence} < 0.8: "${booking.vendor}"`,
-        )
-        return 'wrong_dest'
-      }
+  // ── Rule 1: Non-travel types need explicit destination match ──────────────
+  if (NON_TRAVEL_TYPES.has(booking.booking_type)) {
+    if (!destOk) {
+      console.log(
+        `[checkRelevance] ✗ non-travel type="${booking.booking_type}" no dest match: "${booking.vendor}" ` +
+        `city="${city}" country="${country}" ≠ trip="${trip.destination}"`,
+      )
+      return 'wrong_dest'
     }
   }
 
-  // ── Date window: 180 days before trip start → 7 days after trip end ───────
+  // ── Rule 2: Travel-core types with extracted destination — must match ──────
+  if (TRAVEL_CORE_TYPES.has(booking.booking_type) && hasExtractedDest && !destOk) {
+    console.log(
+      `[checkRelevance] ✗ dest mismatch: "${booking.vendor}" ` +
+      `city="${city}" country="${country}" ≠ trip="${trip.destination}"`,
+    )
+    return 'wrong_dest'
+  }
+
+  // ── Rule 3: Travel-core with NO destination — require high confidence ──────
+  if (TRAVEL_CORE_TYPES.has(booking.booking_type) && !hasExtractedDest) {
+    if (booking.confidence < 0.82) {
+      console.log(
+        `[checkRelevance] ✗ no dest extracted + conf=${booking.confidence} < 0.82: "${booking.vendor}"`,
+      )
+      return 'wrong_dest'
+    }
+  }
+
+  // ── Rule 4: Date window ───────────────────────────────────────────────────
+  // 365 days before trip start → 30 days after end
+  // (covers visa applications, travel insurance, advance bookings)
   const tripStart   = new Date(trip.start_date)
   const tripEnd     = new Date(trip.end_date)
   const windowStart = new Date(tripStart)
-  windowStart.setDate(windowStart.getDate() - 180)
+  windowStart.setDate(windowStart.getDate() - 365)
   const windowEnd   = new Date(tripEnd)
-  windowEnd.setDate(windowEnd.getDate() + 7)
+  windowEnd.setDate(windowEnd.getDate() + 30)
 
   const bookingDateStr = booking.check_in || booking.departure_date
   if (bookingDateStr) {
     const bd = new Date(bookingDateStr)
     if (bd < windowStart || bd > windowEnd) {
       console.log(
-        `[gmailScanner/trip] ✗ date mismatch: "${booking.vendor}" ` +
+        `[checkRelevance] ✗ date outside window: "${booking.vendor}" ` +
         `"${bookingDateStr}" outside [${windowStart.toISOString().slice(0, 10)}, ` +
         `${windowEnd.toISOString().slice(0, 10)}]`,
       )
@@ -477,6 +536,7 @@ export interface TripScanStats extends ScanStats {
   filteredDuplicate: number   // dropped: same booking_ref already in DB
   failedDB:          number   // tried to save but DB insert failed
   lastDbError?:      string   // last DB error message for debugging
+  connectionError?:  string   // set when Gmail auth/token failed — user must reconnect
 }
 
 interface GmailConnection {
@@ -486,6 +546,7 @@ interface GmailConnection {
   access_token:  string
   refresh_token: string | null
   token_expiry:  string | null
+  history_id?:   string | null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -513,8 +574,45 @@ async function getValidToken(
   return accessToken
 }
 
+// ── Shared maps used by processMessages ──────────────────────────────────────
+
+const CATEGORY_MAP: Record<string, string> = {
+  hotel:      'hotel',
+  flight:     'flight',
+  car_rental: 'car_rental',
+  taxi:       'taxi',
+  activity:   'activity',
+  tour:       'activity',
+  insurance:  'insurance',
+  inflight:   'flight',
+  food:       'food',
+  sim:        'sim',
+  visa:       'visa',
+  ferry:      'ferry',
+  train:      'train',
+  other:      'other',
+}
+
+const DOC_TYPE_MAP: Record<string, string> = {
+  hotel:      'hotel',
+  flight:     'flight',
+  car_rental: 'other',
+  taxi:       'other',
+  activity:   'activity',
+  tour:       'activity',
+  insurance:  'insurance',
+  inflight:   'flight',
+  food:       'other',
+  sim:        'other',
+  visa:       'visa',
+  ferry:      'ferry',
+  train:      'other',
+  other:      'other',
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helper: process one batch of messages for a user
+// Creates: email_ingests + documents + expenses (all three tables)
 // ─────────────────────────────────────────────────────────────────────────────
 async function processMessages(
   supabase:    SupabaseClient,
@@ -528,10 +626,16 @@ async function processMessages(
 ): Promise<void> {
   for (const msg of messages) {
     try {
-      let body = ''
-      try { body = await getEmailBody(accessToken, msg.id) } catch { continue }
+      // ── Fetch full email body ───────────────────────────────────────────
+      let rawHtml = ''
+      let body    = ''
+      try {
+        rawHtml = await getEmailBody(accessToken, msg.id)
+        body    = rawHtml
+      } catch { continue }
       const emailContent = body || msg.snippet
 
+      // ── Check for PDF attachments ───────────────────────────────────────
       let pdfBase64: string | undefined
       try {
         const attachments = await getEmailAttachments(accessToken, msg.id)
@@ -542,11 +646,23 @@ async function processMessages(
         } else { stats.scannedEmailOnly++ }
       } catch { stats.scannedEmailOnly++ }
 
+      // ── Claude parse ────────────────────────────────────────────────────
       const parsedBooking = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
       if (!parsedBooking) continue
       stats.parsed++
       if (parsedBooking.confidence < 0.7) continue
 
+      // ── Deduplication: skip if same Gmail message ID already stored ─────
+      const gmidKey = `GMID:${msg.id}`
+      const { data: existing } = await supabase
+        .from('documents')
+        .select('id')
+        .like('notes', `${gmidKey}%`)
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (existing) { console.log(`[processMessages] dup skip GMID=${msg.id}`); continue }
+
+      // ── Match to a trip ─────────────────────────────────────────────────
       let matchedTripId = forceTripId
       let matchScore    = forceTripId ? 100 : 0
       let matchReason   = forceTripId ? 'ייבוא ידני לטיול' : 'לא נותח'
@@ -558,14 +674,50 @@ async function processMessages(
         matchReason   = result.reason
       }
 
+      // ── Relevance check: verify booking is actually related to the matched trip ──
+      // Prevents non-travel receipts (food, shopping) and wrong-destination bookings
+      // from being saved under an unrelated trip.
+      if (matchedTripId && !forceTripId) {
+        const matchedTrip = trips.find(t => t.id === matchedTripId)
+        if (matchedTrip) {
+          // Build a minimal TripRow for checkRelevance
+          const tripRow = {
+            id:          matchedTrip.id,
+            name:        matchedTrip.name,
+            destination: matchedTrip.destination,
+            start_date:  matchedTrip.start_date,
+            end_date:    matchedTrip.end_date,
+            travelers:   (matchedTrip.travelerNames || []).map((n, i) => ({ id: String(i), name: n })),
+          }
+          const relevance = checkRelevance(parsedBooking, tripRow)
+          if (relevance !== 'ok') {
+            console.log(
+              `[processMessages] ✗ relevance="${relevance}" for "${parsedBooking.vendor}" → skipping`,
+            )
+            continue
+          }
+        }
+      }
+
       const rawText = htmlToText(emailContent).slice(0, 10000)
-      const { data: ingestRecord } = await supabase
-        .from('email_ingests')
-        .insert({
+
+      // ── Build booking title ─────────────────────────────────────────────
+      const bookingTitle =
+        parsedBooking.hotel_name ||
+        (parsedBooking.airline && parsedBooking.flight_number
+          ? `${parsedBooking.airline} ${parsedBooking.flight_number}`
+          : null) ||
+        parsedBooking.vendor || msg.subject.slice(0, 60)
+
+      // ── 1. email_ingests record ─────────────────────────────────────────
+      // Try with gmail_message_id (migration 007), fall back without it if column missing
+      let ingestRecord: { id: string } | null = null
+      {
+        const basePayload = {
           user_id:      userId,
           from_address: msg.from,
           subject:      msg.subject,
-          raw_html:     null,
+          raw_html:     rawHtml?.slice(0, 50000) || null,
           raw_text:     rawText,
           parsed_data:  parsedBooking,
           trip_id:      matchedTripId,
@@ -573,56 +725,93 @@ async function processMessages(
           match_reason: matchReason,
           status:       matchedTripId ? 'matched' : 'unmatched',
           source,
+        }
+        const { data: r1, error: e1 } = await supabase
+          .from('email_ingests')
+          .insert({ ...basePayload, gmail_message_id: msg.id })
+          .select('id')
+          .single()
+        if (r1) {
+          ingestRecord = r1
+        } else if (e1?.code === 'PGRST204' || e1?.message?.includes('gmail_message_id')) {
+          // Column missing — retry without it (migration 007 not yet applied)
+          const { data: r2 } = await supabase
+            .from('email_ingests')
+            .insert(basePayload)
+            .select('id')
+            .single()
+          ingestRecord = r2
+        } else if (e1) {
+          console.error('[processMessages] Ingest insert error:', e1.message)
+        }
+      }
+
+      if (!matchedTripId || !ingestRecord) continue
+
+      // ── 2. documents record — visible in Documents page ─────────────────
+      const { data: docRecord, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          trip_id:        matchedTripId,
+          user_id:        userId,
+          name:           bookingTitle,
+          doc_type:       DOC_TYPE_MAP[parsedBooking.booking_type] || 'other',
+          file_url:       null,
+          file_type:      'gmail',
+          extracted_data: parsedBooking,
+          booking_ref:    parsedBooking.confirmation_number || null,
+          flight_number:  parsedBooking.flight_number || null,
+          valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
+          valid_until:    parsedBooking.check_out || parsedBooking.return_date || null,
+          notes:          `${gmidKey}\nמ: ${msg.from}\nתאריך: ${msg.date}`,
         })
         .select('id')
         .single()
 
-      if (matchedTripId && ingestRecord) {
-        const categoryMap: Record<string, string> = {
-          hotel: 'hotel', flight: 'flight', car_rental: 'taxi',
-          activity: 'activity', tour: 'activity', insurance: 'other',
-          inflight: 'other', other: 'other',
-        }
-        const expenseTitle =
-          parsedBooking.hotel_name ||
-          (parsedBooking.airline && parsedBooking.flight_number
-            ? `${parsedBooking.airline} ${parsedBooking.flight_number}`
-            : null) ||
-          parsedBooking.summary || parsedBooking.vendor || msg.subject.slice(0, 60)
-
-        const { data: expense, error: expenseError } = await supabase
-          .from('expenses')
-          .insert({
-            trip_id:      matchedTripId,
-            title:        expenseTitle,
-            amount:       parsedBooking.amount || 0,
-            currency:     parsedBooking.currency || 'ILS',
-            amount_ils:   parsedBooking.amount || 0,
-            category:     categoryMap[parsedBooking.booking_type] || 'other',
-            expense_date:
-              parsedBooking.check_in ||
-              parsedBooking.departure_date ||
-              new Date().toISOString().split('T')[0],
-            notes:   `מספר אישור: ${parsedBooking.confirmation_number}\nיובא אוטומטית מ-Gmail: ${msg.from}`,
-            source,
-            is_paid: true,
-          })
-          .select('id')
-          .single()
-
-        if (expenseError) {
-          console.error('[gmailScanner] Expense insert error:', expenseError)
-        }
-
-        if (expense) {
-          await supabase.from('email_ingests')
-            .update({ expense_id: expense.id, status: 'processed' })
-            .eq('id', ingestRecord.id)
-          stats.created++
-        }
+      if (docError) {
+        console.error('[processMessages] Document insert error:', docError.message)
       }
+
+      // ── 3. expenses record — visible in Expenses page ───────────────────
+      const { data: expense, error: expenseError } = await supabase
+        .from('expenses')
+        .insert({
+          trip_id:      matchedTripId,
+          title:        bookingTitle,
+          amount:       parsedBooking.amount || 0,
+          currency:     parsedBooking.currency || 'ILS',
+          amount_ils:   parsedBooking.amount || 0,
+          category:     CATEGORY_MAP[parsedBooking.booking_type] || 'other',
+          expense_date:
+            parsedBooking.check_in ||
+            parsedBooking.departure_date ||
+            new Date().toISOString().split('T')[0],
+          notes:        `${gmidKey}\nמספר אישור: ${parsedBooking.confirmation_number || '—'}\nמ: ${msg.from}`,
+          source:       'scan',
+          is_paid:      true,
+        })
+        .select('id')
+        .single()
+
+      if (expenseError) {
+        console.error('[processMessages] Expense insert error:', expenseError.message)
+      }
+
+      // ── Link expense + document to ingest record ────────────────────────
+      await supabase.from('email_ingests')
+        .update({
+          expense_id: expense?.id  || null,
+          status:     'processed',
+        })
+        .eq('id', ingestRecord.id)
+
+      stats.created++
+      console.log(
+        `[processMessages] ✓ created doc+expense: "${bookingTitle}" ` +
+        `(trip=${matchedTripId}, conf=${parsedBooking.confidence}, source=${source})`,
+      )
     } catch (err) {
-      console.error(`[gmailScanner] Error processing message ${msg.id}:`, err)
+      console.error(`[processMessages] Error processing ${msg.id}:`, err)
     }
   }
 }
@@ -654,11 +843,20 @@ export async function scanUserGmail(
   // ── 2. Fetch user's trips for matching ────────────────────────────────────
   const { data: trips } = await supabase
     .from('trips')
-    .select('id, name, destination, start_date, end_date')
+    .select('id, name, destination, start_date, end_date, travelers, notes')
     .eq('user_id', userId)
     .order('start_date', { ascending: false })
 
-  const tripList = (trips || []) as TripRecord[]
+  const tripList: TripRecord[] = (trips || []).map(tr => ({
+    id:             tr.id,
+    name:           tr.name,
+    destination:    tr.destination,
+    start_date:     tr.start_date,
+    end_date:       tr.end_date,
+    travelerNames:  ((tr.travelers as Array<{ name: string }> | null) || []).map(t => t.name).filter(Boolean),
+    tripType:       undefined,
+    cities:         undefined,
+  }))
 
   const stats: ScanStats = {
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
@@ -672,6 +870,25 @@ export async function scanUserGmail(
       stats.scanned += messages.length
       console.log(`[gmailScanner] ${conn.gmail_address}: ${messages.length} messages found`)
       await processMessages(supabase, userId, accessToken, messages, tripList, stats, 'gmail_scan')
+
+      // ── Save current historyId for future incremental scans ──────────────
+      // After the initial full scan, we record the current position in the
+      // Gmail history so the next scan only fetches NEW emails (not 30 days again).
+      // Requires migration 011 (history_id column). Non-fatal if missing.
+      try {
+        const histId = await getCurrentHistoryId(accessToken)
+        if (histId) {
+          const { error: hErr } = await supabase
+            .from('gmail_connections')
+            .update({ history_id: histId })
+            .eq('id', conn.id)
+          if (!hErr) {
+            console.log(`[gmailScanner] Saved initial historyId=${histId} for ${conn.gmail_address}`)
+          } else if (hErr.code !== 'PGRST204' && !hErr.message?.includes('history_id')) {
+            console.warn('[gmailScanner] Could not save historyId:', hErr.message)
+          }
+        }
+      } catch { /* non-fatal */ }
     } catch (err) {
       console.error(`[gmailScanner] Error scanning ${conn.gmail_address}:`, err)
     }
@@ -681,16 +898,289 @@ export async function scanUserGmail(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Incremental scan: only new emails since last check (via Gmail History API)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Incremental Gmail scan — called every minute by the fast-scan cron.
+ *
+ * For each connected Gmail account:
+ *   - If history_id is stored: fetch only NEW messages since last scan (History API)
+ *   - If no history_id: run a 7-day full scan to bootstrap, then save historyId
+ *
+ * This is extremely lightweight: most runs return 0 new booking emails and
+ * complete in under 200ms (one History API call per account, no Claude).
+ * Claude only runs when a new booking-like email is detected.
+ *
+ * @returns aggregated stats across all accounts
+ */
+export async function scanIncrementalGmail(
+  supabase: SupabaseClient,
+  userId:   string,
+): Promise<ScanStats & { accountsChecked: number; newEmailsFound: number }> {
+  const stats = {
+    scanned: 0, parsed: 0, created: 0,
+    scannedWithPDF: 0, scannedEmailOnly: 0,
+    accountsChecked: 0, newEmailsFound: 0,
+  }
+
+  // ── Load connections ──────────────────────────────────────────────────────
+  // Try to select history_id (migration 011). If column missing, fall back
+  // to base columns and treat history_id as null (bootstrap mode every run).
+  let connections: Record<string, unknown>[] | null = null
+  let hasHistoryIdCol = true
+  {
+    const { data: c1, error: e1 } = await supabase
+      .from('gmail_connections')
+      .select('id, user_id, gmail_address, access_token, refresh_token, token_expiry, history_id')
+      .eq('user_id', userId)
+    if (e1?.code === 'PGRST204' || e1?.message?.includes('history_id')) {
+      hasHistoryIdCol = false
+      console.warn('[incremental] history_id column missing — run migration 011. Running in bootstrap mode.')
+      const { data: c2 } = await supabase
+        .from('gmail_connections')
+        .select('id, user_id, gmail_address, access_token, refresh_token, token_expiry')
+        .eq('user_id', userId)
+      connections = c2
+    } else {
+      connections = c1
+    }
+  }
+
+  if (!connections?.length) return stats
+
+  // ── Load trips once ───────────────────────────────────────────────────────
+  const { data: trips } = await supabase
+    .from('trips')
+    .select('id, name, destination, start_date, end_date, travelers, notes')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false })
+
+  const tripList: TripRecord[] = (trips || []).map(tr => ({
+    id:            tr.id,
+    name:          tr.name,
+    destination:   tr.destination,
+    start_date:    tr.start_date,
+    end_date:      tr.end_date,
+    travelerNames: ((tr.travelers as Array<{ name: string }> | null) || [])
+                     .map(t => t.name).filter(Boolean),
+    tripType:      undefined,
+    cities:        undefined,
+  }))
+
+  // ── Process each account ──────────────────────────────────────────────────
+  for (const conn of connections as unknown as GmailConnection[]) {
+    stats.accountsChecked++
+    try {
+      const accessToken = await getValidToken(supabase, conn)
+
+      const connHistoryId = hasHistoryIdCol ? ((conn as unknown as Record<string, unknown>).history_id as string | null) : null
+
+      if (!connHistoryId) {
+        // ── Bootstrap: no historyId yet → 7-day scan + save historyId ──────
+        console.log(`[incremental] ${conn.gmail_address}: no historyId — bootstrapping with 7d scan`)
+        const messages = await searchBookingEmails(accessToken, 7, 30)
+        if (messages.length) {
+          stats.scanned     += messages.length
+          stats.newEmailsFound += messages.length
+          await processMessages(supabase, userId, accessToken, messages, tripList, stats, 'gmail_incremental')
+        }
+        // Save current historyId so next run uses incremental path (requires migration 011)
+        if (hasHistoryIdCol) {
+          const histId = await getCurrentHistoryId(accessToken)
+          if (histId) {
+            await supabase
+              .from('gmail_connections')
+              .update({ history_id: histId })
+              .eq('id', conn.id)
+          }
+        }
+        continue
+      }
+
+      // ── Incremental: fetch only new messages since last historyId ─────────
+      const { messageIds, latestHistoryId } = await getGmailHistory(accessToken, connHistoryId)
+      console.log(`[incremental] ${conn.gmail_address}: ${messageIds.length} new since historyId=${connHistoryId}`)
+
+      // Always update historyId so we don't re-process on next run
+      if (hasHistoryIdCol && latestHistoryId !== connHistoryId) {
+        await supabase
+          .from('gmail_connections')
+          .update({ history_id: latestHistoryId })
+          .eq('id', conn.id)
+      }
+
+      if (!messageIds.length) continue
+      stats.newEmailsFound += messageIds.length
+
+      // ── Fetch metadata + pre-filter (no body fetch yet) ─────────────────
+      const BATCH = 5
+      const candidates: Array<NonNullable<Awaited<ReturnType<typeof getMessageMetadata>>>> = []
+      for (let i = 0; i < messageIds.length; i += BATCH) {
+        const batch   = messageIds.slice(i, i + BATCH)
+        const fetched = await Promise.all(batch.map(id => getMessageMetadata(accessToken, id)))
+        for (const m of fetched) if (m) candidates.push(m)
+      }
+
+      const bookingCandidates = candidates.filter(msg => {
+        const verdict = quickPreFilter(msg.subject, msg.from, msg.snippet)
+        return verdict !== 'skip'
+      })
+
+      if (!bookingCandidates.length) {
+        console.log(`[incremental] ${conn.gmail_address}: all ${messageIds.length} new emails filtered out`)
+        continue
+      }
+
+      console.log(
+        `[incremental] ${conn.gmail_address}: ${bookingCandidates.length} of ${messageIds.length} pass pre-filter`,
+      )
+
+      stats.scanned += bookingCandidates.length
+      await processMessages(
+        supabase, userId, accessToken,
+        bookingCandidates, tripList, stats,
+        'gmail_incremental',
+      )
+    } catch (err) {
+      console.error(`[incremental] Error for ${conn.gmail_address}:`, err)
+    }
+  }
+
+  return stats
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Real-time push: process specific message IDs from Gmail History API
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Connection row shape needed by scanPushMessages */
+export interface GmailConnectionRow {
+  id:            string
+  user_id:       string
+  gmail_address: string
+  access_token:  string
+  refresh_token: string | null
+  token_expiry:  string | null
+}
+
+/**
+ * Process specific Gmail message IDs from a Pub/Sub push notification.
+ *
+ * This is the real-time counterpart of scanUserGmail — it processes only the
+ * new messages delivered by Gmail's push mechanism, so we never re-scan the
+ * entire inbox. Called by /api/gmail/webhook on every incoming notification.
+ *
+ * Flow:
+ *   1. Refresh access token if needed
+ *   2. Fetch lightweight metadata for each new message ID
+ *   3. Quick pre-filter (subject + sender) — discard obvious non-bookings
+ *   4. Load user's trips for matching
+ *   5. Run processMessages (full pipeline: body fetch → Claude → expense insert)
+ *
+ * @param supabase    Supabase admin client
+ * @param userId      User whose Gmail triggered the push
+ * @param connection  The gmail_connections row for this account
+ * @param messageIds  New message IDs from Gmail history.list
+ */
+export async function scanPushMessages(
+  supabase:    SupabaseClient,
+  userId:      string,
+  connection:  GmailConnectionRow,
+  messageIds:  string[],
+): Promise<ScanStats> {
+  const stats: ScanStats = {
+    scanned: 0, parsed: 0, created: 0,
+    scannedWithPDF: 0, scannedEmailOnly: 0,
+  }
+
+  if (!messageIds.length) return stats
+
+  // ── 1. Get a valid access token ───────────────────────────────────────────
+  const accessToken = await getValidToken(supabase, connection as GmailConnection)
+
+  // ── 2. Fetch metadata for each new message (in parallel, batched) ─────────
+  const BATCH = 5
+  const candidates: Array<NonNullable<Awaited<ReturnType<typeof getMessageMetadata>>>> = []
+
+  for (let i = 0; i < messageIds.length; i += BATCH) {
+    const batch   = messageIds.slice(i, i + BATCH)
+    const fetched = await Promise.all(batch.map(id => getMessageMetadata(accessToken, id)))
+    for (const m of fetched) if (m) candidates.push(m)
+  }
+
+  // ── 3. Quick pre-filter — drop obvious non-booking emails ─────────────────
+  const bookingCandidates = candidates.filter(msg => {
+    const verdict = quickPreFilter(msg.subject, msg.from, msg.snippet)
+    if (verdict === 'skip') {
+      console.log(`[push] pre-filter skip: "${msg.subject.slice(0, 60)}"`)
+      return false
+    }
+    return true
+  })
+
+  if (!bookingCandidates.length) {
+    console.log(`[push] ${connection.gmail_address}: ${candidates.length} new → all filtered out`)
+    return stats
+  }
+
+  console.log(
+    `[push] ${connection.gmail_address}: ${candidates.length} new, ` +
+    `${bookingCandidates.length} pass pre-filter → processing`,
+  )
+  stats.scanned = bookingCandidates.length
+
+  // ── 4. Load user's trips for matching ────────────────────────────────────
+  const { data: trips } = await supabase
+    .from('trips')
+    .select('id, name, destination, start_date, end_date, travelers, notes')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false })
+
+  const tripList: TripRecord[] = (trips || []).map(tr => ({
+    id:            tr.id,
+    name:          tr.name,
+    destination:   tr.destination,
+    start_date:    tr.start_date,
+    end_date:      tr.end_date,
+    travelerNames: ((tr.travelers as Array<{ name: string }> | null) || [])
+                     .map(t => t.name).filter(Boolean),
+    tripType:      undefined,
+    cities:        undefined,
+  }))
+
+  // ── 5. Full pipeline via existing processMessages helper ─────────────────
+  await processMessages(
+    supabase, userId, accessToken,
+    bookingCandidates, tripList, stats,
+    'gmail_push',
+  )
+
+  console.log(
+    `[push] done — scanned=${stats.scanned} parsed=${stats.parsed} created=${stats.created}`,
+  )
+  return stats
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Trip-specific retroactive scan
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface TripRow {
-  id:          string
-  name:        string
-  destination: string
-  start_date:  string
-  end_date:    string
-  travelers:   Array<{ id: string; name: string }>
+  id:              string
+  name:            string
+  destination:     string
+  start_date:      string
+  end_date:        string
+  travelers:       Array<{ id: string; name: string }>
+  trip_type?:      string   // 'business' | 'beach' | 'ski' | 'family' | 'couple' | etc.
+  budget_currency?: string  // 'ILS' | 'USD' | 'EUR' etc.
+  cities?:         string[] // specific cities if multi-city trip
+  businessInfo?: {          // for business trips — helps match company invoices
+    companyName?: string
+    businessId?:  string
+    department?:  string
+  }
 }
 
 /**
@@ -713,13 +1203,42 @@ export async function scanTripGmail(
   // ── 1. Load trip ──────────────────────────────────────────────────────────
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('id, name, destination, start_date, end_date, travelers')
+    .select('id, name, destination, start_date, end_date, travelers, notes')
     .eq('id', tripId)
     .eq('user_id', userId)
     .single()
 
   if (tripError || !trip) throw new Error('טיול לא נמצא')
-  const t = { ...trip, travelers: (trip.travelers as Array<{ id: string; name: string }>) || [] } as TripRow
+
+  // Parse business info from notes JSON (stored as { type, cities, business: { companyName, businessId, department } })
+  let businessInfo: TripRow['businessInfo'] | undefined
+  try {
+    const notesObj = typeof trip.notes === 'string' ? JSON.parse(trip.notes) : (trip.notes as Record<string, unknown> | null)
+    if (notesObj?.business && typeof notesObj.business === 'object') {
+      const biz = notesObj.business as Record<string, unknown>
+      businessInfo = {
+        companyName: typeof biz.companyName === 'string' ? biz.companyName : undefined,
+        businessId:  typeof biz.businessId  === 'string' ? biz.businessId  : undefined,
+        department:  typeof biz.department  === 'string' ? biz.department  : undefined,
+      }
+    }
+  } catch { /* notes not JSON — ignore */ }
+
+  // Also try to extract cities from notes JSON
+  let tripCities: string[] | undefined
+  try {
+    const notesObj2 = typeof trip.notes === 'string' ? JSON.parse(trip.notes) : (trip.notes as Record<string, unknown> | null)
+    if (Array.isArray(notesObj2?.cities)) tripCities = notesObj2.cities as string[]
+  } catch { /* ignore */ }
+
+  const t: TripRow = {
+    ...trip,
+    travelers:       (trip.travelers as Array<{ id: string; name: string }>) || [],
+    trip_type:       undefined,
+    budget_currency: undefined,
+    cities:          tripCities,
+    businessInfo,
+  }
 
   // ── 2. Load ALL Gmail connections ────────────────────────────────────────
   const { data: connections, error: connError } = await supabase
@@ -751,23 +1270,44 @@ export async function scanTripGmail(
   }
 
   const categoryMap: Record<string, string> = {
-    hotel: 'hotel', flight: 'flight', car_rental: 'taxi', taxi: 'taxi',
-    activity: 'activity', tour: 'activity', insurance: 'other',
-    inflight: 'other', other: 'other',
+    hotel:      'hotel',
+    flight:     'flight',
+    car_rental: 'car_rental',
+    taxi:       'taxi',
+    activity:   'activity',
+    tour:       'activity',
+    insurance:  'insurance',
+    inflight:   'flight',
+    food:       'food',
+    sim:        'sim',
+    visa:       'visa',
+    ferry:      'ferry',
+    train:      'train',
+    other:      'other',
   }
 
   const docTypeMap: Record<string, string> = {
-    hotel: 'hotel', flight: 'flight', car_rental: 'other', taxi: 'other',
-    activity: 'activity', tour: 'activity', insurance: 'insurance',
-    inflight: 'other', other: 'other',
+    hotel:      'hotel',
+    flight:     'flight',
+    car_rental: 'other',
+    taxi:       'other',
+    activity:   'activity',
+    tour:       'activity',
+    insurance:  'insurance',
+    inflight:   'other',
+    food:       'other',
+    sim:        'other',
+    other:      'other',
   }
 
   // ── 5. Scan each connected Gmail account ─────────────────────────────────
   for (const conn of connections as GmailConnection[]) {
     try {
+      // getValidToken throws with "פג תוקף" if refresh token is missing/expired
       const accessToken = await getValidToken(supabase, conn)
-      // Fetch up to 50 emails — parallel processing keeps total time manageable
-      const messages = await searchBookingEmails(accessToken, daysSearched, 50, destQuery)
+      // Fetch up to 100 emails — larger cap to avoid missing trip-specific emails
+      // when the user has many booking emails from other trips in the same period
+      const messages = await searchBookingEmails(accessToken, daysSearched, 100, destQuery)
       stats.scanned += messages.length
       console.log(`[gmailScanner/trip] ${conn.gmail_address}: ${messages.length} messages for "${t.name}"`)
 
@@ -775,12 +1315,18 @@ export async function scanTripGmail(
       // This is the most reliable dedup — Claude may extract different names
       // for the same hotel across runs, so name+date matching is fragile.
       // Storing the raw Gmail message ID gives a deterministic skip.
-      const { data: alreadyIngested } = await supabase
+      // Note: gmail_message_id column requires migration 007. If missing, dedup
+      // falls back to empty set (all messages processed, no dedup).
+      const { data: alreadyIngested, error: dedupErr } = await supabase
         .from('email_ingests')
         .select('gmail_message_id')
         .eq('trip_id', tripId)
         .eq('user_id', userId)
         .not('gmail_message_id', 'is', null)
+
+      if (dedupErr && (dedupErr.code === 'PGRST204' || dedupErr.message?.includes('gmail_message_id'))) {
+        console.warn('[gmailScanner] gmail_message_id column missing — run migration 007. Dedup disabled.')
+      }
 
       const processedIds = new Set(
         (alreadyIngested || []).map(r => r.gmail_message_id as string)
@@ -816,6 +1362,12 @@ export async function scanTripGmail(
         startDate:     t.start_date,
         endDate:       t.end_date,
         travelerNames: t.travelers.map(tr => tr.name).filter(Boolean),
+        tripType:      t.trip_type,
+        cities:        t.cities,
+        numTravelers:  t.travelers.length || undefined,
+        currency:      t.budget_currency,
+        tripName:      t.name,
+        companyName:   t.businessInfo?.companyName,
       }
 
       // Thresholds — slightly lower for known senders
@@ -1135,6 +1687,7 @@ export async function scanTripGmail(
             .from('documents')
             .insert({
               trip_id:        tripId,
+              user_id:        userId,
               name:           bookingTitle,
               doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
               file_type:      fileType,  // 'pdf' if attachment found, 'gmail' for HTML snapshot
@@ -1188,19 +1741,23 @@ export async function scanTripGmail(
           // gmail_message_id is the primary dedup key for future scans —
           // ensures re-scanning never re-processes the same email.
           const rawText = htmlToText(emailContent).slice(0, 10000)
-          await supabase.from('email_ingests').insert({
-            user_id:          userId,
-            from_address:     msg.from,
-            subject:          msg.subject,
-            raw_text:         rawText,
-            parsed_data:      parsedBooking,
-            trip_id:          tripId,
-            match_score:      100,
-            match_reason:     'ייבוא ידני לטיול',
-            status:           docRecord ? 'processed' : 'matched',
-            source:           'gmail_trip_import',
-            gmail_message_id: msg.id,   // ← primary dedup key
-          })
+          const baseIngest = {
+            user_id:      userId,
+            from_address: msg.from,
+            subject:      msg.subject,
+            raw_text:     rawText,
+            parsed_data:  parsedBooking,
+            trip_id:      tripId,
+            match_score:  100,
+            match_reason: 'ייבוא ידני לטיול',
+            status:       docRecord ? 'processed' : 'matched',
+            source:       'gmail_trip_import',
+          }
+          const { error: i1 } = await supabase.from('email_ingests')
+            .insert({ ...baseIngest, gmail_message_id: msg.id })
+          if (i1?.code === 'PGRST204' || i1?.message?.includes('gmail_message_id')) {
+            await supabase.from('email_ingests').insert(baseIngest)
+          }
         } catch (err) {
           console.error(`[gmailScanner/trip] DB write error for ${msg.id}:`, err)
         }
@@ -1213,23 +1770,29 @@ export async function scanTripGmail(
       for (const { msg, parsedBooking, emailContent } of borderline) {
         try {
           const rawText = htmlToText(emailContent).slice(0, 10000)
-          const { data: ingestRecord, error: ingestError } = await supabase
+          const borderlineBase = {
+            user_id:      userId,
+            from_address: msg.from,
+            subject:      msg.subject,
+            raw_text:     rawText,
+            parsed_data:  parsedBooking,
+            trip_id:      tripId,
+            match_score:  Math.round(parsedBooking.confidence * 100),
+            match_reason: 'ממתין לאישור משתמש',
+            status:       'pending_review',
+            source:       'gmail_trip_import',
+          }
+          let { data: ingestRecord, error: ingestError } = await supabase
             .from('email_ingests')
-            .insert({
-              user_id:          userId,
-              from_address:     msg.from,
-              subject:          msg.subject,
-              raw_text:         rawText,
-              parsed_data:      parsedBooking,
-              trip_id:          tripId,
-              match_score:      Math.round(parsedBooking.confidence * 100),
-              match_reason:     'ממתין לאישור משתמש',
-              status:           'pending_review',
-              source:           'gmail_trip_import',
-              gmail_message_id: msg.id,
-            })
+            .insert({ ...borderlineBase, gmail_message_id: msg.id })
             .select('id')
             .single()
+          if (ingestError?.code === 'PGRST204' || ingestError?.message?.includes('gmail_message_id')) {
+            const res = await supabase.from('email_ingests')
+              .insert(borderlineBase).select('id').single()
+            ingestRecord = res.data
+            ingestError  = res.error
+          }
 
           if (!ingestError && ingestRecord) {
             stats.pendingReview.push({
@@ -1252,7 +1815,20 @@ export async function scanTripGmail(
         }
       }
     } catch (err) {
-      console.error(`[gmailScanner/trip] Error scanning ${conn.gmail_address}:`, err)
+      const errMsg = err instanceof Error ? err.message : String(err)
+      console.error(`[gmailScanner/trip] Error scanning ${conn.gmail_address}:`, errMsg)
+
+      // Surface auth errors so the UI can show a reconnect prompt
+      // rather than the misleading "no emails found" message
+      const isAuthError =
+        errMsg.includes('פג תוקף')      ||
+        errMsg.includes('invalid_grant') ||
+        errMsg.includes('Token refresh failed') ||
+        errMsg.includes('401')           ||
+        errMsg.includes('Unauthorized')
+      if (isAuthError) {
+        stats.connectionError = `חיבור Gmail ל-${conn.gmail_address} פג תוקף — יש להתחבר מחדש`
+      }
     }
   }
 

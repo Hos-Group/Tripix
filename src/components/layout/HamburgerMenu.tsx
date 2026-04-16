@@ -5,35 +5,39 @@ import Link from 'next/link'
 import {
   Menu, X, AlertTriangle, Wallet, Luggage, ArrowLeftRight,
   Settings, LogOut, Cloud, Plane, Users, Sparkles, Map,
-  Globe, PlusCircle, FolderOpen,
+  Globe, PlusCircle, FolderOpen, Heart, Smartphone,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function HamburgerMenu() {
   const [open, setOpen] = useState(false)
   const { currentTrip } = useTrip()
   const { displayName, signOut } = useAuth()
+  const { t } = useLanguage()
 
   const primaryItems = [
-    { href: '/trips/new', label: 'צור טיול חדש', icon: PlusCircle, isPrimary: true },
-    { href: '/trips',     label: 'הטיולים שלי',   icon: FolderOpen, isPrimary: false },
+    { href: '/trips/new', label: t('menu_new_trip'), icon: PlusCircle, isPrimary: true },
+    { href: '/trips',     label: t('menu_my_trips'), icon: FolderOpen, isPrimary: false },
   ]
 
   const tripTools = [
-    { href: '/assistant', label: 'עוזר AI חכם',      icon: Sparkles,       color: 'text-violet-500',  bg: 'bg-violet-50' },
-    { href: '/itinerary', label: 'לוח מסע',           icon: Map,            color: 'text-teal-600',    bg: 'bg-teal-50' },
-    { href: '/budget',    label: 'מעקב תקציב',       icon: Wallet,         color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { href: '/packing',   label: 'רשימת אריזה',      icon: Luggage,        color: 'text-amber-600',   bg: 'bg-amber-50' },
-    { href: '/weather',   label: 'מזג אוויר',        icon: Cloud,          color: 'text-sky-500',     bg: 'bg-sky-50' },
-    { href: '/tools',     label: 'כלים (המרה / טיפ)', icon: ArrowLeftRight, color: 'text-blue-500',    bg: 'bg-blue-50' },
-    { href: '/emergency', label: 'מצב חירום',        icon: AlertTriangle,  color: 'text-red-500',     bg: 'bg-red-50' },
+    { href: '/assistant', label: t('menu_ai_assistant'), icon: Sparkles,       color: 'text-violet-500',  bg: 'bg-violet-50' },
+    { href: '/itinerary', label: t('menu_itinerary'),    icon: Map,            color: 'text-teal-600',    bg: 'bg-teal-50' },
+    { href: '/budget',    label: t('menu_budget'),       icon: Wallet,         color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { href: '/packing',   label: t('menu_packing'),      icon: Luggage,        color: 'text-amber-600',   bg: 'bg-amber-50' },
+    { href: '/lifestyle', label: 'LifeStyle',            icon: Heart,          color: 'text-pink-500',    bg: 'bg-pink-50' },
+    { href: '/weather',   label: t('menu_weather'),      icon: Cloud,          color: 'text-sky-500',     bg: 'bg-sky-50' },
+    { href: '/tools',     label: t('menu_tools'),        icon: ArrowLeftRight, color: 'text-blue-500',    bg: 'bg-blue-50' },
+    { href: '/emergency', label: t('menu_emergency'),    icon: AlertTriangle,  color: 'text-red-500',     bg: 'bg-red-50' },
+    { href: '/partners', label: t('menu_partners'),      icon: Smartphone,     color: 'text-sky-500',    bg: 'bg-sky-50'    },
   ]
 
   const generalItems = [
-    { href: '/shared',    label: 'טיולים משותפים',  icon: Users,  color: 'text-orange-500', bg: 'bg-orange-50' },
-    { href: '/community', label: 'קהילת Tripix',    icon: Globe,  color: 'text-green-500',  bg: 'bg-green-50' },
+    { href: '/shared',    label: t('menu_shared_trips'), icon: Users,  color: 'text-orange-500', bg: 'bg-orange-50' },
+    { href: '/community', label: t('menu_community'),    icon: Globe,  color: 'text-green-500',  bg: 'bg-green-50' },
   ]
 
   return (
@@ -132,19 +136,19 @@ export default function HamburgerMenu() {
                     className="flex items-center gap-3 p-3 rounded-2xl active:scale-[0.98] transition-all text-white"
                     style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
                     <PlusCircle className="w-5 h-5 text-white" />
-                    <span className="text-sm font-bold">צור טיול חדש</span>
+                    <span className="text-sm font-bold">{t('menu_new_trip')}</span>
                   </Link>
                   <Link href="/trips" onClick={() => setOpen(false)}
                     className="flex items-center gap-3 p-3 rounded-2xl bg-primary/8 active:scale-[0.98] transition-all"
                     style={{ backgroundColor: 'rgba(108,71,255,0.08)' }}>
                     <FolderOpen className="w-5 h-5 text-primary" />
-                    <span className="text-sm font-bold text-primary">הטיולים שלי</span>
+                    <span className="text-sm font-bold text-primary">{t('menu_my_trips')}</span>
                   </Link>
                 </div>
 
                 {/* Trip tools */}
                 <div>
-                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2 px-1">כלי טיול</p>
+                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2 px-1">{t('menu_trip_tools')}</p>
                   <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                     {tripTools.map((item, i) => (
                       <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
@@ -160,7 +164,7 @@ export default function HamburgerMenu() {
 
                 {/* General */}
                 <div>
-                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2 px-1">כללי</p>
+                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-2 px-1">{t('menu_general')}</p>
                   <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                     {generalItems.map((item, i) => (
                       <Link key={item.href} href={item.href} onClick={() => setOpen(false)}

@@ -58,12 +58,12 @@ export default function AdminPage() {
         { data: recentUsers },
         { data: tripDests },
       ] = await Promise.all([
-        supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('trips').select('*', { count: 'exact', head: true }),
         supabase.from('documents').select('*', { count: 'exact', head: true }),
         supabase.from('gmail_connections').select('*', { count: 'exact', head: true }),
         supabase.from('expenses').select('*', { count: 'exact', head: true }),
-        supabase.from('user_profiles')
+        supabase.from('profiles')
           .select('email, created_at')
           .order('created_at', { ascending: false })
           .limit(5),

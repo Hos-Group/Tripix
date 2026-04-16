@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tripix — Marketing Content Pack</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: 'Heebo', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header & Navigation */
+        header {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(108, 71, 255, 0.2);
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        nav {
+            display: flex;
+            gap: 10px;
+        }
+
+        nav button {
+            padding: 10px 20px;
+            background: transparent;
+            color: #fff;
+            border: 1px solid rgba(108, 71, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Heebo', sans-serif;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        nav button.active {
+            background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+            border-color: transparent;
+        }
+
+        nav button:hover {
+            border-color: #6C47FF;
+            transform: translateY(-2px);
+        }
+
+        /* Main Content */
+        .content {
+            margin: 40px 0;
+        }
+
+        .section {
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-size: 32px;
+            font-weight: 900;
+            margin-bottom: 30px;
+            text-align: right;
+        }
+
+        .section-subtitle {
+            font-size: 14px;
+            color: #9B7BFF;
+            margin-bottom: 20px;
+            text-align: right;
+        }
+
+        /* Phone Frame */
+        .phone-frame {
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto;
+            background: #000;
+            border-radius: 40px;
+            padding: 12px;
+            box-shadow: 0 20px 60px rgba(108, 71, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .phone-frame::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 25px;
+            background: #000;
+            border-radius: 0 0 20px 20px;
+            z-index: 10;
+        }
+
+        .phone-content {
+            width: 100%;
+            aspect-ratio: 9/16;
+            background: #fff;
+            border-radius: 30px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        /* Instagram Carousel */
+        .carousel-container {
+            width: 100%;
+            display: flex;
+            gap: 20px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .carousel-slide {
+            flex: 0 0 calc(33.333% - 14px);
+            min-width: 280px;
+        }
+
+        .slide-content {
+            background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+            border-radius: 30px;
+            padding: 40px 20px;
+            color: #fff;
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            line-height: 1.8;
+        }
+
+        .slide-content.slide-2 {
+            background: #6C47FF;
+        }
+
+        .slide-content.slide-3 {
+            background: #6C47FF;
+            gap: 30px;
+        }
+
+        .slide-logo {
+            font-size: 48px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #fff, #9B7BFF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .slide-dashboard {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 12px;
+            width: 100%;
+            aspect-ratio: 1;
+        }
+
+        .carousel-controls {
+            text-align: center;
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .carousel-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .carousel-dot.active {
+            background: #6C47FF;
+            width: 20px;
+            border-radius: 4px;
+        }
+
+        /* Reel Card */
+        .reel-card {
+            background: linear-gradient(135deg, rgba(108, 71, 255, 0.1), rgba(155, 123, 255, 0.1));
+            border: 1px solid rgba(108, 71, 255, 0.3);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+
+        .reel-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #9B7BFF;
+            text-align: right;
+        }
+
+        .reel-duration {
+            display: inline-block;
+            background: #6C47FF;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-bottom: 15px;
+            text-align: right;
+            width: 100%;
+        }
+
+        .storyboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .storyboard-scene {
+            background: #6C47FF;
+            aspect-ratio: 9/16;
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 12px;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scene-timing {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+
+        .scene-label {
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .timing-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .timing-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #6C47FF, #9B7BFF);
+            transition: width 0.3s ease;
+        }
+
+        /* Caption Section */
+        .caption-section {
+            background: rgba(108, 71, 255, 0.1);
+            border-left: 3px solid #6C47FF;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            text-align: right;
+        }
+
+        .caption-title {
+            font-weight: 700;
+            color: #9B7BFF;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .caption-text {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .hashtags {
+            font-size: 12px;
+            color: #9B7BFF;
+            word-break: break-all;
+        }
+
+        /* Production Notes */
+        .production-notes {
+            background: rgba(155, 123, 255, 0.1);
+            border: 1px solid rgba(155, 123, 255, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+
+        .production-notes h4 {
+            color: #9B7BFF;
+            margin-bottom: 10px;
+            text-align: right;
+        }
+
+        .production-notes p {
+            margin-bottom: 8px;
+            text-align: right;
+            line-height: 1.5;
+        }
+
+        /* Posts Grid */
+        .posts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .post-card {
+            background: linear-gradient(135deg, rgba(108, 71, 255, 0.1), rgba(155, 123, 255, 0.1));
+            border: 1px solid rgba(108, 71, 255, 0.3);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .post-card:hover {
+            transform: translateY(-5px);
+            border-color: #6C47FF;
+            box-shadow: 0 10px 30px rgba(108, 71, 255, 0.2);
+        }
+
+        .post-image {
+            width: 100%;
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 30px;
+            font-weight: 700;
+            font-size: 24px;
+        }
+
+        .post-details {
+            padding: 20px;
+        }
+
+        .post-details h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            text-align: right;
+        }
+
+        .post-details p {
+            font-size: 13px;
+            color: #aaa;
+            text-align: right;
+            line-height: 1.5;
+        }
+
+        /* Infographic Post */
+        .infographic-card {
+            background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            color: #fff;
+        }
+
+        .infographic-stat {
+            font-size: 32px;
+            font-weight: 900;
+            margin: 20px 0 5px;
+        }
+
+        .infographic-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+
+        /* Overview Section */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .overview-card {
+            background: linear-gradient(135deg, rgba(108, 71, 255, 0.1), rgba(155, 123, 255, 0.1));
+            border: 1px solid rgba(108, 71, 255, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: right;
+        }
+
+        .overview-card h3 {
+            color: #9B7BFF;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .overview-card p {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(108, 71, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+            z-index: 500;
+        }
+
+        .sidebar.show {
+            display: block;
+        }
+
+        .sidebar-item {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(108, 71, 255, 0.2);
+            font-size: 12px;
+            cursor: pointer;
+            text-align: right;
+            transition: color 0.3s ease;
+        }
+
+        .sidebar-item:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-item:hover {
+            color: #9B7BFF;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .carousel-slide {
+                flex: 0 0 100%;
+                min-width: unset;
+            }
+
+            nav button {
+                padding: 8px 15px;
+                font-size: 12px;
+            }
+
+            .section-title {
+                font-size: 24px;
+            }
+
+            .sidebar {
+                position: static;
+                max-height: unset;
+                margin-bottom: 30px;
+                background: rgba(0, 0, 0, 0.3);
+            }
+
+            .posts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(108, 71, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #6C47FF;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9B7BFF;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from { transform: translateX(20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .post-card {
+            animation: slideIn 0.5s ease forwards;
+        }
+
+        .post-card:nth-child(2) { animation-delay: 0.1s; }
+        .post-card:nth-child(3) { animation-delay: 0.2s; }
+        .post-card:nth-child(4) { animation-delay: 0.3s; }
+        .post-card:nth-child(5) { animation-delay: 0.4s; }
+        .post-card:nth-child(6) { animation-delay: 0.5s; }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo">Tripix</div>
+            <nav>
+                <button class="nav-btn active" data-section="overview">סקירה כללית</button>
+                <button class="nav-btn" data-section="posts">פוסטים</button>
+                <button class="nav-btn" data-section="reels">רילס</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Overview Section -->
+        <div id="overview" class="section active">
+            <div class="section-title">Tripix — חבילת תוכן שיווקית</div>
+            <p style="text-align: right; margin-bottom: 30px; opacity: 0.8;">
+                דשבורד אינטראקטיבי מלא עם קרוסלות אינסטגרם, 7 רילסים, ו-6 פוסטים בעיצוב מקצועי
+            </p>
+
+            <div class="overview-grid">
+                <div class="overview-card">
+                    <h3>📱 קרוסלה אינסטגרם</h3>
+                    <p>3 שקופיות עם טקסט, לוגו וקול קורא לפעולה</p>
+                </div>
+                <div class="overview-card">
+                    <h3>🎬 7 רילסים מקצועיים</h3>
+                    <p>מ-18 שניות עד 48 שניות, סטוריבורדים מלאים וטיימינג</p>
+                </div>
+                <div class="overview-card">
+                    <h3>📸 6 פוסטים ייחודיים</h3>
+                    <p>אינפוגרפיקה, before/after, טיפים וסיפורים אמיתיים</p>
+                </div>
+                <div class="overview-card">
+                    <h3>🎨 עיצוב ברנדי</h3>
+                    <p>צבעים: #6C47FF (סגול), לבן על רקע כהה</p>
+                </div>
+                <div class="overview-card">
+                    <h3>🌐 עברית RTL</h3>
+                    <p>כל התוכן בעברית, ממוצא מימין</p>
+                </div>
+                <div class="overview-card">
+                    <h3>💡 הערות ייצור</h3>
+                    <p>הנחיות צילום, הצעות למוזיקה וTiming מדויק</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Posts Section -->
+        <div id="posts" class="section">
+            <div class="section-title">📸 פוסטים ברשת חברתית</div>
+
+            <!-- Post 1: Instagram Carousel -->
+            <div class="section-subtitle">Post #1: קרוסלה אינסטגרם — "חזרתי מתאילנד"</div>
+            <div class="carousel-container">
+                <div class="carousel-slide">
+                    <div class="phone-frame">
+                        <div class="phone-content">
+                            <div class="slide-content">
+                                <div>חזרתי מתאילנד.</div>
+                                <div>פתחתי את האקסל.</div>
+                                <div>רציתי לבכות.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-controls">
+                        <div class="carousel-dot active"></div>
+                    </div>
+                </div>
+
+                <div class="carousel-slide">
+                    <div class="phone-frame">
+                        <div class="phone-content">
+                            <div class="slide-content slide-2">
+                                <div style="margin-bottom: 20px;">או שאפשר ככה</div>
+                                <div class="slide-dashboard">
+                                    📊 Dashboard Preview<br>
+                                    💰 Expenses: ₪8,500<br>
+                                    👥 Split: 4 חברים<br>
+                                    ✅ All organized
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-controls">
+                        <div class="carousel-dot active"></div>
+                    </div>
+                </div>
+
+                <div class="carousel-slide">
+                    <div class="phone-frame">
+                        <div class="phone-content">
+                            <div class="slide-content slide-3">
+                                <div class="slide-logo">T</div>
+                                <div style="font-size: 24px;">TRIPIX</div>
+                                <div>חינם. לגמרי. בלי קאץ׳.</div>
+                                <div style="font-size: 16px; opacity: 0.9;">tripix.app</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="carousel-controls">
+                        <div class="carousel-dot active"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="caption-section">
+                <div class="caption-title">כותרת ותיאור:</div>
+                <div class="caption-text">
+                    "חזרתי מתאילנד. פתחתי את האקסל. רציתי לבכות. או שאפשר ככה 👆 Tripix — כל הטיול במקום אחד. סריקת קבלות בAI, ייבוא הזמנות מGmail, חלוקת הוצאות חכמה, רשימת אריזה, ציר זמן ועוד. חינם. לגמרי. בלי קאץ׳."
+                </div>
+                <div class="hashtags">
+                    #Tripix #ניהולטיולים #ניהולהוצאות #נסיעות #טייפולVR #חברים #חינם #חדשון #טיולבחו"ל #ישראלים
+                </div>
+            </div>
+
+            <div class="production-notes">
+                <h4>🎬 הערות ייצור:</h4>
+                <p>• 3 שקופיות בפורמט 9:16 (Story/Reel ratio)</p>
+                <p>• צבע רקע: סגול ממדרון #6C47FF ל-#9B7BFF</p>
+                <p>• טקסט לבן, מרוכז, bold</p>
+                <p>• זמן כל שקופית: 3-4 שניות</p>
+                <p>• מוזיקה: Upbeat, מודרנית, בקצב בינוני</p>
+            </div>
+
+            <!-- Post 2: Infographic -->
+            <div class="section-subtitle" style="margin-top: 60px;">Post #2: אינפוגרפיקה — "המספרים מדברים"</div>
+            <div class="posts-grid">
+                <div class="post-card">
+                    <div class="infographic-card">
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 20px;">כמה אנחנו בעצם משוטטים?</div>
+                        <div class="infographic-stat">9M+</div>
+                        <div class="infographic-label">נסיעות של ישראלים בשנה</div>
+
+                        <div style="border-top: 1px solid rgba(255, 255, 255, 0.3); margin: 30px 0;"></div>
+
+                        <div class="infographic-stat">₪8,500</div>
+                        <div class="infographic-label">ממוצע הוצאות לטיול</div>
+
+                        <div style="border-top: 1px solid rgba(255, 255, 255, 0.3); margin: 30px 0;"></div>
+
+                        <div style="font-size: 16px; color: #fff; line-height: 1.6;">
+                            כמה מזה אתם באמת עוקבים?
+                            <br><br>
+                            עם Tripix: 100% 📊
+                        </div>
+                    </div>
+                    <div class="post-details">
+                        <h3>קרא טריפיקס ➜</h3>
+                        <p>כל הטיול במקום אחד. סריקה, ייבוא, חלוקה וארגון.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post 3: Before vs After -->
+            <div class="section-subtitle" style="margin-top: 60px;">Post #3: Before vs After — "ציפיות vs מציאות"</div>
+            <div class="posts-grid">
+                <div class="post-card">
+                    <div class="post-image" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 20px;">
+                        <div style="background: rgba(0, 0, 0, 0.2); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 16px;">
+                            <div>📝 בלי Tripix</div>
+                            <div style="font-size: 12px; margin-top: 10px; opacity: 0.9;">קבלות מעורבבות, אקסל מבולגן, דרמה בקבוצה</div>
+                        </div>
+                        <div style="background: #6C47FF; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 16px;">
+                            <div>✨ עם Tripix</div>
+                            <div style="font-size: 12px; margin-top: 10px; opacity: 0.9;">סדר מלא, dashboard יפה, כל אחד שקט</div>
+                        </div>
+                    </div>
+                    <div class="post-details">
+                        <h3>ניהול טיול: ציפיות vs מציאות</h3>
+                        <p>בחרו את הצד הימני 👈 הורידו Tripix בחינם. tripix.app</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post 4: Checklist -->
+            <div class="section-subtitle" style="margin-top: 60px;">Post #4: Checklist — "5 דברים שחייבים לעשות"</div>
+            <div class="posts-grid">
+                <div class="post-card">
+                    <div class="post-image" style="flex-direction: column; gap: 20px; padding: 30px; justify-content: space-around;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">✈️ 5 דברים לפני כל טיול</div>
+                        <div style="font-size: 14px; text-align: right;">
+                            <div>✅ להוריד Tripix</div>
+                            <div>✅ לסרוק את כל ההזמנות</div>
+                            <div>✅ להוסיף חברים לטיול</div>
+                            <div>✅ להכין רשימת אריזה</div>
+                            <div>✅ לבדוק מזג אוויר ביעד</div>
+                        </div>
+                    </div>
+                    <div class="post-details">
+                        <h3>Checklist: לפני הטיול הבא</h3>
+                        <p>כל ה-5 גם Tripix עוזר לך לעשות בדקות. חינם.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post 5: Quote -->
+            <div class="section-subtitle" style="margin-top: 60px;">Post #5: Quote — "הטיול הטוב ביותר"</div>
+            <div class="posts-grid">
+                <div class="post-card">
+                    <div class="post-image" style="background: linear-gradient(135deg, #6C47FF, #9B7BFF); padding: 60px 30px;">
+                        <div style="font-size: 28px; font-weight: 700; line-height: 1.6; margin-bottom: 30px;">
+                            הטיול הטוב ביותר הוא זה שאתה לא צריך לדאוג בו לכלום.
+                        </div>
+                        <div style="font-size: 14px; opacity: 0.8;">— Tripix, 2026</div>
+                    </div>
+                    <div class="post-details">
+                        <h3>טיול ללא דאגות</h3>
+                        <p>עם Tripix, כל דבר מטופל. tripix.app</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post 6: User Scenario -->
+            <div class="section-subtitle" style="margin-top: 60px;">Post #6: סיפור אמיתי — "4 חברים, תאילנד"</div>
+            <div class="posts-grid">
+                <div class="post-card">
+                    <div class="post-image" style="flex-direction: column; gap: 25px;">
+                        <div style="font-size: 20px; font-weight: 700;">4 חברים. תאילנד. 2 שבועות.</div>
+                        <div style="text-align: center; line-height: 1.8;">
+                            <div style="color: #ff6b6b; font-weight: 700;">בלי Tripix:</div>
+                            <div style="font-size: 16px;">847 הודעות ווטסאפ</div>
+                            <div style="font-size: 12px; opacity: 0.8;">על כסף בלבד</div>
+                        </div>
+                        <div style="border-top: 1px solid rgba(255, 255, 255, 0.3);"></div>
+                        <div style="text-align: center; line-height: 1.8;">
+                            <div style="color: #51cf66; font-weight: 700;">עם Tripix:</div>
+                            <div style="font-size: 16px;">0 הודעות כסף</div>
+                            <div style="font-size: 12px; opacity: 0.8;">כולם יודעים בדיוק כמה הם חייבים</div>
+                        </div>
+                    </div>
+                    <div class="post-details">
+                        <h3>סיפור אמיתי: הטיול שלהם</h3>
+                        <p>הטיול שלכם הבא יכול להיות כמו זה. Tripix — חינם.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reels Section -->
+        <div id="reels" class="section">
+            <div class="section-title">🎬 רילסים - סטוריבורדים</div>
+
+            <!-- Reel 1: 3 שניות vs 3 שעות -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #1: "3 שניות vs 3 שעות"</div>
+                <div class="reel-duration">⏱️ 22 שניות</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:02</div>
+                        <div class="scene-label">שחור. "סוף טיול חברים. הגיע הרגע."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:02-0:04</div>
+                        <div class="scene-label">Split: אדם עם מחשבון/מחברת. "בלי Tripix"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:04-0:07</div>
+                        <div class="scene-label">אדם מתוסכל, WA בועות קופצות. "3 שעות אחר כך..."</div>
+                    </div>
+                    <div class="storyboard-scene" style="background: #6C47FF;">
+                        <div class="scene-timing">0:07-0:09</div>
+                        <div class="scene-label">DROP — סגול. "עם Tripix?"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:09-0:14</div>
+                        <div class="scene-label">Screen Rec: Tripix expense split. "3 שניות."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:14-0:17</div>
+                        <div class="scene-label">Share to WA. "שלחתי לקבוצה. נגמר."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:17-0:20</div>
+                        <div class="scene-label">End: Tripix לוגו. "כל הטיול. מקום אחד."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:20-0:22</div>
+                        <div class="scene-label">"חינם — לינק בביו 👆"</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "3 שניות vs 3 שעות 🕐 סוף טיול חברים = סיוט חלוקת כסף. אלא אם יש Tripix 💜 סריקה, ייבוא, חלוקה חכמה ושיתוף ללא דרמה. 3 שניות. בסדר. Tripix — חינם."
+                    </div>
+                    <div class="hashtags">#Tripix #שניות #חברים #טיול #ניהולהוצאות #חינם #NoCaption</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• סצנה 1: שחור מלא, טקסט לבן bold</p>
+                    <p>• סצנה 2-3: ריאל footage או מוקmock של אדם מתוסכל</p>
+                    <p>• סצנה 4: DROP effect, transition מהיר לסגול</p>
+                    <p>• סצנה 5-6: Screen recording של Tripix app</p>
+                    <p>• מוזיקה: Upbeat, transition effect בכל DROP</p>
+                    <p>• טקסט: לבן, bold, בגודל גדול, RTL</p>
+                </div>
+            </div>
+
+            <!-- Reel 2: 60 שניות, 6 פיצ׳רים -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #2: "60 שניות, 6 פיצ׳רים, 0 שקלים"</div>
+                <div class="reel-duration">⏱️ 48 שניות</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:03</div>
+                        <div class="scene-label">אדם לקמרה: "תנו לי 60 שניות..."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:03-0:05</div>
+                        <div class="scene-label">Dynamic Text: "TRIPIX — כל הטיול במקום אחד"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:05-0:10</div>
+                        <div class="scene-label">1️⃣ Screen Rec: סורק קבלה. "AI עושה הכל"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:10-0:16</div>
+                        <div class="scene-label">2️⃣ Screen Rec: Gmail import. "בלחיצה אחת"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:16-0:22</div>
+                        <div class="scene-label">3️⃣ Screen Rec: Dashboard + pie chart</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:22-0:28</div>
+                        <div class="scene-label">4️⃣ Screen Rec: Expense split. "בלי דרמה"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:28-0:33</div>
+                        <div class="scene-label">5️⃣ Screen Rec: Timeline. "כל אירוע"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:33-0:38</div>
+                        <div class="scene-label">6️⃣ Screen Rec: Packing list + weather</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:38-0:42</div>
+                        <div class="scene-label">Back to camera: "וכל זה? חינם. אפס שקל."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:42-0:48</div>
+                        <div class="scene-label">End: Logo + "הטיול הבא מתחיל כאן" + CTA</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "60 שניות. 6 פיצ׳רים. 0 שקלים. 💜 1. סורק קבלה בAI 2. מייבא הזמנות מGmail 3. Dashboard של כל ההוצאות 4. Split הוצאות חכם 5. Timeline של כל הטיול 6. רשימת אריזה + מזג אוויר + בקשות מסמכים. וכל זה בלי לשלם שקל אחד. Tripix — חינם לגמרי."
+                    </div>
+                    <div class="hashtags">#Tripix #60שניות #6פיצ׳רים #חינם #טיול #Shorts #AI</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• פתיחה: אדם בקמרה, אופטימיסטי, ישתרך בטלפון</p>
+                    <p>• כל 6 ה-screen recordings צריכים להיות מהר, דינמי</p>
+                    <p>• טקסט לכל feature בגודל גדול, RTL</p>
+                    <p>• עברה בין screens באנימציות חלקות</p>
+                    <p>• מוזיקה: Energetic, upbeat, motivational</p>
+                    <p>• End screen: סגול, לוגו לבן, CTA ברור</p>
+                </div>
+            </div>
+
+            <!-- Reel 3: סרקתי קבלה ב-3 שניות -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #3: "סרקתי קבלה ב-3 שניות"</div>
+                <div class="reel-duration">⏱️ 18 שניות (Demo)</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:02</div>
+                        <div class="scene-label">Text on Black: "אתם עדיין שומרים קבלות בגלריה?"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:02-0:05</div>
+                        <div class="scene-label">Screen Rec: Open Tripix → "סרוק קבלה"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:05-0:10</div>
+                        <div class="scene-label">Camera scans → AI auto-fills</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:10-0:13</div>
+                        <div class="scene-label">Zoom on filled data: "3 שניות. הכל מלא."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:13-0:16</div>
+                        <div class="scene-label">Dashboard: new expense in totals</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:16-0:18</div>
+                        <div class="scene-label">End: "Tripix — סריקה חכמה"</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "סרקתי קבלה ב-3 שניות וTrip Tripix עשה את כל השאר 📱 סורק קבלה בAI, מזהה סכום, סוג הוצאה, מטבע, הוא מעודכן בדוד. בלי להקליד כלום. Tripix — סריקת קבלות חכמה."
+                    </div>
+                    <div class="hashtags">#Tripix #סריקהחכמה #AI #קבלות #טיול #Shorts</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• טקסט ראשון: שחור, טקסט לבן bold</p>
+                    <p>• Screen recording: כל פעולה ברורה וקלה</p>
+                    <p>• AI animation: וויזואלית דינמית כשהוא ממלא</p>
+                    <p>• Dashboard update: animation חלקה כשהוצאה חדשה מוסיפה</p>
+                    <p>• מוזיקה: קצרה, חכמה, tech-ish</p>
+                </div>
+            </div>
+
+            <!-- Reel 4: Gmail עושה את העבודה -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #4: "Gmail עושה את העבודה"</div>
+                <div class="reel-duration">⏱️ 20 שניות (Demo)</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:03</div>
+                        <div class="scene-label">Text: "הזמנתם טיסה? מלון? רכב?"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:03-0:05</div>
+                        <div class="scene-label">Text: "Tripix כבר יודע."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:05-0:12</div>
+                        <div class="scene-label">Screen Rec: Gmail import → flights, hotels auto</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:12-0:16</div>
+                        <div class="scene-label">Timeline: כל events כרונולוגי</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:16-0:18</div>
+                        <div class="scene-label">Text: "כל ההזמנות. אוטומטית. ממייל."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:18-0:20</div>
+                        <div class="scene-label">End: סגול + Tripix לוגו + CTA</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "כל ההזמנות שלכם מGmail לTrip Tripix באוטומט ✈️🏨 הזמנתם טיסה? מלון? השכרת רכב? Tripix כבר יודע ומעדכן. כל הטיול בציר זמן אחד. אוטומטית. ממייל שלכם. יותר לא צריך להעתיק-הדביק."
+                    </div>
+                    <div class="hashtags">#Tripix #GmailIntegration #אוטומט #טיול #הזמנות #Shorts</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• Pacing: מהיר, דינמי, שובר כללים</p>
+                    <p>• Screen rec: צריך להראות email → parsed data</p>
+                    <p>• Timeline: beautiful scroll-through, כל הוויזואלים יפים</p>
+                    <p>• מוזיקה: upbeat, energetic</p>
+                </div>
+            </div>
+
+            <!-- Reel 5: מי חייב למי? נגמר. -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #5: "מי חייב למי? נגמר."</div>
+                <div class="reel-duration">⏱️ 22 שניות (Demo)</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:03</div>
+                        <div class="scene-label">WhatsApp screenshot: קבוצה חברים דרמה</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:03-0:05</div>
+                        <div class="scene-label">Text on Red: "נמאס."</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:05-0:10</div>
+                        <div class="scene-label">Screen Rec: Add expense → select friends → auto split</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:10-0:15</div>
+                        <div class="scene-label">"מי חייב למי" summary screen</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:15-0:18</div>
+                        <div class="scene-label">Share to WA one tap</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:18-0:22</div>
+                        <div class="scene-label">Text: "0 דרמות. 0 אקסלים." + End</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "מי חייב למי? Tripix יודע בדיוק 💜 קיצור דרכים: בלי דרמה בקבוצה, בלי אקסל מבולגן, בלי misunderstandings. כל אחד מוסיף הוצאה, Tripix חוקק מי חייב למי, שלח לקבוצה בكليkeית. סוף. נגמר."
+                    </div>
+                    <div class="hashtags">#Tripix #SplitExpenses #NoDrama #ChaverimTrip #Shorts</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• WA screenshot: פחד, confusion, emojis חבורה</p>
+                    <p>• Screen rec: smooth, fast, חכם</p>
+                    <p>• Summary screen: beautiful design, clear numbers</p>
+                    <p>• מוזיקה: relief theme, happy ending</p>
+                </div>
+            </div>
+
+            <!-- Reel 6: הטיול שלי ב-60 שניות -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #6: "הטיול שלי ב-60 שניות"</div>
+                <div class="reel-duration">⏱️ 25 שניות (Demo)</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:03</div>
+                        <div class="scene-label">Text: "רגע לפני הטיול — ככה נראה בTrip Tripix"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:03-0:08</div>
+                        <div class="scene-label">Dashboard scroll: expenses by category, pie</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:08-0:13</div>
+                        <div class="scene-label">Timeline: flights, hotels, car rentals</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:13-0:18</div>
+                        <div class="scene-label">Packing list: checkmarks + weather widget</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:18-0:22</div>
+                        <div class="scene-label">Document vault: tickets, insurance, passes</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:22-0:25</div>
+                        <div class="scene-label">End: "ואקף אחד. טיול שלם." + CTA</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "60 שניות וכל הטיול שלנו בTrip Tripix 🎬 Dashboard עם כל ההוצאות, Timeline עם כל אירוע, Packing list עם checkboxes, מזג אוויר בחום ליעד, Vault עם כל המסמכים. אקף אחד. טיול שלם. בחינם."
+                    </div>
+                    <div class="hashtags">#Tripix #TravelPlanning #Dashboard #AllInOne #Shorts</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• Dashboard: scroll smooth, pie chart animated</p>
+                    <p>• Timeline: כרונולוגי, clean design</p>
+                    <p>• Packing list: check animations חכמה</p>
+                    <p>• Weather widget: animated, weather icons</p>
+                    <p>• Vault: security feel, all docs visible</p>
+                    <p>• מוזיקה: epic, motivational, travel-themed</p>
+                </div>
+            </div>
+
+            <!-- Reel 7: 5 טעויות -->
+            <div class="reel-card">
+                <div class="reel-title">Reel #7: "5 טעויות שעולות כסף בטיול"</div>
+                <div class="reel-duration">⏱️ 30 שניות (Educational)</div>
+
+                <div class="storyboard">
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:00-0:03</div>
+                        <div class="scene-label">Hook: "5 טעויות שעולות לכם כסף בכל טיול"</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:03-0:07</div>
+                        <div class="scene-label">#1: "לא עוקבים בזמן אמת" → Tripix dashboard</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:07-0:12</div>
+                        <div class="scene-label">#2: "לא שומרים קבלות" → Tripix scan</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:12-0:17</div>
+                        <div class="scene-label">#3: "לא מחלקים נכון" → Tripix split</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:17-0:22</div>
+                        <div class="scene-label">#4: "שוכחים רשימה" → Tripix packing list</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:22-0:27</div>
+                        <div class="scene-label">#5: "מסמכים בפזורים" → Tripix vault</div>
+                    </div>
+                    <div class="storyboard-scene">
+                        <div class="scene-timing">0:27-0:30</div>
+                        <div class="scene-label">End: "Tripix פותר את כל ה-5. חינם."</div>
+                    </div>
+                </div>
+
+                <div class="timing-bar">
+                    <div class="timing-bar-fill" style="width: 100%;"></div>
+                </div>
+
+                <div class="caption-section">
+                    <div class="caption-title">📝 כותרת ותיאור:</div>
+                    <div class="caption-text">
+                        "5 טעויות שעולות לכם כסף בכל טיול (וTrip Tripix פותר את כל אחת מהן) 💜 1. לא עוקבים אחרי הוצאות בזמן אמת 2. לא שומרים קבלות כמו שצריך 3. לא מחלקים הוצאות בין חברים נכון 4. שוכחים דברים ברשימת אריזה ובסוף קונים כפול 5. מסמכים בפזורים, טיסות בתיקייה אחרת, ביטוח באמייל שלישי. Tripix עוזר לכל אחת מהן. בחינם."
+                    </div>
+                    <div class="hashtags">#Tripix #TravelTips #5Mistakes #Money #SaveMoney #Shorts</div>
+                </div>
+
+                <div class="production-notes">
+                    <h4>🎬 הערות ייצור:</h4>
+                    <p>• Hook: ברור, attention-grabbing, בקול חזק</p>
+                    <p>• כל טעות: בקצר ובר. problem → solution מ-Tripix</p>
+                    <p>• פורמט: text on screen, visual examples</p>
+                    <p>• מוזיקה: דידקטית אך לא משעממת</p>
+                    <p>• End: positive, empowering message</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Tab Navigation
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const sections = document.querySelectorAll('.section');
+
+        navButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active from all buttons
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                // Add active to clicked button
+                button.classList.add('active');
+
+                // Remove active from all sections
+                sections.forEach(section => section.classList.remove('active'));
+                // Add active to corresponding section
+                const sectionId = button.getAttribute('data-section');
+                document.getElementById(sectionId).classList.add('active');
+
+                // Scroll to top
+                window.scrollTo(0, 0);
+            });
+        });
+
+        // Carousel Navigation
+        document.querySelectorAll('.carousel-dot').forEach((dot, index) => {
+            dot.addEventListener('click', () => {
+                const dots = dot.parentElement.querySelectorAll('.carousel-dot');
+                dots.forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+            });
+        });
+
+        // Smooth scroll for section navigation
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+
+        // Add animation to storyboard scenes on scroll
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animation = 'slideIn 0.5s ease forwards';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.storyboard-scene').forEach(scene => {
+            observer.observe(scene);
+        });
+
+        // Mobile menu toggle
+        let sidebarVisible = false;
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            sidebarVisible = !sidebarVisible;
+            sidebar.classList.toggle('show');
+        }
+
+        // Add keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'd') {
+                const activeButton = document.querySelector('.nav-btn.active');
+                const nextButton = activeButton.nextElementSibling;
+                if (nextButton && nextButton.classList.contains('nav-btn')) {
+                    nextButton.click();
+                }
+            }
+            if (e.key === 'ArrowLeft' || e.key === 'a') {
+                const activeButton = document.querySelector('.nav-btn.active');
+                const prevButton = activeButton.previousElementSibling;
+                if (prevButton && prevButton.classList.contains('nav-btn')) {
+                    prevButton.click();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -3,10 +3,12 @@
 import dynamic from 'next/dynamic'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Loader2, MapPin } from 'lucide-react'
+import { ChevronLeft, Loader2, MapPin, CalendarDays } from 'lucide-react'
 import { useTrip } from '@/contexts/TripContext'
 import { supabase } from '@/lib/supabase'
 import { Document as TripDoc } from '@/types'
+import { buildCalEvents, generateICS, downloadICS, RawDocument } from '@/lib/calendarExport'
+import toast from 'react-hot-toast'
 
 // ── Comprehensive IATA airport code → [lat, lng] mapping ─────────────────────
 const AIRPORT_COORDS: Record<string, [number, number]> = {
@@ -301,6 +303,7 @@ export default function ItineraryPage() {
   const [hotels,     setHotels]     = useState<HotelMarker[]>([])
   const [carRentals, setCarRentals] = useState<CarRentalMarker[]>([])
   const [loading,    setLoading]    = useState(true)
+  const [rawDocs,    setRawDocs]    = useState<RawDocument[]>([])
 
   useEffect(() => {
     if (currentTrip) loadData()
@@ -322,6 +325,7 @@ export default function ItineraryPage() {
     const hotelMarkers:     HotelMarker[]     = []
     const carRentalMarkers: CarRentalMarker[] = []
 
+    setRawDocs(docs || [])
     const flightDocs    = (docs || []).filter(d => d.doc_type === 'flight')
     const hotelDocs     = (docs || []).filter(d => d.doc_type === 'hotel')
     const carRentalDocs = (docs || []).filter(d => d.doc_type === 'car_rental')
@@ -466,6 +470,26 @@ export default function ItineraryPage() {
 
   const hasData = flights.length > 0 || hotels.length > 0 || carRentals.length > 0
 
+  function handleExportCalendar() {
+    if (!currentTrip) return
+    const calEvents = buildCalEvents(rawDocs as RawDocument[], [])
+    if (calEvents.length === 0) {
+      toast.error('אין אירועים לייצוא — יש לייבא מסמכים קודם')
+      return
+    }
+    const ics = generateICS({
+      tripId:      currentTrip.id,
+      tripName:    currentTrip.name,
+      destination: currentTrip.destination,
+      startDate:   currentTrip.start_date,
+      endDate:     currentTrip.end_date,
+      events:      calEvents,
+    })
+    const safeName = currentTrip.name.replace(/[^a-zA-Z0-9א-ת\s]/g, '').trim().replace(/\s+/g, '_')
+    downloadICS(ics, `${safeName}.ics`)
+    toast.success(`✅ ייצוא ${calEvents.length} אירועים ללוח שנה`)
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-950">
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -484,10 +508,17 @@ export default function ItineraryPage() {
             <h1 className="text-base font-bold">Trip Map</h1>
             {currentTrip && <p className="text-xs opacity-60">{currentTrip.name}</p>}
           </div>
-          <div className="flex items-center gap-2 text-[10px] opacity-70">
-            <span>✈️ Flight</span>
-            <span>🏨 Hotel</span>
-            <span>🚗 Car</span>
+          <div className="flex items-center gap-2">
+            {hasData && !loading && (
+              <button
+                onClick={handleExportCalendar}
+                className="flex items-center gap-1 bg-white/15 hover:bg-white/25 active:scale-95 transition-all rounded-xl px-2.5 py-1.5 text-[11px] font-medium"
+                title="ייצוא לוח שנה"
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>ייצוא</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

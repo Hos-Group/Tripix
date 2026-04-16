@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "tripix-gmail-scanner", "runs": [{"id": "eval-1-add-dedup-rule-with_skill", "prompt": "\u05db\u05e9\u05d0\u05e0\u05d9 \u05e1\u05d5\u05e8\u05e7 Gmail, \u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05d9\u05d5\u05e6\u05e8\u05ea \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05e9\u05dc \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea. \u05dc\u05de\u05e9\u05dc, Booking.com \u05e9\u05d5\u05dc\u05d7 3 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e2\u05dc \u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4 \u05d5\u05e0\u05d5\u05e6\u05e8\u05d5\u05ea 3 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05d6\u05d4\u05d5\u05ea. \u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05d7\u05d5\u05e7 \u05d1\u05e8\u05d6\u05dc \u05e9\u05de\u05d5\u05e0\u05e2 \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05d1\u05d4\u05d5\u05e6\u05d0\u05d5\u05ea, \u05dc\u05d0 \u05e8\u05e7 \u05d1\u05de\u05e1\u05de\u05db\u05d9\u05dd.", "eval_id": 1, "outputs": [{"name": "fix.md", "type": "text", "content": "# Task 1: Add Dedup Rule for Expenses\n\n## \u05d1\u05e2\u05d9\u05d4\n\u05db\u05e9\u05d0\u05e0\u05d9 \u05e1\u05d5\u05e8\u05e7 Gmail, \u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05d9\u05d5\u05e6\u05e8\u05ea \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05e9\u05dc \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea. \u05dc\u05de\u05e9\u05dc, Booking.com \u05e9\u05d5\u05dc\u05d7 3 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e2\u05dc \u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4 \u05d5\u05e0\u05d5\u05e6\u05e8\u05d5\u05ea 3 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05d6\u05d4\u05d5\u05ea. \u05d4\u05d3\u05d5-\u05e7\u05d5\u05de\u05e0\u05d8 \u05d4\u05e7\u05d9\u05d9\u05dd (name+date) \u05de\u05d5\u05e0\u05e2 \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05d1\u05de\u05e1\u05de\u05db\u05d9\u05dd, \u05d0\u05d1\u05dc \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05e0\u05d5\u05e6\u05e8\u05d5\u05ea \u05d1\u05e0\u05e4\u05e8\u05d3.\n\n## \u05e9\u05d5\u05e8\u05e9 \u05d4\u05d1\u05e2\u05d9\u05d4\n\u05d1-`scanTripGmail()` \u05d1\u05e7\u05d5\u05d1\u05e5 `src/lib/gmailScanner.ts`:\n- **\u05e9\u05d5\u05e8\u05d5\u05ea 940-959**: \u05d9\u05e9 dedup check \u05dc-documents \u05e2\u05d1\u05d5\u05e8 name+date\n- **\u05e9\u05d5\u05e8\u05d5\u05ea 1052-1067**: \u05d9\u05e6\u05d9\u05e8\u05ea expense \u05d4\u05d9\u05d0 **\"best-effort\"** \u05dc\u05dc\u05d0 dedup check\n- \u05d0\u05dd \u05d0\u05d5\u05ea\u05d5 \u05d4\u05de\u05d9\u05d9\u05dc \u05de\u05e2\u05d5\u05d3\u05db\u05df \u05d5\u05e0\u05e9\u05dc\u05d7 \u05e9\u05d5\u05d1, \u05d4-dedup \u05e9\u05dc Gmail message ID \u05de\u05d5\u05e0\u05e2 \u05e9\u05db\u05e4\u05d5\u05dc \u05de\u05e1\u05de\u05da \u05d0\u05da **\u05dc\u05d0** \u05de\u05d5\u05e0\u05e2 \u05e9\u05db\u05e4\u05d5\u05dc \u05d4\u05d5\u05e6\u05d0\u05d4\n\n## \u05d4\u05e4\u05d9\u05ea\u05e8\u05d5\u05df\n\n### \u05e9\u05dc\u05d1 1: \u05d4\u05d5\u05e1\u05e3 dedup check \u05dc\u05e4\u05e0\u05d9 \u05d9\u05e6\u05d9\u05e8\u05ea Expense\n\n**\u05de\u05d9\u05e7\u05d5\u05dd \u05d1\u05e7\u05d5\u05d3**: \u05d1\u05e7\u05d5\u05d1\u05e5 `src/lib/gmailScanner.ts`, **\u05d1\u05ea\u05d5\u05da \u05d4\u05dc\u05d5\u05dc\u05d0\u05d4** `for (const result of parsed)` (\u05d4\u05d7\u05dc \u05de\u05e9\u05d5\u05e8\u05d4 885), **\u05d0\u05d7\u05e8\u05d9 \u05d4-Document dedup checks** (\u05d0\u05d7\u05e8\u05d9 \u05e9\u05d5\u05e8\u05d4 959) **\u05d5\u05e7\u05d5\u05d3\u05dd \u05dc\u05d9\u05e6\u05d9\u05e8\u05ea Expense** (\u05d8\u05e8\u05dd \u05e9\u05d5\u05e8\u05d4 1052).\n\n\u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea \u05d4\u05e7\u05d5\u05d3 \u05d4\u05d6\u05d4:\n\n```typescript\n          // \u2500\u2500 Deduplication 3: same expense (amount + date + category) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n          // Prevent duplicate expenses when the same booking email is processed\n          // multiple times (e.g., Booking.com sends confirmation + payment + reminder).\n          // We check: amount + date + category to avoid creating the same expense\n          // multiple times. This ensures the expense ledger stays clean even when\n          // multiple confirmation emails arrive.\n          const expenseCategory = categoryMap[parsedBooking.booking_type] || 'other'\n          const expenseAmount   = parsedBooking.amount || 0\n          const expenseDate     = parsedBooking.check_in || parsedBooking.departure_date || t.start_date\n\n          if (expenseAmount > 0 && expenseDate) {\n            const { data: existingExpense } = await supabase\n              .from('expenses')\n              .select('id')\n              .eq('trip_id', tripId)\n              .eq('amount', expenseAmount)\n              .eq('expense_date', expenseDate)\n              .eq('category', expenseCategory)\n              .maybeSingle()\n\n            if (existingExpense) {\n              console.log(\n                `[gmailScanner/trip] skip dup expense: amount=${expenseAmount} ` +\n                `date=${expenseDate} category=${expenseCategory}`,\n              )\n              stats.filteredDuplicate++\n              continue  // Skip creating the expense\n            }\n          }\n```\n\n### \u05e9\u05dc\u05d1 2: \u05e2\u05d3\u05db\u05df \u05d0\u05ea \u05d4\u05e2\u05e8\u05da `stats.filteredDuplicate`\n\n\u05d4\u05d5\u05e1\u05e3 \u05e1\u05e4\u05e8\u05d9\u05d9\u05d4 \u05d6\u05d5 \u05d2\u05dd \u05dc\u05e9\u05dc\u05d5\u05e9 \u05d4-filters \u05e9\u05db\u05d1\u05e8 \u05e7\u05d9\u05d9\u05de\u05d9\u05dd:\n- **\u05e9\u05d5\u05e8\u05d4 936**: `stats.filteredDuplicate++` \u05db\u05d0\u05e9\u05e8 \u05de\u05ea\u05d2\u05dc\u05d4 duplicate \u05d1-booking_ref\n- **\u05e9\u05d5\u05e8\u05d4 957**: `stats.filteredDuplicate++` \u05db\u05d0\u05e9\u05e8 \u05de\u05ea\u05d2\u05dc\u05d4 duplicate \u05d1-name+date\n- **\u05e2\u05db\u05e9\u05d9\u05d5**: `stats.filteredDuplicate++` \u05db\u05d0\u05e9\u05e8 \u05de\u05ea\u05d2\u05dc\u05d4 duplicate \u05d1-expense\n\n\u05db\u05dc \u05e9\u05dc\u05d5\u05e9 \u05d4\u05d1\u05d3\u05d9\u05e7\u05d5\u05ea \u05de\u05d2\u05d1\u05d9\u05dc \u05d0\u05ea \u05d0\u05d5\u05ea\u05d5 `stats.filteredDuplicate` \u05db\u05d9 \u05d4\u05df \u05db\u05d5\u05dc\u05df \u05de\u05d5\u05e0\u05e2\u05d5\u05ea \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05d1\u05de\u05d5\u05e4\u05e2 \u05d0\u05d7\u05d3 \u05e9\u05dc \u05d4\u05de\u05d9\u05d9\u05dc.\n\n## \u05d4\u05e1\u05d1\u05e8\n\n### \u05dc\u05de\u05d4 \u05d6\u05d4 \u05e2\u05d5\u05d1\u05d3\n1. **Primary dedup** (Gmail message ID): \u05de\u05e0\u05d9\u05e2 \u05e2\u05d9\u05d1\u05d5\u05d3 \u05e9\u05dc \u05d0\u05d5\u05ea\u05d5 \u05d4\u05de\u05d9\u05d9\u05dc \u05e4\u05e2\u05de\u05d9\u05d9\u05dd \u05dc\u05d0\u05d5\u05ea\u05d5 \u05d8\u05d9\u05d5\u05dc\n2. **Secondary dedup** (booking_ref): \u05de\u05e0\u05d9\u05e2 \u05d3\u05d5\u05e7\u05d5\u05de\u05e0\u05d8\u05d9\u05dd \u05db\u05e4\u05d5\u05dc\u05d9\u05dd \u05e9\u05dc \u05d0\u05d5\u05ea\u05d5 \u05d4\u05d1\u05d5\u05e7\u05d9\u05e0\u05d2\n3. **Tertiary dedup** (name+date): \u05de\u05e0\u05d9\u05e2 \u05d3\u05d5\u05e7\u05d5\u05de\u05e0\u05d8\u05d9\u05dd \u05db\u05e4\u05d5\u05dc\u05d9\u05dd \u05db\u05e9\u05de\u05e0\u05d5\u05e2\u05d9\u05dd \u05d4\u05d1\u05d9\u05d8\u05d5\u05d9\u05d9\u05dd \u05d4\u05e9\u05d5\u05e0\u05d9\u05dd\n4. **Quaternary dedup** (amount+date+category) - **\u05d7\u05d3\u05e9**: \u05de\u05e0\u05d9\u05e2 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05db\u05e4\u05d5\u05dc\u05d5\u05ea\n\n### \u05de\u05e7\u05e8\u05d4 \u05de\u05e9\u05d9\u05de\u05d5\u05e9\n```\nBooking.com \u05e9\u05d5\u05dc\u05d7 3 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05d1-3 \u05d9\u05de\u05d9\u05dd \u05dc\u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4:\n1. \"Reservation confirmed\" - amount=500, date=2024-06-15, category=\"hotel\"\n2. \"Payment received\" - amount=500, date=2024-06-15, category=\"hotel\" \u2190 \u05d3\u05d5\u05d2\u05e8\u05dd\n3. \"Reminder: your stay is coming\" - amount=500, date=2024-06-15, category=\"hotel\" \u2190 \u05d3\u05d5\u05d2\u05e8\u05dd\n\n\u05ea\u05d5\u05e6\u05d0\u05d4 \u05e2\u05dd \u05d4\u05e4\u05d9\u05ea\u05e8\u05d5\u05df:\n- Document: \u05de\u05d5\u05e6\u05e8 1 (\u05de\u05d9\u05d9\u05dc \u05e8\u05d0\u05e9\u05d5\u05df)\n- Expense: \u05de\u05d5\u05e6\u05e8 1 (\u05de\u05d9\u05d9\u05dc \u05e8\u05d0\u05e9\u05d5\u05df)\n- \u05de\u05d9\u05d9\u05dc 2 \u05d5-3: \u05d3\u05d5\u05d2\u05e8\u05d9\u05dd \u05d1\u05e9\u05dc\u05d1 3 (amount+date+category check)\n```\n\n### \u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1\u05d5\u05ea\n1. **\u05e2\u05d1\u05d5\u05e8 `scanUserGmail()`**: \u05d1\u05e2\u05d9\u05d4 \u05d3\u05d5\u05de\u05d4 \u05e7\u05d9\u05d9\u05de\u05ea \u05d1-`processMessages()` (\u05e9\u05d5\u05e8\u05d4 523-600). \u05dc-expense \u05db\u05d0\u05df \u05d2\u05dd \u05d0\u05d9\u05df dedup check. \u05e2\u05d9\u05d9\u05df \u05d1-Task 2 \u05dc\u05e4\u05ea\u05e8\u05d5\u05df \u05de\u05dc\u05d0.\n\n2. **Edge cases**:\n   - \u05d0\u05dd \u05d4\u05d5\u05e6\u05d0\u05d4 \u05d1\u05e1\u05db\u05d5\u05dd 0 \u05d0\u05d5 \u05dc\u05dc\u05d0 \u05ea\u05d0\u05e8\u05d9\u05da, \u05d4\u05d1\u05d3\u05d9\u05e7\u05d4 \u05dc\u05d0 \u05de\u05d5\u05e4\u05e2\u05dc\u05ea (\u05d4\u05e7\u05d5\u05e0\u05d3\u05d9\u05e6\u05d9\u05d5\u05e0\u05d9\u05dc \u05d4\u05d5\u05d0 `if (expenseAmount > 0 && expenseDate)`)\n   - \u05e1\u05db\u05d5\u05de\u05d9\u05dd \u05e9\u05dc\u05d9\u05dc\u05d9\u05d9\u05dd (refunds) \u05dc\u05d0 \u05d9\u05d5\u05d3\u05e7\u05e8\u05d5 (\u05d0\u05d7\u05e8\u05ea refunds \u05e8\u05d0\u05e9\u05d5\u05e0\u05d9\u05d9\u05dd \u05d9\u05d7\u05e1\u05de\u05d5 refunds \u05de\u05d0\u05d5\u05d7\u05e8\u05d9\u05dd)\n\n3. **\u05d1\u05d9\u05e6\u05d5\u05e2\u05d9\u05dd**: \u05d4\u05d1\u05d3\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d0 `.maybeSingle()` \u05e9\u05d4\u05d9\u05d0 \u05d9\u05e2\u05d9\u05dc\u05d4 \u05de\u05d0\u05d5\u05d3 (index on trip_id + amount + date + category \u05d9\u05e2\u05d6\u05d5\u05e8).\n\n## \u05d8\u05d1\u05dc\u05ea \u05d4\u05e9\u05d5\u05d5\u05d0\u05d4\n\n| Dedup Layer | \u05de\u05d4 \u05d1\u05d5\u05d3\u05e7 | \u05de\u05d9\u05e7\u05d5\u05dd | \u05de\u05d5\u05e0\u05e2 |\n|------------|---------|------|------|\n| 1 (Gmail ID) | \u05d0\u05d5\u05ea\u05d5 \u05d0\u05d9\u05de\u05d9\u05d9\u05dc \u05e9\u05e0\u05d5\u05e6\u05e8 \u05d1\u05de\u05e2\u05e8\u05db\u05ea | \u05e9\u05d5\u05e8\u05d4 750-770 | \u05e2\u05d9\u05d1\u05d5\u05d3 \u05db\u05e4\u05d5\u05dc |\n| 2 (booking_ref) | \u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4 \u05de\u05d0\u05d5\u05ea\u05d5 \u05e1\u05e4\u05e7 | \u05e9\u05d5\u05e8\u05d4 913-938 | \u05d3\u05d5\u05e7\u05d5\u05de\u05e0\u05d8\u05d9\u05dd \u05db\u05e4\u05d5\u05dc\u05d9\u05dd |\n| 3 (name+date) | \u05d0\u05d5\u05ea\u05d4 \u05e9\u05dd + \u05ea\u05d0\u05e8\u05d9\u05da | \u05e9\u05d5\u05e8\u05d4 940-959 | \u05d3\u05d5\u05e7\u05d5\u05de\u05e0\u05d8\u05d9\u05dd \u05db\u05e4\u05d5\u05dc\u05d9\u05dd (backup) |\n| **4 (amount+date+category)** | **\u05d0\u05d5\u05ea\u05d4 \u05d4\u05d5\u05e6\u05d0\u05d4 \u05d1\u05d3\u05d9\u05d5\u05e7** | **\u05e9\u05d5\u05e8\u05d4 960-980 (\u05d7\u05d3\u05e9)** | **\u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05db\u05e4\u05d5\u05dc\u05d5\u05ea** |\n\n---\n\n## Verification\n\n\u05dc\u05d0\u05d7\u05e8 \u05d4\u05d5\u05e1\u05e4\u05ea \u05d4\u05e7\u05d5\u05d3:\n1. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4\u05e7\u05d5\u05d3 \u05de\u05e9\u05ea\u05dc\u05d1 \u05d1\u05ea\u05d5\u05da \u05d4\u05dc\u05d5\u05dc\u05d0\u05d4 `for (const result of parsed)` \u05d0\u05d7\u05e8\u05d9 \u05d4-dedup checks \u05d5\u05e7\u05d5\u05d3\u05dd \u05dc\u05d9\u05e6\u05d9\u05e8\u05ea \u05d4-Expense\n2. \u05d5\u05d3\u05d0 \u05e9\u05d4-`continue` \u05d3\u05d5\u05dc\u05d2 \u05e2\u05dc \u05e9\u05ea\u05d9 \u05d4\u05d1\u05d3\u05d9\u05e7\u05d5\u05ea \u05d4\u05d1\u05d0\u05d5\u05ea (document + expense insert)\n3. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4\u05e7\u05d5\u05e0\u05e1\u05d5\u05dc \u05de\u05e6\u05d9\u05d2 `skip dup expense: amount=XXX date=YYYY-MM-DD category=ZZZ` \u05db\u05e6\u05e4\u05d5\u05d9\n"}], "grading": {"eval_id": 1, "configuration": "with_skill", "expectations": [{"text": "identifies_correct_file", "passed": true, "evidence": "Clearly identifies gmailScanner.ts as the file to change (stated in Hebrew: '\u05d1\u05e7\u05d5\u05d1\u05e5 `src/lib/gmailScanner.ts`')"}, {"text": "identifies_processMessages_gap", "passed": true, "evidence": "Explicitly recognizes that processMessages() lacks dedup for expenses and notes this should be addressed in Task 2"}, {"text": "adds_expense_dedup", "passed": true, "evidence": "Provides actual TypeScript code block (lines 20-50) for expense deduplication with database query and continue statement"}, {"text": "uses_booking_ref_or_amount", "passed": true, "evidence": "Dedup key uses amount + date + category composite check (lines 28-39), preventing duplicate expenses based on these fields"}, {"text": "handles_both_scan_modes", "passed": false, "evidence": "Only focuses on scanTripGmail. While it acknowledges scanUserGmail has the same issue (line 83), it defers to Task 2 rather than addressing both modes in this solution"}, {"text": "hebrew_explanation", "passed": true, "evidence": "Entire response is in Hebrew with clear section headers and detailed explanations"}, {"text": "code_is_correct_typescript", "passed": true, "evidence": "Code follows existing TypeScript patterns with proper async/await, Supabase client usage, and database queries"}]}}, {"id": "eval-1-add-dedup-rule-without_skill", "prompt": "\u05db\u05e9\u05d0\u05e0\u05d9 \u05e1\u05d5\u05e8\u05e7 Gmail, \u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05d9\u05d5\u05e6\u05e8\u05ea \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05e9\u05dc \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea. \u05dc\u05de\u05e9\u05dc, Booking.com \u05e9\u05d5\u05dc\u05d7 3 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e2\u05dc \u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4 \u05d5\u05e0\u05d5\u05e6\u05e8\u05d5\u05ea 3 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05d6\u05d4\u05d5\u05ea. \u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05d7\u05d5\u05e7 \u05d1\u05e8\u05d6\u05dc \u05e9\u05de\u05d5\u05e0\u05e2 \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05d1\u05d4\u05d5\u05e6\u05d0\u05d5\u05ea, \u05dc\u05d0 \u05e8\u05e7 \u05d1\u05de\u05e1\u05de\u05db\u05d9\u05dd.", "eval_id": 1, "outputs": [{"name": "fix.md", "type": "text", "content": "# Task 1: \u05d4\u05d5\u05e1\u05e3 \u05d7\u05d5\u05e7 dedup \u05dc\u05e2\u05d1\u05d5\u05e8 \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05d1\u05d4\u05d5\u05e6\u05d0\u05d5\u05ea\n\n## \u05d1\u05e2\u05d9\u05d4\n\u05db\u05d0\u05e9\u05e8 \u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05e1\u05d5\u05e8\u05e7\u05ea Gmail \u05d9\u05d5\u05de\u05d9\u05ea, \u05d4\u05d9\u05d0 \u05d9\u05d5\u05e6\u05e8\u05ea \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05e9\u05dc \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea. \u05dc\u05d3\u05d5\u05d2\u05de\u05d4, Booking.com \u05e9\u05d5\u05dc\u05d7 3 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e2\u05dc \u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4 (\u05d0\u05d9\u05e9\u05d5\u05e8, \u05ea\u05e9\u05dc\u05d5\u05dd, \u05ea\u05d6\u05db\u05d5\u05e8\u05ea) \u05d5\u05e0\u05d5\u05e6\u05e8\u05d5\u05ea 3 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05d6\u05d4\u05d5\u05ea \u05d1\u05de\u05e7\u05d5\u05dd \u05d4\u05d5\u05e6\u05d0\u05d4 \u05d0\u05d7\u05ea.\n\n## \u05e9\u05d5\u05e8\u05e9 \u05d4\u05d1\u05e2\u05d9\u05d4\n\u05d4\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 `scanUserGmail` (\u05d4\u05de\u05e9\u05de\u05e9\u05ea \u05dc\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d9\u05d5\u05de\u05d9\u05ea \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea) **\u05d0\u05d9\u05e0\u05d4 \u05de\u05e9\u05ea\u05de\u05e9\u05ea** \u05d1\u05d3\u05d3\u05d5\u05e4 \u05d4\u05de\u05d1\u05d5\u05e1\u05e1 \u05e2\u05dc `gmail_message_id` \u05e9\u05e7\u05d9\u05d9\u05dd \u05d1\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 `scanTripGmail`.\n\n\u05d1\u05e7\u05d5\u05d1\u05e5 `/src/lib/gmailScanner.ts`:\n- \u05e9\u05d5\u05e8\u05d5\u05ea 685-1096: `scanTripGmail` **\u05db\u05df** \u05de\u05e9\u05de\u05e8\u05ea \u05d0\u05ea `gmail_message_id` \u05d1\u05d8\u05d1\u05dc\u05ea `email_ingests` \u05d5\u05d1\u05d5\u05d3\u05e7\u05ea \u05d0\u05ea \u05d6\u05d4 \u05dc\u05e4\u05e0\u05d9 \u05e2\u05d9\u05d1\u05d5\u05d3 (\u05e9\u05d5\u05e8\u05d5\u05ea 753-764)\n- \u05e9\u05d5\u05e8\u05d5\u05ea 617-658: `scanUserGmail` **\u05dc\u05d0** \u05e2\u05d5\u05e9\u05d4 \u05d1\u05d3\u05d9\u05e7\u05d4 \u05d6\u05d5 \u2014 \u05d4\u05d9\u05d0 \u05ea\u05de\u05d9\u05d3 \u05e2\u05d5\u05d1\u05e8\u05ea \u05d9\u05e9\u05d9\u05e8\u05d5\u05ea \u05dc`processMessages`\n\n## \u05d4\u05e4\u05ea\u05e8\u05d5\u05df\n\n### 1. \u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea \u05d4-dedup \u05dc\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 `scanUserGmail`\n\n**\u05e7\u05d5\u05d1\u05e5:** `/src/lib/gmailScanner.ts`\n**\u05de\u05e7\u05d5\u05dd:** \u05dc\u05d0\u05d7\u05e8 \u05e9\u05d5\u05e8\u05d4 650 (\u05d1\u05ea\u05d5\u05da \u05d4-loop \u05e2\u05dc `messages`)\n\n```typescript\n// \u2500\u2500 Pre-filter: skip Gmail messages already processed \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// gmail_message_id is the deterministic dedup key \u2014 protects against\n// emails sent multiple times by the same vendor (Booking.com, airlines, etc)\nconst { data: alreadyIngested } = await supabase\n  .from('email_ingests')\n  .select('gmail_message_id')\n  .eq('user_id', userId)\n  .not('gmail_message_id', 'is', null)\n\nconst processedIds = new Set(\n  (alreadyIngested || []).map(r => r.gmail_message_id as string)\n)\n\nconst newMessages = messages.filter(m => !processedIds.has(m.id))\nconst skippedByMsgId = messages.length - newMessages.length\nif (skippedByMsgId > 0) {\n  console.log(\n    `[gmailScanner] Skipped ${skippedByMsgId} already-processed message(s) by Gmail ID`,\n  )\n}\n```\n\n### 2. \u05e2\u05d3\u05db\u05df \u05d0\u05ea \u05d4\u05e7\u05e8\u05d9\u05d0\u05d4 \u05dc-`processMessages`\n\n**\u05e7\u05d5\u05d1\u05e5:** `/src/lib/gmailScanner.ts`\n**\u05de\u05e7\u05d5\u05dd:** \u05e9\u05d5\u05e8\u05d4 651\n\n**\u05dc\u05e4\u05e0\u05d9:**\n```typescript\nawait processMessages(supabase, userId, accessToken, messages, tripList, stats, 'gmail_scan')\n```\n\n**\u05d0\u05d7\u05e8\u05d9:**\n```typescript\nawait processMessages(supabase, userId, accessToken, newMessages, tripList, stats, 'gmail_scan')\n```\n\n\u05e9\u05e0\u05d4 `messages` \u05dc-`newMessages` \u05db\u05d3\u05d9 \u05e9\u05ea\u05e2\u05d1\u05d5\u05e8 \u05e8\u05e7 \u05e2\u05dc \u05d4\u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05d4\u05d7\u05d3\u05e9\u05d5\u05ea \u05e9\u05dc\u05d0 \u05e2\u05d5\u05d1\u05d3\u05d5.\n\n### 3. \u05e2\u05d3\u05db\u05df \u05d0\u05ea `processMessages` \u05dc\u05e9\u05de\u05d5\u05e8 \u05d0\u05ea `gmail_message_id`\n\n**\u05e7\u05d5\u05d1\u05e5:** `/src/lib/gmailScanner.ts`\n**\u05de\u05e7\u05d5\u05dd:** \u05e9\u05d5\u05e8\u05d5\u05ea 540-554 (\u05d1\u05ea\u05d5\u05da `processMessages`)\n\n**\u05dc\u05e4\u05e0\u05d9:**\n```typescript\nconst { data: ingestRecord } = await supabase\n  .from('email_ingests')\n  .insert({\n    user_id:      userId,\n    from_address: msg.from,\n    subject:      msg.subject,\n    raw_html:     null,\n    raw_text:     rawText,\n    parsed_data:  parsedBooking,\n    trip_id:      matchedTripId,\n    match_score:  matchScore,\n    match_reason: matchReason,\n    status:       matchedTripId ? 'matched' : 'unmatched',\n    source,\n  })\n  .select('id')\n  .single()\n```\n\n**\u05d0\u05d7\u05e8\u05d9:**\n```typescript\nconst { data: ingestRecord } = await supabase\n  .from('email_ingests')\n  .insert({\n    user_id:          userId,\n    from_address:     msg.from,\n    subject:          msg.subject,\n    raw_html:         null,\n    raw_text:         rawText,\n    parsed_data:      parsedBooking,\n    trip_id:          matchedTripId,\n    match_score:      matchScore,\n    match_reason:     matchReason,\n    status:           matchedTripId ? 'matched' : 'unmatched',\n    source,\n    gmail_message_id: msg.id,  // \u2190 \u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea \u05d6\u05d4 \u05dc\u05d3\u05d3\u05d5\u05e4 \u05e2\u05ea\u05d9\u05d3\u05d9\n  })\n  .select('id')\n  .single()\n```\n\n## \u05d0\u05d9\u05da \u05d6\u05d4 \u05e2\u05d5\u05d1\u05d3\n\n1. **\u05d1\u05ea\u05d7\u05d9\u05dc\u05ea \u05db\u05dc \u05e1\u05e8\u05d9\u05e7\u05d4:** \u05d1\u05d3\u05d5\u05e7 \u05d0\u05d9\u05dc\u05d5 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05db\u05d1\u05e8 \u05e2\u05d5\u05d1\u05d3\u05d5 (\u05dc\u05e4\u05d9 `gmail_message_id`)\n2. **\u05e1\u05e0\u05df \u05d0\u05ea \u05d4\u05d4\u05d5\u05d3\u05e2\u05d5\u05ea:** \u05ea\u05e2\u05d1\u05d5\u05e8 \u05e8\u05e7 \u05e2\u05dc \u05d4\u05d5\u05d3\u05e2\u05d5\u05ea \u05d7\u05d3\u05e9\u05d5\u05ea \u05e9\u05d8\u05e8\u05dd \u05e2\u05d5\u05d1\u05d3\u05d5\n3. **\u05e9\u05de\u05d5\u05e8 \u05d0\u05ea \u05d4\u05de\u05e1\u05e8 ID:** \u05db\u05dc \u05e4\u05e2\u05dd \u05e9\u05de\u05e9\u05de\u05e8\u05d9\u05dd `email_ingest`, \u05e9\u05de\u05d5\u05e8 \u05d0\u05ea `msg.id` \u05d4\u05d2\u05dc\u05dd \u05e9\u05dc Gmail\n4. **\u05ea\u05d5\u05e6\u05d0\u05d4:** \u05d0\u05e4\u05d9\u05dc\u05d5 \u05d0\u05dd Booking.com \u05e9\u05dc\u05d7 3 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e2\u05dc \u05d0\u05d5\u05ea\u05d4 \u05d4\u05d6\u05de\u05e0\u05d4, \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05ea\u05e2\u05d1\u05d5\u05e8 \u05e8\u05e7 \u05e2\u05dc \u05d4\u05e8\u05d0\u05e9\u05d5\u05df \u05d5\u05ea\u05d3\u05dc\u05d2 \u05e2\u05dc \u05d4\u05e9\u05e0\u05d9\u05d9\u05dd\n\n\u05d6\u05d4 **\u05d1\u05d3\u05d9\u05d5\u05e7 \u05d0\u05d5\u05ea\u05d5 \u05d4\u05d3\u05e4\u05d5\u05e1** \u05e9\u05db\u05d1\u05e8 \u05e7\u05d9\u05d9\u05dd \u05d1\u05d4\u05e6\u05dc\u05d7\u05d4 \u05d1\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 `scanTripGmail`.\n"}], "grading": {"eval_id": 1, "configuration": "without_skill", "expectations": [{"text": "identifies_correct_file", "passed": true, "evidence": "Correctly identifies `/src/lib/gmailScanner.ts` as the file needing changes"}, {"text": "identifies_processMessages_gap", "passed": true, "evidence": "Explicitly identifies that scanUserGmail uses processMessages which lacks dedup, and provides solution in 3 steps including updating processMessages"}, {"text": "adds_expense_dedup", "passed": true, "evidence": "Provides TypeScript code for dedup check and includes update to processMessages to store gmail_message_id"}, {"text": "uses_booking_ref_or_amount", "passed": false, "evidence": "The solution doesn't actually implement amount/date/category dedup. Instead it focuses on gmail_message_id and adds that to email_ingests storage, which is a different approach"}, {"text": "handles_both_scan_modes", "passed": true, "evidence": "Explicitly addresses both scanUserGmail (lines 15-21) and scanTripGmail, providing fixes for processMessages which is called by scanUserGmail"}, {"text": "hebrew_explanation", "passed": true, "evidence": "Full Hebrew response with clear problem statement, root cause analysis, and solution steps"}, {"text": "code_is_correct_typescript", "passed": true, "evidence": "TypeScript code follows existing patterns with proper Supabase syntax and async operations"}]}}, {"id": "eval-2-fix-scan-gap-with_skill", "prompt": "\u05d4-scanUserGmail \u05dc\u05d0 \u05e2\u05d5\u05e9\u05d4 dedup \u05db\u05de\u05d5 scanTripGmail. \u05d0\u05d9\u05da \u05d0\u05e0\u05d9 \u05de\u05d0\u05d7\u05d3 \u05d0\u05ea \u05e9\u05e0\u05d9 \u05d4\u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd \u05db\u05d3\u05d9 \u05e9\u05d2\u05dd \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea \u05d4\u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05ea\u05e9\u05ea\u05de\u05e9 \u05d1\u05d0\u05d5\u05ea\u05d5 dedup?", "eval_id": 2, "outputs": [{"name": "fix.md", "type": "text", "content": "# Task 2: Fix the Scan Gap Between scanUserGmail and scanTripGmail\n\n## \u05d1\u05e2\u05d9\u05d4\n`scanUserGmail()` (\u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea \u05d4\u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea) \u05d5-`scanTripGmail()` (\u05d9\u05d9\u05d1\u05d5\u05d0 \u05d9\u05d3\u05e0\u05d9 \u05dc\u05d8\u05d9\u05d5\u05dc) \u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd \u05d1\u05dc\u05d5\u05d2\u05d9\u05e7\u05d5\u05ea dedup \u05e9\u05d5\u05e0\u05d5\u05ea:\n\n- **scanTripGmail()**: \u05d1\u05d3\u05d9\u05e7\u05d5\u05ea dedup \u05de\u05dc\u05d0\u05d5\u05ea (3 \u05e9\u05db\u05d1\u05d5\u05ea: Gmail ID \u2192 booking_ref \u2192 name+date)\n- **scanUserGmail()**: \u05e8\u05e7 \u05d1\u05d3\u05d9\u05e7\u05d4 \u05d1\u05e1\u05d9\u05e1\u05d9\u05ea \u05e9\u05dc Gmail message ID \u05d1-`email_ingests`, \u05d1\u05dc\u05d0 dedup \u05e9\u05dc documents\n\n\u05d4\u05ea\u05d5\u05e6\u05d0\u05d4: \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05d9\u05db\u05d5\u05dc\u05d4 \u05dc\u05d9\u05e6\u05d5\u05e8 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05db\u05e4\u05d5\u05dc\u05d5\u05ea, \u05d0\u05da \u05d4\u05d9\u05d9\u05d1\u05d5\u05d0 \u05d4\u05d9\u05d3\u05e0\u05d9 \u05dc\u05d0.\n\n## \u05e9\u05d5\u05e8\u05e9 \u05d4\u05d1\u05e2\u05d9\u05d4\n\n### \u05d1\u0640 scanUserGmail (\u05e9\u05d5\u05e8\u05d4 617-658)\n1. \u05e7\u05d5\u05e8\u05d0 `processMessages()` (\u05e9\u05d5\u05e8\u05d4 651)\n2. `processMessages()` **\u05dc\u05d0 \u05d1\u05d5\u05d3\u05e7** \u05d0\u05ea `documents` table\n3. **\u05d0\u05d9\u05df dedup \u05e9\u05dc booking_ref \u05d0\u05d5 name+date** \u2014 \u05e8\u05e7 \u05d9\u05e6\u05d9\u05e8\u05ea `email_ingests` \u05d5-`expenses`\n\n### \u05d1\u0640 scanTripGmail (\u05e9\u05d5\u05e8\u05d4 685-1096)\n1. \u05d1\u05d3\u05d9\u05e7\u05d5\u05ea dedup **\u05de\u05dc\u05d0\u05d5\u05ea**:\n   - \u05e9\u05d5\u05e8\u05d4 753-771: Gmail message ID\n   - \u05e9\u05d5\u05e8\u05d4 917-938: booking_ref\n   - \u05e9\u05d5\u05e8\u05d4 947-959: name+date\n2. \u05d9\u05e6\u05d9\u05e8\u05ea documents, expenses, \u05d5-email_ingests \u05e2\u05dd dedup \u05de\u05dc\u05d0\n\n## \u05d4\u05e4\u05d9\u05ea\u05e8\u05d5\u05df\n\n### \u05e9\u05dc\u05d1 1: \u05d7\u05d9\u05dc\u05d5\u05e5 \u05d4-Dedup Logic \u05dc\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 \u05de\u05e9\u05d5\u05ea\u05e4\u05ea\n\n**\u05e7\u05d5\u05d1\u05e5**: `src/lib/gmailScanner.ts`\n\n**\u05de\u05d9\u05e7\u05d5\u05dd**: \u05d4\u05d5\u05e1\u05e3 \u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 \u05d7\u05d3\u05e9\u05d4 **\u05dc\u05e4\u05e0\u05d9** `scanUserGmail()` (\u05dc\u05e4\u05e0\u05d9 \u05e9\u05d5\u05e8\u05d4 617). \u05e9\u05dd \u05d6\u05d4 \u05d9\u05d4\u05d9\u05d4 \u05e7\u05e8\u05d5\u05d1 \u05dc\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d5\u05ea helper \u05d0\u05d7\u05e8\u05d5\u05ea:\n\n```typescript\n/**\n * Check if a booking already exists in the documents table using\n * the 3-layer dedup strategy from scanTripGmail.\n *\n * Returns 'ok' if we should process, or 'duplicate' if it's already been imported.\n */\nasync function checkDocumentDuplicates(\n  supabase: SupabaseClient,\n  tripId: string,\n  parsedBooking: ParsedBooking,\n  bookingTitle: string,\n  dedupDate: string | null,\n): Promise<'ok' | 'duplicate'> {\n  const isFlight = parsedBooking.booking_type === 'flight'\n\n  // \u2500\u2500 Dedup Layer 2: Booking reference \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  if (parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {\n    const refQuery = supabase\n      .from('documents')\n      .select('id')\n      .eq('trip_id', tripId)\n      .eq('booking_ref', parsedBooking.confirmation_number)\n\n    if (isFlight) {\n      // For flights: same ref + same passenger = duplicate\n      refQuery.eq('name', bookingTitle)\n    }\n\n    const { data: existingByRef } = await refQuery.maybeSingle()\n    if (existingByRef) {\n      console.log(\n        `[gmailScanner] skip dup by ref: \"${bookingTitle}\" ref=${parsedBooking.confirmation_number}`,\n      )\n      return 'duplicate'\n    }\n  }\n\n  // \u2500\u2500 Dedup Layer 3: Name + Date \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  if (bookingTitle && dedupDate) {\n    const { data: existingByName } = await supabase\n      .from('documents')\n      .select('id')\n      .eq('trip_id', tripId)\n      .eq('name', bookingTitle)\n      .eq('valid_from', dedupDate)\n      .maybeSingle()\n\n    if (existingByName) {\n      console.log(\n        `[gmailScanner] skip dup by name+date: \"${bookingTitle}\" ${dedupDate}`,\n      )\n      return 'duplicate'\n    }\n  }\n\n  return 'ok'\n}\n```\n\n### \u05e9\u05dc\u05d1 2: \u05e2\u05d3\u05db\u05df \u05d0\u05ea processMessages() \u05db\u05d3\u05d9 \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1-Dedup\n\n**\u05e7\u05d5\u05d1\u05e5**: `src/lib/gmailScanner.ts`\n\n**\u05de\u05d9\u05e7\u05d5\u05dd**: \u05d1-`processMessages()` (\u05e9\u05d5\u05e8\u05d4 497-605)\n\n**\u05d4\u05d7\u05dc\u05e4\u05d4**: \u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea \u05d4-dedup check **\u05d0\u05d7\u05e8\u05d9** \u05e9\u05de\u05ea\u05d0\u05d9\u05de\u05d9\u05dd \u05d0\u05ea \u05d4\u05de\u05d9\u05d9\u05dc \u05dc\u05d8\u05d9\u05d5\u05dc (\u05e9\u05d5\u05e8\u05d4 528-537) **\u05d5\u05e7\u05d5\u05d3\u05dd** \u05dc\u05d9\u05e6\u05d9\u05e8\u05ea `email_ingests` (\u05e9\u05d5\u05e8\u05d4 540-556).\n\n```typescript\n      // Match to trip\n      let matchedTripId = forceTripId\n      let matchScore    = forceTripId ? 100 : 0\n      let matchReason   = forceTripId ? '\u05d9\u05d9\u05d1\u05d5\u05d0 \u05d9\u05d3\u05e0\u05d9 \u05dc\u05d8\u05d9\u05d5\u05dc' : '\u05dc\u05d0 \u05e0\u05d5\u05ea\u05d7'\n\n      if (!forceTripId && trips.length) {\n        const result = matchTripToBooking(parsedBooking, trips)\n        matchedTripId = result.trip?.id || null\n        matchScore    = result.score\n        matchReason   = result.reason\n      }\n\n      // \u2500\u2500 NEW: Check document dedup if we matched a trip \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n      if (matchedTripId) {\n        const firstPassenger = (parsedBooking.traveler_names?.[0] || '').trim()\n        const isFlight = parsedBooking.booking_type === 'flight'\n\n        const baseTitle =\n          parsedBooking.hotel_name ||\n          (parsedBooking.airline && parsedBooking.flight_number\n            ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||\n          parsedBooking.vendor || msg.subject.slice(0, 60)\n\n        const bookingTitle = isFlight && firstPassenger\n          ? `${baseTitle} \u2013 ${firstPassenger}`\n          : baseTitle\n\n        const dedupDate = parsedBooking.check_in || parsedBooking.departure_date\n        const dupCheck = await checkDocumentDuplicates(\n          supabase,\n          matchedTripId,\n          parsedBooking,\n          bookingTitle,\n          dedupDate || null,\n        )\n\n        if (dupCheck === 'duplicate') {\n          // Skip this email entirely \u2014 we already imported it\n          continue\n        }\n      }\n\n      const rawText = htmlToText(emailContent).slice(0, 10000)\n      // ... rest of the function continues unchanged\n```\n\n### \u05e9\u05dc\u05d1 3: \u05e2\u05d3\u05db\u05df \u05d0\u05ea \u05e9\u05dd \u05d4\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 (\u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9 \u05d0\u05da \u05de\u05d5\u05de\u05dc\u05e5)\n\n**\u05e9\u05dd \u05d7\u05d3\u05e9**: `processMessages()` \u2192 `scanUserGmailMessages()` \u05d0\u05d5 \u05ea\u05e9\u05de\u05d5\u05e8 \u05d0\u05ea \u05d4\u05e9\u05dd \u05db\u05de\u05d5 \u05d4\u05d9\u05d0.\n\n**\u05d4\u05e1\u05d9\u05d1\u05d4**: \u05db\u05d3\u05d9 \u05dc\u05d4\u05d1\u05d4\u05d9\u05e8 \u05e9\u05d6\u05d5 \u05d7\u05dc\u05e7 \u05de-`scanUserGmail()` \u05d5\u05dc\u05d0 generic processing.\n\n## \u05d4\u05e1\u05d1\u05e8\n\n### \u05de\u05d4 \u05d4\u05e9\u05ea\u05e0\u05d4\n1. **\u05e0\u05d5\u05e6\u05e8\u05d4 \u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 \u05de\u05e9\u05d5\u05ea\u05e4\u05ea** `checkDocumentDuplicates()` \u05d4\u05de\u05e9\u05de\u05e9\u05ea \u05d2\u05dd `scanTripGmail()` \u05d5\u05d2\u05dd `processMessages()`\n2. **processMessages()** \u05e2\u05db\u05e9\u05d9\u05d5 \u05d1\u05d5\u05d3\u05e7\u05ea \u05d0\u05ea `documents` table \u05d1\u05d3\u05d5\u05de\u05d4 \u05dc-`scanTripGmail()`\n3. **scanTripGmail()** \u05d9\u05db\u05d5\u05dc \u05dc\u05d4\u05d9\u05d5\u05ea \u05de\u05d7\u05d3\u05e9 \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1-`checkDocumentDuplicates()` (\u05e9\u05dc\u05d1 4 \u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9)\n\n### \u05de\u05e7\u05e8\u05d4 \u05de\u05e9\u05d9\u05de\u05d5\u05e9\n```\n\u05d9\u05d5\u05dd 1: Booking.com \u05e9\u05d5\u05dc\u05d7 \u05de\u05d9\u05d9\u05dc confirmation \u2192 scanUserGmail() \u05d8\u05d5\u05e8\u05dd \u05d0\u05ea \u05d4-email\n       \u2192 processMessages() \u05d9\u05d5\u05e6\u05e8 Document + Expense (\u05e2\u05dd \u05d4-dedup \u05d4\u05d7\u05d3\u05e9)\n\n\u05d9\u05d5\u05dd 3: Booking.com \u05e9\u05d5\u05dc\u05d7 \u05de\u05d9\u05d9\u05dc payment \u2192 scanUserGmail() \u05d8\u05d5\u05e8\u05dd \u05d0\u05ea \u05d4-email\n       \u2192 processMessages() \u05d1\u05d5\u05d3\u05e7 \u05d0\u05ea documents table\n       \u2192 \u05de\u05d5\u05e6\u05d0 \u05e9\u05db\u05d1\u05e8 \u05d9\u05e9 document \u05e2\u05dd \u05d0\u05d5\u05ea\u05d5 booking_ref + name\n       \u2192 \u05d3\u05d5\u05d2\u05e8\u05dd \u05d0\u05ea \u05d4-email (\u05dc\u05d0 \u05d9\u05d5\u05e6\u05e8 document \u05d0\u05d5 expense \u05db\u05e4\u05d5\u05dc)\n```\n\n### \u05e9\u05dc\u05d1 4 (\u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9): \u05d4\u05e4\u05d5\u05da \u05d0\u05ea scanTripGmail() \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1-checkDocumentDuplicates()\n\n**\u05de\u05d9\u05e7\u05d5\u05dd**: \u05d1\u05ea\u05d5\u05da `scanTripGmail()`, \u05d1\u05dc\u05d5\u05dc\u05d0\u05d4 `for (const result of parsed)` (\u05e9\u05d5\u05e8\u05d4 885-959)\n\n**\u05d4\u05d7\u05dc\u05e4\u05d4**: \u05e9\u05d5\u05e8\u05d5\u05ea 913-959 (\u05e9\u05ea\u05d9 \u05d4-dedup checks) \u05d9\u05db\u05d5\u05dc\u05d5\u05ea \u05dc\u05d4\u05d9\u05d5\u05ea \u05de\u05d5\u05d7\u05dc\u05e4\u05d5\u05ea \u05d1\u05e7\u05d5\u05dc \u05d0\u05d7\u05d3:\n\n```typescript\n          const isFlight = parsedBooking.booking_type === 'flight'\n          const firstPassenger = (parsedBooking.traveler_names?.[0] || '').trim()\n\n          const baseTitle =\n            parsedBooking.hotel_name ||\n            (parsedBooking.airline && parsedBooking.flight_number\n              ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||\n            parsedBooking.vendor || msg.subject.slice(0, 60)\n\n          const bookingTitle = isFlight && firstPassenger\n            ? `${baseTitle} \u2013 ${firstPassenger}`\n            : baseTitle\n\n          const dedupDate = parsedBooking.check_in || parsedBooking.departure_date\n\n          // \u2500\u2500 Check document dedup using the shared function \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n          const dupCheck = await checkDocumentDuplicates(\n            supabase,\n            tripId,\n            parsedBooking,\n            bookingTitle,\n            dedupDate || null,\n          )\n\n          if (dupCheck === 'duplicate') {\n            stats.filteredDuplicate++\n            continue\n          }\n\n          // Continue with file handling and DB writes...\n          // (the rest of the document creation code remains the same)\n```\n\n**\u05d9\u05ea\u05e8\u05d5\u05df**: \u05e7\u05d5\u05d3 \u05de\u05e9\u05d5\u05ea\u05e3, \u05e4\u05d7\u05d5\u05ea maintenance burden.\n\n## \u05d8\u05d1\u05dc\u05ea \u05d4\u05e9\u05d5\u05d5\u05d0\u05d4\n\n### \u05dc\u05e4\u05e0\u05d9 \u05d4\u05e4\u05d9\u05ea\u05e8\u05d5\u05df\n\n| \u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 | Gmail ID | booking_ref | name+date |\n|---------|----------|-------------|-----------|\n| `scanUserGmail()` | \u2713 (via email_ingests) | \u2717 | \u2717 |\n| `scanTripGmail()` | \u2713 | \u2713 | \u2713 |\n\n### \u05d0\u05d7\u05e8\u05d9 \u05d4\u05e4\u05d9\u05ea\u05e8\u05d5\u05df\n\n| \u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 | Gmail ID | booking_ref | name+date |\n|---------|----------|-------------|-----------|\n| `scanUserGmail()` | \u2713 (via email_ingests) | \u2713 | \u2713 |\n| `scanTripGmail()` | \u2713 | \u2713 | \u2713 |\n\n## \u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1\u05d5\u05ea\n\n1. **Gmail message ID \u05d1\u05d5\u05d3\u05e7 \u05e0\u05e9\u05d0\u05e8 \u05d1-processMessages()**: \u05d4\u05e7\u05d5\u05d3 \u05d4\u05de\u05e7\u05d5\u05e8\u05d9 \u05e2\u05d3\u05d9\u05d9\u05df \u05d1\u05d5\u05d3\u05e7 `email_ingests` (\u05e9\u05d5\u05e8\u05d4 540-556). \u05d6\u05d4 \u05d8\u05d5\u05d1 \u05db\u05d9 \u05d4\u05d5\u05d0 \u05de\u05e0\u05d9\u05e2 \u05e2\u05d9\u05d1\u05d5\u05d3 \u05db\u05e4\u05d5\u05dc \u05e9\u05dc \u05d0\u05d5\u05ea\u05d5 \u05d0\u05d9\u05de\u05d9\u05d9\u05dc.\n\n2. **\u05d9\u05e6\u05d9\u05e8\u05ea documents**: `scanUserGmail()` \u05dc\u05d0 \u05d9\u05d5\u05e6\u05e8 documents (\u05e9\u05d5\u05e8\u05d5\u05ea 558-600 \u05d9\u05d5\u05e6\u05e8\u05d5\u05ea \u05e8\u05e7 `email_ingests` \u05d5-`expenses`). \u05d6\u05d4 \u05d1\u05e1\u05d3\u05e8 \u2014 \u05d4\u05d5\u05d0 \u05de\u05d9\u05d5\u05e2\u05d3 \u05dc\u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea, \u05dc\u05d0 \u05dc\u05d9\u05d9\u05d1\u05d5\u05d0 \u05de\u05dc\u05d0. \u05d4dedup \u05d4\u05d5\u05d0 \u05e8\u05e7 \u05db\u05d3\u05d9 \u05dc\u05de\u05e0\u05d5\u05e2 \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea \u05db\u05e4\u05d5\u05dc\u05d5\u05ea.\n\n3. **Edge case**: \u05d0\u05dd \u05d4\u05de\u05d9\u05d9\u05dc \u05dc\u05d0 \u05d4\u05ea\u05d0\u05d9\u05dd \u05dc\u05e9\u05d5\u05dd \u05d8\u05d9\u05d5\u05dc (`matchedTripId === null`), \u05d4dedup \u05dc\u05d0 \u05de\u05d5\u05e4\u05e2\u05dc (\u05e9\u05d5\u05e8\u05d4 `if (matchedTripId)`). \u05d6\u05d4 \u05d1\u05e1\u05d3\u05e8 \u2014 \u05d1\u05dc\u05d0 \u05ea\u05d9\u05d5\u05d2, \u05d0\u05e0\u05d7\u05e0\u05d5 \u05dc\u05d0 \u05d9\u05db\u05d5\u05dc\u05d9\u05dd \u05dc\u05d3\u05e2\u05ea \u05d0\u05dd \u05d6\u05d4 \u05db\u05e4\u05d5\u05dc.\n\n4. **\u05d1\u05d9\u05e6\u05d5\u05e2\u05d9\u05dd**: `checkDocumentDuplicates()` \u05de\u05d1\u05e6\u05e2\u05ea \u05e2\u05d3 2 queries (booking_ref, name+date). \u05d4\u05dd \u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd \u05d1-`.maybeSingle()` \u05e9\u05d4\u05d9\u05d0 \u05d9\u05e2\u05d9\u05dc\u05d4.\n\n---\n\n## Verification\n\n\u05dc\u05d0\u05d7\u05e8 \u05d4\u05d5\u05e1\u05e4\u05ea \u05d4\u05e7\u05d5\u05d3:\n1. \u05d4\u05e8\u05e5 `scanUserGmail()` \u05e2\u05dc \u05de\u05e9\u05ea\u05de\u05e9 \u05e2\u05dd \u05de\u05d9\u05d9\u05dc \u05db\u05e4\u05d5\u05dc \u05de-Booking.com\n2. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4-console \u05de\u05e6\u05d9\u05d2 `skip dup by ref` \u05d0\u05d5 `skip dup by name+date` \u05d1\u05e9\u05e0\u05d9\u05d9\u05d4 \u05d4-scan\n3. \u05d5\u05d3\u05d0 \u05e9\u05e0\u05d5\u05e6\u05e8\u05d4 \u05e8\u05e7 **\u05d4\u05d5\u05e6\u05d0\u05d4 \u05d0\u05d7\u05ea** \u05d1\u05d8\u05e8\u05d9\u05e4, \u05dc\u05d0 \u05e9\u05ea\u05d9\u05d9\u05dd\n4. \u05d1\u05d3\u05d5\u05e7 \u05e9-`email_ingests` \u05e9\u05e0\u05d9\u05d4\u05dd `matched`/`processed` \u05d0\u05da \u05e8\u05e7 \u05d0\u05d7\u05d3 \u05d9\u05e6\u05e8 `expenses` record\n"}], "grading": {"eval_id": 2, "configuration": "with_skill", "expectations": [{"text": "identifies_gap_clearly", "passed": true, "evidence": "Clearly explains the difference: scanTripGmail has 3 dedup layers while scanUserGmail only has gmail message ID check via email_ingests"}, {"text": "mentions_three_dedup_layers", "passed": true, "evidence": "Explicitly references all three dedup layers: Gmail ID (line 753-771), booking_ref (line 917-938), and name+date (line 947-959) in the comparison table"}, {"text": "proposes_shared_function", "passed": true, "evidence": "Suggests extracting shared dedup logic into checkDocumentDuplicates() function with detailed implementation (lines 33-91)"}, {"text": "covers_email_ingests_gap", "passed": true, "evidence": "Notes that processMessages doesn't store gmail_message_id properly and provides code to add it (line 102)"}, {"text": "provides_implementation_code", "passed": true, "evidence": "Includes multiple TypeScript code blocks: the shared function, updates to processMessages, and optional refactoring of scanTripGmail"}, {"text": "considers_backward_compatibility", "passed": false, "evidence": "Does not address migration concerns for existing data or how to handle already-processed emails that lack gmail_message_id"}]}}, {"id": "eval-2-fix-scan-gap-without_skill", "prompt": "\u05d4-scanUserGmail \u05dc\u05d0 \u05e2\u05d5\u05e9\u05d4 dedup \u05db\u05de\u05d5 scanTripGmail. \u05d0\u05d9\u05da \u05d0\u05e0\u05d9 \u05de\u05d0\u05d7\u05d3 \u05d0\u05ea \u05e9\u05e0\u05d9 \u05d4\u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd \u05db\u05d3\u05d9 \u05e9\u05d2\u05dd \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea \u05d4\u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05ea\u05e9\u05ea\u05de\u05e9 \u05d1\u05d0\u05d5\u05ea\u05d5 dedup?", "eval_id": 2, "outputs": [{"name": "fix.md", "type": "text", "content": "# Task 2: \u05ea\u05e7\u05df \u05d0\u05ea \u05d4-scan gap \u2014 \u05d0\u05d9\u05d7\u05d5\u05d3 \u05e9\u05e0\u05d9 \u05de\u05e1\u05dc\u05d5\u05dc\u05d9 \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4\n\n## \u05d1\u05e2\u05d9\u05d4\n\u05e7\u05d9\u05d9\u05de\u05d9\u05dd \u05e9\u05e0\u05d9 \u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd \u05e9\u05d5\u05e0\u05d9\u05dd \u05dc\u05e1\u05e8\u05d9\u05e7\u05ea Gmail:\n- **`scanTripGmail`**: \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05de\u05d9\u05d5\u05d6\u05de\u05ea \u05e2\u05dc \u05d9\u05d3\u05d9 \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05dc\u05d8\u05d9\u05d5\u05dc \u05e1\u05e4\u05e6\u05d9\u05e4\u05d9 (\u05e2\u05dd dedup \u05de\u05e2\u05dc)\n- **`scanUserGmail`**: \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea \u05d4\u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea \u05e9\u05dc \u05db\u05dc \u05d4\u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd (\u05dc\u05dc\u05d0 dedup \u05de\u05e2\u05dc)\n\n**\u05d4\u05d4\u05d1\u05d3\u05dc\u05d9\u05dd:**\n\n| \u05d3\u05d1\u05e8 | scanUserGmail | scanTripGmail |\n|-----|--------------|---------------|\n| **dedup \u05d1-gmail_message_id** | \u274c \u05db\u05df \u05d0\u05d1\u05dc \u05d1\u05d7\u05e1\u05e8 | \u2705 \u05db\u05df (\u05e9\u05d5\u05e8\u05d5\u05ea 753-764) |\n| **dedup \u05d1-confirmation_number+date** | \u274c \u05dc\u05d0 | \u2705 \u05db\u05df (\u05e9\u05d5\u05e8\u05d5\u05ea 917-938, 947-959) |\n| **\u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05dc\u05d8\u05e2\u05d5\u05df PDF** | \u274c \u05e4\u05e9\u05d5\u05d8 \u05d1\u05d3\u05d5\u05e7 attachment | \u2705 \u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05d0\u05e7\u05d8\u05d9\u05d1\u05d9 \u05dc\u05d4\u05d5\u05e8\u05d9\u05d3 PDF \u05d1\u05de\u05e7\u05d1\u05d9\u05dc (Pass 2) |\n| **\u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05dc\u05d7\u05dc\u05e5 booking URL** | \u274c \u05dc\u05d0 | \u2705 \u05db\u05df (\u05e9\u05d5\u05e8\u05d5\u05ea 861-880) |\n| **\u05d9\u05e6\u05d9\u05e8\u05ea \u05de\u05e1\u05de\u05da (Document)** | \u274c \u05dc\u05d0 | \u2705 \u05db\u05df (\u05e9\u05d5\u05e8\u05d5\u05ea 1016-1033) |\n| **\u05d9\u05e6\u05d9\u05e8\u05ea \u05d4\u05d5\u05e6\u05d0\u05d4 (Expense)** | \u2705 \u05db\u05df | \u2705 \u05db\u05df |\n\n**\u05ea\u05d5\u05e6\u05d0\u05d4:** \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4 \u05d4\u05d9\u05d5\u05de\u05d9\u05ea \u05d9\u05d5\u05e6\u05e8\u05ea \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05e9\u05dc \u05d4\u05d5\u05e6\u05d0\u05d5\u05ea. \u05d4\u05de\u05e9\u05ea\u05de\u05e9 \u05d7\u05d9\u05d9\u05d1 \u05d9\u05d3\u05e0\u05d9\u05ea \u05dc\u05d1\u05e6\u05e2 import \u05dc\u05d8\u05d9\u05d5\u05dc \u05db\u05d3\u05d9 \u05dc\u05d4\u05d9\u05de\u05e0\u05e2 \u05de\u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea.\n\n## \u05d4\u05e4\u05ea\u05e8\u05d5\u05df\n\n### \u05d0\u05e4\u05e9\u05e8\u05d5\u05ea \u05d0': \u05e9\u05d3\u05e8\u05d2 \u05d0\u05ea `scanUserGmail` (\u05de\u05d5\u05de\u05dc\u05e5)\n\n**\u05de\u05d8\u05e8\u05d4:** \u05d2\u05e8\u05d5\u05dd \u05dc-`scanUserGmail` \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05d0\u05d5\u05ea\u05d5 logic \u05d7\u05d6\u05e7 \u05db\u05de\u05d5 `scanTripGmail`.\n\n**\u05e6\u05e2\u05d3\u05d9\u05dd:**\n\n1. **\u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea \u05d4-dedup \u05e2\u05dc `gmail_message_id` + `confirmation_number`**\n\n   \u05d1\u05e7\u05d5\u05d1\u05e5 `/src/lib/gmailScanner.ts`, \u05d1\u05ea\u05d5\u05da `processMessages`:\n\n   ```typescript\n   // BEFORE creating the expense, check for duplicates\n\n   // Dedup 1: check if this Gmail message was already processed\n   const { data: byMsgId } = await supabase\n     .from('email_ingests')\n     .select('id')\n     .eq('user_id', userId)\n     .eq('gmail_message_id', msg.id)\n     .maybeSingle()\n   if (byMsgId) {\n     console.log(`[gmailScanner] Skip duplicate by Gmail message ID: ${msg.id}`)\n     continue // don't create expense\n   }\n\n   // Dedup 2: for matched trips, check if same confirmation_number + date exists\n   if (matchedTripId && parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {\n     const dedupDate = parsedBooking.check_in || parsedBooking.departure_date\n     const { data: byRef } = await supabase\n       .from('expenses')\n       .select('id')\n       .eq('trip_id', matchedTripId)\n       .eq('notes', `\u05de\u05e1\u05e4\u05e8 \u05d0\u05d9\u05e9\u05d5\u05e8: ${parsedBooking.confirmation_number}`) // crude but works\n       .maybeSingle()\n     if (byRef) {\n       console.log(`[gmailScanner] Skip duplicate by confirmation number: ${parsedBooking.confirmation_number}`)\n       continue\n     }\n   }\n   ```\n\n2. **\u05e9\u05de\u05d5\u05e8 \u05d0\u05ea `gmail_message_id` \u05d1\u05db\u05dc `email_ingest`**\n\n   (\u05d6\u05d4 \u05db\u05d1\u05e8 \u05de\u05db\u05d5\u05e1\u05d4 \u05d1\u05ea\u05e9\u05d5\u05d1\u05d4 \u05dc-Task 1)\n\n3. **\u05e9\u05d3\u05e8\u05d2 \u05d0\u05ea `processMessages` \u05dc\u05d4\u05d5\u05e8\u05d9\u05d3 PDF \u05d1\u05e6\u05d5\u05e8\u05d4 \u05e4\u05e2\u05d9\u05dc\u05d4**\n\n   \u05db\u05e8\u05d2\u05e2 \u05d4\u05e7\u05d5\u05d3 \u05d3\u05e8\u05d5\u05e9 \u05dc\u05e4\u05d9 \u05d6\u05d4 \u05d0\u05d5 \u05dc\u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05e7\u05d5\u05d3 \u05de-scanTripGmail (Pass 2):\n   - \u05e0\u05e1\u05d4 \u05dc\u05d4\u05d5\u05e8\u05d9\u05d3 PDF \u05d2\u05dd \u05d0\u05dd \u05d0\u05d9\u05df attachment \u05d8\u05d4\u05d5\u05e8 (\u05dc\u05e4\u05e2\u05de\u05d9\u05dd Gmail \u05de\u05d5\u05e1\u05ea\u05e8 \u05d0\u05ea \u05d6\u05d4)\n   - \u05e9\u05de\u05d5\u05e8 \u05d0\u05ea \u05d4\u05e0\u05e1\u05d9\u05d5\u05df \u05d1\u05de\u05e7\u05d1\u05d9\u05dc (Promise.allSettled)\n\n### \u05d0\u05e4\u05e9\u05e8\u05d5\u05ea \u05d1': \u05de\u05d6\u05d5\u05d2 \u05d0\u05ea \u05e9\u05e0\u05d9 \u05d4\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d5\u05ea \u05dc\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 \u05d0\u05d7\u05ea (\u05d7\u05d6\u05e7\u05d4 \u05e2\u05d5\u05d3 \u05d9\u05d5\u05ea\u05e8)\n\n**\u05de\u05d8\u05e8\u05d4:** \u05d0\u05d7\u05d3 \u05d0\u05ea `scanUserGmail` \u05d5-`scanTripGmail` \u05dc\u05e4\u05d5\u05e0\u05e7\u05e6\u05d9\u05d4 \u05d9\u05d7\u05d9\u05d3\u05d4 \u05e2\u05dd \u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05e4\u05e9\u05d5\u05d8/\u05de\u05dc\u05d0.\n\n**\u05e1\u05e7\u05d9\u05e6\u05d4:**\n\n```typescript\ninterface ScanOptions {\n  userId: string\n  supabase: SupabaseClient\n  accessToken: string\n  daysBack?: number        // default 30 for auto-scan, 365 for trip import\n  maxResults?: number      // default 50 for auto, 20 for trip\n  tripId?: string          // if set, force-match to this trip\n  destQuery?: string       // Gmail boost query\n}\n\nasync function scanGmailMessages(opts: ScanOptions) {\n  // Shared logic:\n  // 1. Load connections + refresh tokens\n  // 2. Search emails\n  // 3. Pre-filter by gmail_message_id\n  // 4. Parse with Claude (text-only)\n  // 5. Filter by relevance\n  // 6. For relevant: download PDFs + re-parse\n  // 7. Save to email_ingests + documents + expenses\n  // 8. Return stats\n}\n\n// For daily auto-scan:\nexport async function scanUserGmail(supabase, userId) {\n  for (const conn of connections) {\n    const accessToken = await getValidToken(supabase, conn)\n    const stats = await scanGmailMessages({\n      userId, supabase, accessToken,\n      daysBack: 30, maxResults: 50,\n      // no tripId, no destQuery\n    })\n  }\n}\n\n// For trip import:\nexport async function scanTripGmail(supabase, userId, tripId) {\n  // ... load trip + connections ...\n  for (const conn of connections) {\n    const accessToken = await getValidToken(supabase, conn)\n    const stats = await scanGmailMessages({\n      userId, supabase, accessToken,\n      daysBack: 365, maxResults: 20,\n      tripId, destQuery: buildTripGmailQuery(trip, trip.travelers),\n    })\n  }\n}\n```\n\n## \u05d4\u05de\u05dc\u05e6\u05d4\n\n**\u05d1\u05e2\u05d1\u05d5\u05e8 \u05e2\u05db\u05e9\u05d9\u05d5:** \u05d4\u05e9\u05ea\u05de\u05e9 \u05d1\u05d0\u05e4\u05e9\u05e8\u05d5\u05ea \u05d0' (\u05e9\u05d3\u05e8\u05d2 \u05d0\u05ea `scanUserGmail`):\n- \u05e4\u05d7\u05d5\u05ea \u05e9\u05d9\u05e0\u05d5\u05d9 \u05e7\u05d5\u05d3\n- \u05d0\u05dd \u05de\u05e9\u05d4\u05d5 \u05e7\u05d5\u05e8\u05d4 \u05d0\u05e4\u05e9\u05e8 \u05dc\u05d7\u05d6\u05d5\u05e8 \u05d1\u05e7\u05dc\u05d5\u05ea\n- \u05db\u05dc \u05d4dedup logic \u05e0\u05de\u05e6\u05d0 \u05d1\u05de\u05e7\u05d5\u05dd \u05d0\u05d7\u05d3 (\u05d1\u05ea\u05d5\u05da `processMessages`)\n\n**\u05d1\u05e2\u05ea\u05d9\u05d3:** \u05d7\u05d6\u05d5\u05e8 \u05dc\u05d0\u05e4\u05e9\u05e8\u05d5\u05ea \u05d1':\n- \u05e7\u05d5\u05d3 \u05d9\u05d5\u05ea\u05e8 \u05e0\u05e7\u05d9\n- \u05de\u05d5\u05e0\u05e2 \u05db\u05e4\u05d9\u05dc\u05d5\u05d9\u05d5\u05ea \u05d1\u05e7\u05d5\u05d3\n- \u05d0\u05e4\u05e9\u05e8 \u05dc\u05db\u05d5\u05d5\u05e0\u05df \u05d1\u05e0\u05e4\u05e8\u05d3 \u05d0\u05ea \u05d4\u05d1\u05d9\u05e6\u05d5\u05e2 \u05e9\u05dc \u05db\u05dc \u05de\u05e1\u05dc\u05d5\u05dc\n\n## \u05d1\u05d3\u05d9\u05e7\u05d4 \u05e9\u05dc\u05da\n\n\u05d0\u05d7\u05e8\u05d9 \u05d4\u05d4\u05d1\u05e0\u05d4, \u05d1\u05d3\u05d5\u05e7 \u05e9\u05db\u05dc \u05de\u05d9\u05d9\u05de\u05d9\u05dc \u05e2\u05dd \u05d0\u05d5\u05ea\u05d5 `gmail_message_id` \u05d0\u05d5 `confirmation_number` + \u05ea\u05d0\u05e8\u05d9\u05da \u05de\u05d8\u05d5\u05e4\u05dc **\u05e8\u05e7 \u05e4\u05e2\u05dd \u05d0\u05d7\u05ea** \u05d1\u05d3\u05e8\u05da \u05d4\u05e1\u05e8\u05d9\u05e7\u05d4, \u05d1\u05db\u05dc \u05e2\u05d9\u05ea\u05d5\u05d9.\n"}], "grading": {"eval_id": 2, "configuration": "without_skill", "expectations": [{"text": "identifies_gap_clearly", "passed": true, "evidence": "Clear table showing differences between scanUserGmail and scanTripGmail functions and their dedup capabilities"}, {"text": "mentions_three_dedup_layers", "passed": false, "evidence": "Only mentions gmail_message_id and confirmation_number dedup. Does not clearly reference all three layers (missing name+date layer in the final recommendation)"}, {"text": "proposes_shared_function", "passed": false, "evidence": "Recommends Option A (upgrade scanUserGmail) which modifies processMessages inline, not extracting into a shared function. Option B suggests merging functions, but Option A is preferred"}, {"text": "covers_email_ingests_gap", "passed": false, "evidence": "While it notes gmail_message_id handling, it doesn't clearly explain the gap in how email_ingests stores this field"}, {"text": "provides_implementation_code", "passed": true, "evidence": "Provides TypeScript code examples for both Option A (inline dedup in processMessages) and Option B (merged function approach)"}, {"text": "considers_backward_compatibility", "passed": false, "evidence": "Does not address migration or existing data concerns in either option"}]}}, {"id": "eval-3-new-provider-with_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1-Pegasus Airlines (flypgs.com) \u05e9\u05d8\u05e1\u05d4 \u05dc\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4. \u05de\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e9\u05e0\u05d5\u05ea?", "eval_id": 3, "outputs": [{"name": "fix.md", "type": "text", "content": "# Task 3: Add Support for Pegasus Airlines (Pegasus Hava Ta\u015f\u0131mac\u0131l\u0131\u011f\u0131)\n\n## \u05d1\u05e2\u05d9\u05d4\n\u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1-Pegasus Airlines, \u05d7\u05d1\u05e8\u05ea \u05ea\u05e2\u05d5\u05e4\u05d4 \u05d1\u05ea\u05d5\u05e8\u05db\u05d9\u05d4 (flypgs.com). \u05db\u05e8\u05d2\u05e2 \u05d4\u05d9\u05d0 \u05dc\u05d0 \u05d1\u05e1\u05d3\u05e8 \u05d4\u05d8\u05d9\u05d5\u05dc \u05e9\u05dc \u05d4\u05de\u05e2\u05e8\u05db\u05ea, \u05d0\u05d6 \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e9\u05dc Pegasus \u05dc\u05d0 \u05e0\u05e1\u05e8\u05e7\u05d9\u05dd \u05db\u05e8\u05d0\u05d5\u05d9.\n\n## \u05de\u05e7\u05d3\u05de\u05d5\u05ea\n- **\u05e9\u05dd \u05d7\u05d1\u05e8\u05d4**: Pegasus Airlines / Pegasus Hava Ta\u015f\u0131mac\u0131l\u0131\u011f\u0131\n- **\u05d3\u05d5\u05de\u05d9\u05d9\u05df \u05d4\u05d3\u05d5\u05d0\"\u05dc**: `flypgs.com` (\u05d5-`flyPegasus.com` \u05d0\u05dd \u05e7\u05d9\u05d9\u05dd)\n- **\u05d9\u05e2\u05d3\u05d9\u05dd \u05e2\u05d9\u05e7\u05e8\u05d9\u05d9\u05dd**: \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4, \u05d9\u05d5\u05d5\u05df, \u05e7\u05e4\u05e8\u05d9\u05e1\u05d9\u05df, \u05de\u05d6\u05e8\u05d7 \u05d0\u05d9\u05e8\u05d5\u05e4\u05d4\n- **\u05e1\u05d5\u05d2 \u05d1\u05d5\u05e7\u05d9\u05e0\u05d2**: flight\n- **\u05de\u05de\u05dc\u05d0 \u05de\u05e7\u05d5\u05dd**: Ryanair, EasyJet, Wizz Air (\u05ea\u05e2\u05d5\u05e4\u05d4 \u05ea\u05e7\u05e6\u05d9\u05d1\u05d9\u05ea)\n\n## \u05d4\u05e4\u05d9\u05ea\u05e8\u05d5\u05df\n\n### \u05e9\u05dc\u05d1 1: \u05d4\u05d5\u05e1\u05e3 \u05d3\u05d5\u05de\u05d9\u05d9\u05df \u05dc\u05e8\u05e9\u05d9\u05de\u05ea \u05e1\u0435\u043d\u0434\u05e8\u05d9\u05dd\n\n**\u05e7\u05d5\u05d1\u05e5**: `src/lib/gmailClient.ts`\n\n**\u05de\u05d9\u05e7\u05d5\u05dd**: \u05e9\u05d5\u05e8\u05d4 117-138, \u05d1\u05d7\u05dc\u05e7 \"International airlines\"\n\n**\u05e7\u05d5\u05d3 \u05d4\u05d7\u05d5\u05e7\u05d9**:\n```typescript\n  const senderDomains = [\n    // OTAs & hotels\n    'booking.com', 'airbnb.com', 'expedia.com', 'hotels.com', 'agoda.com',\n    'isrotel.co.il', 'danhotels.com', 'fattal.co.il', 'atlas.co.il',\n    // Israeli airlines\n    'elal.co.il', 'arkia.com', 'israir.co.il',\n    // International airlines\n    'ryanair.com', 'easyjet.com', 'wizzair.com', 'flydubai.com',\n    'emirates.com', 'united.com', 'delta.com', 'lufthansa.com', 'klm.com',\n    'britishairways.com', 'airfrance.com', 'turkishairlines.com',\n    'etihadairways.com', 'singaporeair.com', 'thaiairways.com',\n    'flypgs.com',                                                  // \u2190 \u05d4\u05d5\u05e1\u05e3 \u05d6\u05d4\n    // Ride-hailing\n    'uber.com', 'gett.com', 'bolt.eu', 'lyft.com', 'yango.com',\n    // Tours / activities\n    'klook.com', 'viator.com', 'getyourguide.com',\n    // Multi-platform\n    'trip.com', 'kiwi.com', 'almosafer.com',\n    // Hotels direct\n    'marriott.com', 'hilton.com', 'ihg.com', 'hyatt.com',\n    // Car rental\n    'hertz.com', 'avis.com', 'sixt.com', 'europcar.com',\n  ].map(d => `from:${d}`).join(' OR ')\n```\n\n### \u05e9\u05dc\u05d1 2: \u05d4\u05d5\u05e1\u05e3 \u05d9\u05e2\u05d3\u05d9\u05dd \u05dc\u05e8\u05e9\u05d9\u05de\u05ea \u05e2\u05e8\u05d9\u05dd\n\n**\u05e7\u05d5\u05d1\u05e5**: `src/lib/gmailScanner.ts`\n\n**\u05de\u05d9\u05e7\u05d5\u05dd**: \u05e9\u05d5\u05e8\u05d4 41-81, \u05d1\u05d7\u05dc\u05e7 `COUNTRY_CITY_MAP`\n\n**\u05e7\u05d5\u05d3 \u05d4\u05d7\u05d5\u05e7\u05d9**:\n```typescript\nconst COUNTRY_CITY_MAP: Record<string, string[]> = {\n  thailand: [...],\n  israel: [...],\n  spain: [...],\n  france: [...],\n  italy: [...],\n  japan: [...],\n  usa: [...],\n  uk: [...],\n  germany: [...],\n  netherlands: [...],\n  greece: [...],\n  portugal: [...],\n  uae: [...],\n  turkey:        ['turkey', 'istanbul', 'ist', 'saw', 'antalya', 'ayt', 'ankara', 'esb', 'bodrum', 'bjv'],  // \u2190 \u05db\u05d1\u05e8 \u05e7\u05d9\u05d9\u05dd\n  czechia: [...],\n  // ... (rest remains the same)\n}\n```\n\n**\u05d4\u05e2\u05e8\u05d4**: \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05d1\u05d8\u05d1\u05dc\u05d4 \u05e2\u05dd \u05d9\u05e2\u05d3\u05d9\u05dd \u05db\u05de\u05d5 Istanbul (IST), Antalya (AYT), \u05d5\u05db\u05d5'. **\u05dc\u05d0 \u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05e9\u05d5\u05dd \u05d3\u05d1\u05e8 \u05db\u05d0\u05df** \u05db\u05d9 Pegasus \u05d8\u05e1 \u05d1\u05e2\u05d9\u05e7\u05e8 \u05dc\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05d5\u05d9\u05e2\u05d3\u05d9\u05dd \u05e7\u05d9\u05d9\u05de\u05d9\u05dd \u05d1\u05d8\u05d1\u05dc\u05d4.\n\n### \u05e9\u05dc\u05d1 3 (\u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9): \u05d4\u05d5\u05e1\u05e3 \u05ea\u05d9\u05d0\u05d5\u05e8 \u05d8\u05d5\u05e8\u05e7\u05d9\n\n**\u05e7\u05d5\u05d1\u05e5**: `src/lib/gmailScanner.ts`\n\n**\u05de\u05d9\u05e7\u05d5\u05dd**: \u05e9\u05d5\u05e8\u05d4 117-147, \u05d1\u05d7\u05dc\u05e7 `HE_TO_COUNTRY`\n\n**\u05e7\u05d5\u05d3**: \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05de\u05ea\u05d5\u05e8\u05d2\u05de\u05ea \u05dc\u05e2\u05d1\u05e8\u05d9\u05ea:\n```typescript\nconst HE_TO_COUNTRY: Record<string, string> = {\n  // ... (other entries)\n  '\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4': 'turkey', '\u05d0\u05d9\u05e1\u05d8\u05e0\u05d1\u05d5\u05dc': 'turkey',\n  // ... (rest)\n}\n```\n\n**\u05dc\u05d0 \u05e6\u05e8\u05d9\u05da \u05dc\u05e9\u05e0\u05d5\u05ea** \u2014 \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05de\u05ea\u05d5\u05de\u05da.\n\n---\n\n## \u05d4\u05e1\u05d1\u05e8\n\n### \u05db\u05d9\u05e6\u05d3 \u05d6\u05d4 \u05e2\u05d5\u05d1\u05d3\n\n1. **\u05e1\u05e8\u05d9\u05e7\u05ea Gmail**: \u05db\u05e9\u05d4\u05de\u05e2\u05e8\u05db\u05ea \u05de\u05d7\u05e4\u05e9\u05ea \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05e9\u05dc \u05d1\u05d5\u05e7\u05d9\u05e0\u05d2 (\u05e9\u05d5\u05e8\u05d4 142 \u05d1-gmailClient.ts), \u05d4\u05d9\u05d0 \u05de\u05e9\u05ea\u05de\u05e9\u05ea \u05d1\u05de\u05e9\u05d0\u05d1\u05d4:\n   ```\n   (subject:(confirmation OR booking OR ...) OR (from:booking.com OR from:flypgs.com OR ...))\n   ```\n   - \u05d4\u05d5\u05e1\u05e4\u05ea `'flypgs.com'` \u05d0\u05dc `senderDomains` \u05de\u05e9\u05e0\u05d4 \u05d0\u05ea query \u05d6\u05d4\n\n2. **\u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05de-Pegasus**: \u05e2\u05db\u05e9\u05d9\u05d5 \u05d9\u05d9\u05de\u05e6\u05d0\u05d5 \u05d5\u05d9\u05e2\u05d5\u05d1\u05d3\u05d5 \u05e2\u05dc \u05d9\u05d3\u05d9 `parseBookingEmail()` (Claude AI)\n\n3. **\u05e9\u05d3\u05d4 \u05d9\u05e2\u05d3**: \u05db\u05d0\u05e9\u05e8 Claude \u05de\u05e0\u05ea\u05d7 \u05d0\u05ea \u05d4\u05de\u05d9\u05d9\u05dc:\n   - \u05d4\u05d5\u05d0 \u05de\u05d7\u05dc\u05e5 `destination_city` \u05d5-`destination_country`\n   - \u05d7\u05d5\u05e7\u05d9 relevance \u05d1\u05d5\u05d3\u05e7\u05d9\u05dd \u05d0\u05dd \u05d4\u05d9\u05e2\u05d3 \u05ea\u05d5\u05d0\u05dd \u05d0\u05ea \u05d4\u05d8\u05e8\u05d9\u05e4\n   - \u05e8\u05e9\u05d9\u05de\u05ea \u05e2\u05e8\u05d9\u05dd \u05e9\u05dc \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05d9\u05e9 \u05d0\u05ea \u05db\u05dc \u05d4\u05d9\u05e2\u05d3\u05d9\u05dd \u05d4\u05e2\u05d9\u05e7\u05e8\u05d9\u05d9\u05dd \u05e9\u05dc Pegasus\n\n### \u05de\u05e7\u05e8\u05d4 \u05de\u05e9\u05d9\u05de\u05d5\u05e9\n\n```\n\u05e9\u05d3\u05e8\u05d5\u05d2: \u05de\u05d9\u05d9\u05dc \u05de-Pegasus Airlines\nfrom: reservations@flypgs.com\nsubject: Your Booking PG123456 to Istanbul is Confirmed\n\nGmail search:\n  (subject:confirmation OR from:flypgs.com OR ...) \u2713 \u05de\u05ea\u05d0\u05d9\u05dd\n\nClaude parsing:\n  \u2713 parsing succeeds\n  \u2713 destination = \"Istanbul\" or \"Turkey\"\n  \u2713 confidence >= 0.7\n\nRelevance check (trip to Turkey):\n  \u2713 \"Istanbul\" matches COUNTRY_CITY_MAP['turkey']\n  \u2713 dates overlap\n\nResult:\n  \u2713 document created\n  \u2713 expense created\n  \u2713 everything works!\n```\n\n## \u05d3\u05d5\u05e7\u05d5\u05de\u05e0\u05d8\u05e6\u05d9\u05d4 \u05e2\u05d3\u05db\u05e0\u05d9\u05ea\n\n| \u05e1\u05e2\u05d9\u05e3 | \u05de\u05d9\u05e7\u05d5\u05dd | \u05e9\u05d9\u05e0\u05d5\u05d9 |\n|-----|------|------|\n| \u05e1\u05e0\u05d3\u05e8\u05d9\u05dd | `gmailClient.ts` \u05e9\u05d5\u05e8\u05d4 124 | \u05d4\u05d5\u05e1\u05e3 `'flypgs.com'` |\n| \u05d9\u05e2\u05d3\u05d9\u05dd | `gmailScanner.ts` \u05e9\u05d5\u05e8\u05d4 63 | \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05db\u05d5\u05dc\u05dc\u05ea \u05d0\u05ea \u05db\u05dc \u05d4\u05d9\u05e2\u05d3\u05d9\u05dd |\n| \u05ea\u05e8\u05d2\u05d5\u05dd | `gmailScanner.ts` \u05e9\u05d5\u05e8\u05d4 129 | \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05de\u05ea\u05d5\u05e8\u05d2\u05de\u05ea |\n\n---\n\n## \u05d4\u05e2\u05e8\u05d5\u05ea \u05d5\u05d1\u05d3\u05d9\u05e7\u05d4\n\n### \u05d4\u05e2\u05e8\u05d5\u05ea \u05d7\u05e9\u05d5\u05d1\u05d5\u05ea\n\n1. **Pegasus \u05d5\u05d3\u05d5\u05de\u05d9\u05e0\u05d9\u05d5\u05dd \u05de\u05e9\u05e0\u05d9**: \u05d0\u05dd Pegasus \u05de\u05e9\u05ea\u05de\u05e9 \u05d1\u05db\u05ea\u05d5\u05d1\u05d5\u05ea \u05d3\u05d5\u05d0\"\u05dc \u05de\u05e9\u05e0\u05d9\u05d5\u05ea (\u05db\u05de\u05d5 `info@pegasus.com`), \u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05d2\u05dd \u05d0\u05dc\u05d4:\n   ```typescript\n   'flypgs.com', 'pegasus.com',  // if they use this domain\n   ```\n   \u05d1\u05d3\u05d5\u05e7 \u05d3\u05d5\u05d2\u05de\u05d0\u05d5\u05ea \u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05de\u05de\u05e9\u05ea\u05de\u05e9\u05d9\u05dd.\n\n2. **\u05d4\u05ea\u05d0\u05de\u05d4 \u05dc\u05e9\u05e4\u05d4**: \u05d4\u05dc\u05d5\u05d2\u05d9\u05e7\u05d4 \u05de\u05d7\u05d6\u05d9\u05e8\u05d4 \u05e9\u05d3\u05d5\u05ea \u05d1\u05e2\u05d1\u05e8\u05d9\u05ea \u05d5\u05d1\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea:\n   - `destination_city`: \"Istanbul\" (\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea)\n   - `destination_country`: \"Turkey\" (\u05d0\u05e0\u05d2\u05dc\u05d9\u05ea)\n   - \u05d9\u05ea\u05d0\u05d9\u05de\u05d5 \u05dc\u05e8\u05e9\u05d5\u05de\u05d5\u05ea \u05d1\u05d8\u05d1\u05dc\u05d4\n\n3. **\u05e8\u05d9\u05d1\u05d5\u05d9 \u05d4\u05d3\u05d5\u05de\u05d9\u05d9\u05e0\u05d9\u05dd**: \u05d1\u05de\u05d4\u05dc\u05da \u05d4\u05d1\u05d3\u05d9\u05e7\u05d4, \u05d5\u05d5\u05d3\u05d0 \u05e9\u05d2\u05dd:\n   - `flypgs.com` (\u05d4\u05d3\u05d5\u05de\u05d9\u05d9\u05df \u05d4\u05e8\u05e9\u05de\u05d9)\n   - `pegasus.com` (\u05d0\u05dd \u05e7\u05d9\u05d9\u05dd)\n   - `flyPegasus.com` (\u05d0\u05dd \u05e7\u05d9\u05d9\u05dd)\n\n### \u05d1\u05d3\u05d9\u05e7\u05d4\n\n\u05dc\u05d0\u05d7\u05e8 \u05d4\u05d9\u05d9\u05e9\u05d5\u05dd:\n\n```bash\n# 1. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05d4\u05d3\u05d5\u05de\u05d9\u05d9\u05df \u05d4\u05d5\u05e1\u05e3\ngrep -n \"flypgs.com\" src/lib/gmailClient.ts\n# \u05e6\u05e4\u05d5\u05d9: \u05e9\u05d5\u05e8\u05d4 ~124\n\n# 2. \u05d4\u05e8\u05e5 \u05e1\u05e8\u05d9\u05e7\u05d4 \u05d9\u05d3\u05e0\u05d9\u05ea\ncurl -X POST https://yourapp.com/api/gmail/scan \\\n  -H \"Authorization: Bearer YOUR_TOKEN\"\n\n# 3. \u05d1\u05d3\u05d5\u05e7 logs\nconsole.log(\"[gmailScanner] flypgs.com found in email list\")\n\n# 4. \u05d1\u05d3\u05d5\u05e7 \u05e9\u05de\u05d9\u05d9\u05dc \u05e0\u05d5\u05e6\u05e8\nSELECT * FROM expenses\nWHERE title LIKE '%Pegasus%'\n  AND trip_id = 'your-trip-id';\n```\n\n---\n\n## \u05e1\u05d9\u05db\u05d5\u05dd\n\n| \u05e1\u05e2\u05d9\u05e3 | \u05de\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e2\u05e9\u05d5\u05ea |\n|-----|-------------|\n| **gmailClient.ts** | \u05d4\u05d5\u05e1\u05e3 `'flypgs.com'` \u05dc\u05e8\u05e9\u05d9\u05de\u05ea `senderDomains` |\n| **gmailScanner.ts - COUNTRY_CITY_MAP** | \u05dc\u05dc\u05d0 \u05e9\u05d9\u05e0\u05d5\u05d9 (\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05de\u05db\u05d5\u05e1\u05d4) |\n| **gmailScanner.ts - HE_TO_COUNTRY** | \u05dc\u05dc\u05d0 \u05e9\u05d9\u05e0\u05d5\u05d9 (\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d1\u05e8 \u05de\u05ea\u05d5\u05e8\u05d2\u05de\u05ea) |\n| **\u05d1\u05d3\u05d9\u05e7\u05d4** | \u05d4\u05e8\u05e5 \u05e1\u05e8\u05d9\u05e7\u05d4 \u05e2\u05dd \u05de\u05d9\u05d9\u05dc Pegasus |\n\n\u05d6\u05d4 \u05d4\u05db\u05dc! \u05d4\u05e9\u05d9\u05e0\u05d5\u05d9 \u05d4\u05d5\u05d0 \u05de\u05d9\u05e0\u05d9\u05de\u05dc\u05d9 \u05db\u05d9:\n- \u05d4arquiteture \u05db\u05d1\u05e8 \u05de\u05db\u05e1\u05d4 \u05d7\u05d1\u05e8\u05d5\u05ea \u05ea\u05e2\u05d5\u05e4\u05d4\n- Claude AI \u05db\u05d1\u05e8 \u05d9\u05d5\u05d3\u05e2 \u05dc\u05e0\u05ea\u05d7 \u05de\u05d9\u05d9\u05dc\u05d9 \u05d8\u05d9\u05e1\u05d5\u05ea\n- \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05d5\u05db\u05dc \u05d9\u05e2\u05d3\u05d9\u05d4 \u05db\u05d1\u05e8 \u05d1\u05d8\u05d1\u05dc\u05d4\n\n"}], "grading": {"eval_id": 3, "configuration": "with_skill", "expectations": [{"text": "adds_sender_domain", "passed": true, "evidence": "Explicitly specifies adding 'flypgs.com' to senderDomains in gmailClient.ts (lines 22-35)"}, {"text": "checks_destination_aliases", "passed": true, "evidence": "Verifies that Turkey aliases already exist in COUNTRY_CITY_MAP with cities like istanbul, ist, saw, antalya, ayt, ankara, esb, bodrum, bjv (line 70)"}, {"text": "checks_hebrew_translations", "passed": true, "evidence": "Checks for Hebrew to English mapping and confirms '\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4' and '\u05d0\u05d9\u05e1\u05d8\u05e0\u05d1\u05d5\u05dc' already exist in HE_TO_COUNTRY (lines 84-93)"}, {"text": "correct_file_references", "passed": true, "evidence": "Correctly points to gmailClient.ts for senderDomains and gmailScanner.ts for COUNTRY_CITY_MAP and HE_TO_COUNTRY"}, {"text": "no_unnecessary_changes", "passed": true, "evidence": "Explicitly states '\u05dc\u05d0 \u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05e9\u05d5\u05dd \u05d3\u05d1\u05e8 \u05db\u05d0\u05df' (no need to add anything) for COUNTRY_CITY_MAP and HE_TO_COUNTRY sections, avoiding unnecessary modifications"}]}}, {"id": "eval-3-new-provider-without_skill", "prompt": "\u05d0\u05e0\u05d9 \u05e8\u05d5\u05e6\u05d4 \u05dc\u05d4\u05d5\u05e1\u05d9\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1-Pegasus Airlines (flypgs.com) \u05e9\u05d8\u05e1\u05d4 \u05dc\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4. \u05de\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e9\u05e0\u05d5\u05ea?", "eval_id": 3, "outputs": [{"name": "fix.md", "type": "text", "content": "# Task 3: \u05d4\u05d5\u05e1\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1-Pegasus Airlines\n\n## \u05d3\u05e8\u05d9\u05e9\u05d4\n\u05d4\u05d5\u05e1\u05e3 \u05ea\u05de\u05d9\u05db\u05d4 \u05d1-Pegasus Airlines (flypgs.com) \u05e9\u05d8\u05e1\u05d4 \u05dc\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05db\u05d3\u05d9 \u05e9\u05de\u05d9\u05d9\u05dc\u05d9\u05dd \u05de-Pegasus \u05d9\u05e2\u05d1\u05e8\u05d5 \u05e1\u05e8\u05d9\u05e7\u05d4 \u05d5\u05d7\u05d9\u05dc\u05d5\u05e5.\n\n## \u05e6\u05e2\u05d3\u05d9\u05dd\n\n### 1. \u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea Pegasus Airlines \u05dc\u05e8\u05e9\u05d9\u05de\u05ea Senders\n\n**\u05e7\u05d5\u05d1\u05e5:** `/src/lib/gmailClient.ts`\n**\u05de\u05e7\u05d5\u05dd:** \u05e9\u05d5\u05e8\u05d4 124 (\u05d1\u05ea\u05d5\u05da \u05de\u05e2\u05e8\u05da `senderDomains`)\n\n**\u05dc\u05e4\u05e0\u05d9:**\n```typescript\n// International airlines\n'ryanair.com', 'easyjet.com', 'wizzair.com', 'flydubai.com',\n'emirates.com', 'united.com', 'delta.com', 'lufthansa.com', 'klm.com',\n'britishairways.com', 'airfrance.com', 'turkishairlines.com',\n```\n\n**\u05d0\u05d7\u05e8\u05d9:**\n```typescript\n// International airlines\n'ryanair.com', 'easyjet.com', 'wizzair.com', 'flydubai.com',\n'emirates.com', 'united.com', 'delta.com', 'lufthansa.com', 'klm.com',\n'britishairways.com', 'airfrance.com', 'turkishairlines.com',\n'flypgs.com',  // \u2190 \u05d4\u05d5\u05e1\u05e3 \u05d0\u05ea \u05d6\u05d4 (Pegasus Airlines)\n```\n\n### 2. \u05d4\u05d5\u05e1\u05e3 \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u05dc\u05e8\u05e9\u05d9\u05de\u05ea \u05d4\u05de\u05d3\u05d9\u05e0\u05d5\u05ea (\u05d0\u05dd \u05d8\u05e8\u05dd \u05e7\u05d9\u05d9\u05de\u05ea)\n\n**\u05e7\u05d5\u05d1\u05e5:** `/src/lib/gmailScanner.ts`\n**\u05de\u05e7\u05d5\u05dd:** \u05e9\u05d5\u05e8\u05d4 41 (\u05d1\u05ea\u05d5\u05da \u05de\u05e2\u05e8\u05da `COUNTRY_CITY_MAP`)\n\n\u05d1\u05d3\u05d5\u05e7 \u05d0\u05dd `turkey` \u05db\u05d1\u05e8 \u05e7\u05d9\u05d9\u05de\u05ea:\n```typescript\nturkey:        ['turkey', 'istanbul', 'ist', 'saw', 'antalya', 'ayt', ...],\n```\n\n**\u05d0\u05dd \u05d8\u05e8\u05dd \u05e7\u05d9\u05d9\u05de\u05ea**, \u05d4\u05d5\u05e1\u05e3:\n```typescript\nturkey:        ['turkey', 'istanbul', 'ist', 'saw', 'antalya', 'ayt', 'ankara', 'esb', 'bodrum', 'bjv'],\n```\n\n### 3. (\u05d0\u05d5\u05e4\u05e6\u05d9\u05d5\u05e0\u05dc\u05d9) \u05d4\u05d5\u05e1\u05e3 \u05e2\u05d1\u05e8\u05d9\u05ea \u05dc\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4\n\n**\u05e7\u05d5\u05d1\u05e5:** `/src/lib/gmailScanner.ts`\n**\u05de\u05e7\u05d5\u05dd:** \u05e9\u05d5\u05e8\u05d4 116 (\u05d1\u05ea\u05d5\u05da \u05de\u05e2\u05e8\u05da `HE_TO_COUNTRY`)\n\n\u05d0\u05dd \u05ea\u05e8\u05d0\u05d4 \u05d1\u05de\u05e2\u05e8\u05da `HE_TO_COUNTRY`, \u05d1\u05d3\u05d5\u05e7 \u05d0\u05dd `\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4` \u05e7\u05d9\u05d9\u05dd:\n```typescript\n'\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4': 'turkey', '\u05d0\u05d9\u05e1\u05d8\u05e0\u05d1\u05d5\u05dc': 'turkey',\n```\n\n\u05d0\u05dd \u05dc\u05d0, \u05d4\u05d5\u05e1\u05e3:\n```typescript\n'\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4': 'turkey', '\u05d0\u05d9\u05e1\u05d8\u05e0\u05d1\u05d5\u05dc': 'turkey', '\u05d0\u05e0\u05e7\u05e8\u05d4': 'turkey', '\u05d0\u05e0\u05d8\u05dc\u05d9\u05d4': 'turkey',\n```\n\n## \u05d1\u05d3\u05d9\u05e7\u05d4\n\n\u05d1\u05d5\u05d3\u05d0 \u05e9\u05db\u05d0\u05e9\u05e8 \u05de\u05d9\u05d9\u05d9\u05dc \u05de-flypgs.com \u05d9\u05d5\u05d2\u05d3\u05e8:\n1. **Gmail \u05d9\u05d7\u05d6\u05d5\u05e8 \u05d0\u05d5\u05ea\u05d5** \u05d1\u05d7\u05d9\u05e4\u05d5\u05e9 (\u05d4\u05d5\u05d0 \u05d1\u05d9\u05df `senderDomains`)\n2. **Claude \u05d9\u05d7\u05dc\u05e5 \u05d0\u05ea \u05d6\u05d4** \u05db\u05d8\u05d9\u05e1\u05d4 (confidence >= 0.7)\n3. **Match \u05d9\u05ea\u05e8\u05d7\u05e9** \u05dc\u05d8\u05d9\u05d5\u05dc\u05d9\u05dd \u05e9\u05d9\u05e9 \u05dc\u05d4\u05dd \u05d9\u05e2\u05d3 \"\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4\" / \"Istanbul\" \u05d5\u05db\u05d5'\n4. **Expense \u05d9\u05d4\u05d9\u05d4 \u05d9\u05d5\u05e6\u05e8** \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9\u05ea\n\n## \u05d8\u05d1\u05dc\u05d4 \u05d7\u05d3\u05e9\u05d4: \u05ea\u05de\u05d9\u05db\u05d4 \u05d1\u05d7\u05d1\u05e8\u05d5\u05ea \u05ea\u05e2\u05d5\u05e4\u05d4\n\n\u05dc\u05d0\u05d7\u05e8 \u05d4\u05d5\u05e1\u05e4\u05ea Pegasus, \u05d4\u05d8\u05d1\u05dc\u05d4 \u05e9\u05dc \u05d7\u05d1\u05e8\u05d5\u05ea \u05ea\u05e2\u05d5\u05e4\u05d4 \u05d4\u05e0\u05ea\u05de\u05db\u05d5\u05ea \u05ea\u05d4\u05d9\u05d4:\n\n| \u05d7\u05d1\u05e8\u05d4 | \u05d3\u05d5\u05de\u05d9\u05d9\u05df | \u05d4\u05e2\u05e8\u05d4 |\n|------|--------|------|\n| Ryanair | ryanair.com | low-cost Europe |\n| EasyJet | easyjet.com | low-cost Europe |\n| Wizz Air | wizzair.com | low-cost Eastern Europe |\n| FlyDubai | flydubai.com | Middle East |\n| Emirates | emirates.com | Long-haul |\n| United | united.com | US-based |\n| Delta | delta.com | US-based |\n| Lufthansa | lufthansa.com | Europe |\n| KLM | klm.com | Netherlands |\n| British Airways | britishairways.com | UK |\n| Air France | airfrance.com | France |\n| Turkish Airlines | turkishairlines.com | Turkey |\n| **Pegasus Airlines** | **flypgs.com** | **Turkey (NEW)** |\n| El Al | elal.co.il | Israel |\n| Arkia | arkia.com | Israel |\n| IsraAir | israir.co.il | Israel |\n\n## \u05d4\u05e2\u05e8\u05d5\u05ea\n\n- **Pegasus Airlines** \u05d4\u05d5\u05d0 low-cost carrier \u05d8\u05d5\u05e8\u05e7\u05d9 \u05e9\u05e0\u05d5\u05e1\u05e2 \u05dc\u05d3\u05e8\u05d5\u05dd/\u05de\u05d6\u05e8\u05d7 \u05d0\u05d9\u05e8\u05d5\u05e4\u05d4, \u05d5\u05d1\u05de\u05d9\u05d5\u05d7\u05d3 \u05d8\u05d9\u05e1\u05d5\u05ea \u05e4\u05e0\u05d9\u05dd \u05dc\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4\n- \u05d4\u05d3\u05d5\u05de\u05d9\u05d9\u05df \u05d4\u05d5\u05d0 `flypgs.com` (\u05dc\u05d0 `pegasusairlines.com`)\n- \u05d1\u05d3\u05d5\u05e7 \u05d6\u05d5\u05d2\u05d5\u05ea \u05de\u05d9\u05d9\u05de\u05d9\u05dc \u05de\u05de\u05e9\u05d9 \u05de-Pegasus \u05db\u05d3\u05d9 \u05dc\u05d0\u05de\u05ea \u05d0\u05ea \u05d4\u05e7\u05d5\u05d3\u05d9\u05dd \u05e9\u05dc \u05d8\u05d9\u05e1\u05d4 \u05d5\u05db\u05d5'\n\n## \u05d3\u05d5\u05d2\u05de\u05d4: \u05d8\u05d9\u05e1\u05d4 \u05d8\u05d5\u05e8\u05e7\u05d9\u05ea \u05d8\u05d9\u05e4\u05d5\u05e1\u05d9\u05ea\n\n**\u05de\u05d9\u05d9\u05de\u05d9\u05dc \u05de-Pegasus:**\n- From: reservations@flypgs.com\n- Subject: \"Your flight confirmation\" or \"Pegasus Booking Confirmation\"\n- Content: flight number, departure/arrival times, confirmation number\n\n**\u05de\u05d4 \u05e6\u05e8\u05d9\u05da \u05dc\u05e7\u05e8\u05d5\u05ea:**\n1. Gmail search \u05d9\u05de\u05e6\u05d0 \u05d0\u05d5\u05ea\u05d5 (flypgs.com \u05d1senderDomains) \u2705\n2. Claude \u05d9\u05d7\u05dc\u05e5: airline=\"Pegasus\", flight_number=\"PC1234\", destination=\"Istanbul\" \u05d5\u05db\u05d5'\n3. destination=\"Istanbul\" \u05de\u05ea\u05d0\u05d9\u05dd \u05dc\u05de\u05d3\u05d9\u05e0\u05d4 \"turkey\" \u2705\n4. expense \u05d9\u05d5\u05e6\u05e8 \u05d1\u05d8\u05d9\u05d5\u05dc \u05e2\u05dd \u05d9\u05e2\u05d3 \u05d8\u05d5\u05e8\u05e7\u05d9\u05d4 \u2705\n"}], "grading": {"eval_id": 3, "configuration": "without_skill", "expectations": [{"text": "adds_sender_domain", "passed": true, "evidence": "Step 1 explicitly adds 'flypgs.com' to senderDomains in gmailClient.ts line 124"}, {"text": "checks_destination_aliases", "passed": true, "evidence": "Step 2 verifies that Turkey already exists in COUNTRY_CITY_MAP with proper city aliases (istanbul, ist, saw, antalya, ayt)"}, {"text": "checks_hebrew_translations", "passed": true, "evidence": "Step 3 checks for Hebrew translations and confirms '\u05d8\u05d5\u05e8\u05e7\u05d9\u05d4': 'turkey' and '\u05d0\u05d9\u05e1\u05d8\u05e0\u05d1\u05d5\u05dc': 'turkey' already exist"}, {"text": "correct_file_references", "passed": true, "evidence": "Points to correct files: gmailClient.ts for senderDomains (line 124) and gmailScanner.ts for COUNTRY_CITY_MAP (line 41) and HE_TO_COUNTRY (line 116)"}, {"text": "no_unnecessary_changes", "passed": true, "evidence": "Only recommends adding the domain. Steps 2 and 3 are conditional ('If not found, add') and notes Turkey is already covered"}]}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "tripix-gmail-scanner", "skill_path": "<path/to/skill>", "executor_model": "<model-name>", "analyzer_model": "<model-name>", "timestamp": "2026-04-09T14:17:06Z", "evals_run": [], "runs_per_configuration": 3}, "runs": [], "run_summary": {"delta": {"pass_rate": "+0.00", "time_seconds": "+0.0", "tokens": "+0"}}, "notes": []}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tripix — מוקאפים שיווקיים</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Heebo', sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+  min-height: 100vh;
+}
+
+/* Header */
+.page-header {
+  text-align: center;
+  padding: 60px 20px 40px;
+  background: linear-gradient(180deg, #1a1030 0%, #0a0a0a 100%);
+}
+.page-header h1 {
+  font-size: 42px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #6C47FF, #9B7BFF, #c4b0ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+.page-header p {
+  color: #888;
+  font-size: 16px;
+  font-weight: 300;
+}
+
+/* Navigation tabs */
+.nav-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  position: sticky;
+  top: 0;
+  background: rgba(10,10,10,0.95);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+  border-bottom: 1px solid rgba(108,71,255,0.2);
+}
+.nav-tab {
+  padding: 10px 24px;
+  border-radius: 100px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: #888;
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.nav-tab.active, .nav-tab:hover {
+  background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Section */
+.section {
+  display: none;
+  padding: 40px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.section.active { display: block; }
+.section-label {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 100px;
+  background: rgba(108,71,255,0.15);
+  color: #9B7BFF;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.section-desc {
+  color: #888;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 40px;
+  max-width: 500px;
+}
+
+/* ============================================
+   POST 1: INSTAGRAM CAROUSEL MOCKUP
+   ============================================ */
+.carousel-container {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* Phone frame */
+.phone-frame {
+  background: #1c1c1e;
+  border-radius: 40px;
+  padding: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+}
+.phone-screen {
+  background: #fff;
+  border-radius: 30px;
+  overflow: hidden;
+}
+
+/* Instagram header */
+.ig-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 10px;
+  background: #fff;
+}
+.ig-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+}
+.ig-username {
+  font-size: 14px;
+  font-weight: 700;
+  color: #262626;
+}
+.ig-verified {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: #3897f0;
+  border-radius: 50%;
+  position: relative;
+  margin-right: 4px;
+}
+.ig-verified::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #fff;
+  font-weight: 800;
+}
+.ig-dots {
+  margin-right: auto;
+  font-size: 18px;
+  color: #262626;
+  cursor: pointer;
+}
+
+/* Carousel slides */
+.carousel-track {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+.carousel-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.4s;
+}
+.carousel-slide:not(.active-slide) {
+  transform: translateX(100%);
+  opacity: 0;
+}
+.carousel-slide.active-slide {
+  transform: translateX(0);
+  opacity: 1;
+}
+.carousel-slide.exit-left {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+/* Slide 1 */
+.slide-1 {
+  background: linear-gradient(160deg, #6C47FF 0%, #4a2cc0 100%);
+}
+.slide-1 .emoji-big { font-size: 48px; margin-bottom: 24px; }
+.slide-1 h2 {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.4;
+  direction: rtl;
+}
+
+/* Slide 2 — Dashboard mockup */
+.slide-2 {
+  background: #f5f3ff;
+  padding: 20px;
+  align-items: stretch;
+}
+.slide-2-label {
+  font-size: 18px;
+  font-weight: 800;
+  color: #6C47FF;
+  margin-bottom: 16px;
+  direction: rtl;
+}
+.dashboard-mock {
+  background: #fff;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(108,71,255,0.1);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dash-total {
+  text-align: center;
+  padding: 12px 0;
+}
+.dash-total .amount {
+  font-size: 42px;
+  font-weight: 900;
+  color: #1a1a2e;
+}
+.dash-total .currency { color: #6C47FF; font-size: 20px; font-weight: 700; }
+.dash-total .subtitle { font-size: 12px; color: #888; margin-top: 4px; }
+
+.dash-chart {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  justify-content: center;
+  height: 80px;
+  padding: 8px 0;
+}
+.chart-bar {
+  width: 36px;
+  border-radius: 8px 8px 4px 4px;
+  position: relative;
+}
+.chart-bar .bar-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.dash-categories {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.cat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8f7ff;
+  border-radius: 12px;
+  direction: rtl;
+}
+.cat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cat-name { font-size: 11px; color: #555; flex: 1; }
+.cat-amount { font-size: 11px; font-weight: 700; color: #1a1a2e; }
+
+/* Slide 3 */
+.slide-3 {
+  background: linear-gradient(160deg, #9B7BFF 0%, #6C47FF 100%);
+}
+.slide-3 .logo-big {
+  width: 80px;
+  height: 80px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 900;
+  color: #fff;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
+}
+.slide-3 h2 {
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.slide-3 .url {
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+}
+
+/* Carousel dots */
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 0;
+  background: #fff;
+}
+.carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+.carousel-dot.active { background: #3897f0; width: 6px; }
+
+/* Carousel arrows */
+.carousel-arrows {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 10;
+}
+.carousel-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.3);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  backdrop-filter: blur(4px);
+}
+
+/* Instagram actions */
+.ig-actions {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px 8px;
+  gap: 16px;
+  background: #fff;
+}
+.ig-action-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+.ig-save { margin-right: auto; }
+
+/* Instagram caption */
+.ig-caption {
+  padding: 0 16px 16px;
+  background: #fff;
+  direction: rtl;
+}
+.ig-caption-text {
+  font-size: 13px;
+  color: #262626;
+  line-height: 1.6;
+}
+.ig-caption-text strong { font-weight: 700; }
+.ig-caption-more {
+  color: #8e8e8e;
+  cursor: pointer;
+  font-size: 13px;
+}
+.ig-hashtags {
+  color: #00376b;
+  font-size: 12px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+/* ============================================
+   POST 2 & 3: REELS MOCKUP
+   ============================================ */
+.reels-container {
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.reel-phone {
+  width: 320px;
+  flex-shrink: 0;
+}
+.reel-frame {
+  background: #1c1c1e;
+  border-radius: 36px;
+  padding: 10px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+}
+.reel-screen {
+  border-radius: 28px;
+  overflow: hidden;
+  aspect-ratio: 9/16;
+  position: relative;
+}
+
+/* Reel 2 - Split screen */
+.reel-2-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Animated scene */
+.reel-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s;
+  opacity: 0;
+}
+.reel-scene.active-scene { opacity: 1; }
+
+/* Scene 1: Hook */
+.scene-hook {
+  background: #000;
+  padding: 30px;
+  text-align: center;
+}
+.scene-hook h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.5;
+  direction: rtl;
+}
+
+/* Scene 2: Without Tripix */
+.scene-without {
+  background: linear-gradient(180deg, #1a1a1a 0%, #2a1a1a 100%);
+  padding: 24px;
+  gap: 16px;
+}
+.scene-label-bad {
+  padding: 6px 16px;
+  background: rgba(255,59,48,0.15);
+  border: 1px solid rgba(255,59,48,0.3);
+  border-radius: 100px;
+  color: #ff3b30;
+  font-size: 13px;
+  font-weight: 700;
+}
+.mess-table {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  padding: 16px;
+}
+.mess-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  direction: rtl;
+}
+.mess-row:last-child { border: none; }
+.mess-item { font-size: 12px; color: #999; }
+.mess-price { font-size: 12px; color: #ff3b30; font-weight: 600; }
+.mess-q { font-size: 11px; color: #ff6b6b; font-weight: 600; }
+
+.whatsapp-bubbles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.wa-bubble {
+  padding: 8px 12px;
+  border-radius: 12px 12px 4px 12px;
+  font-size: 11px;
+  direction: rtl;
+  max-width: 85%;
+  line-height: 1.4;
+}
+.wa-bubble.green { background: #075e54; color: #dcf8c6; align-self: flex-start; border-radius: 12px 12px 12px 4px; }
+.wa-bubble.gray { background: rgba(255,255,255,0.08); color: #ccc; align-self: flex-end; }
+.time-label {
+  color: #ff3b30;
+  font-size: 20px;
+  font-weight: 900;
+  margin-top: 8px;
+}
+
+/* Scene 3: DROP */
+.scene-drop {
+  background: linear-gradient(160deg, #6C47FF, #4a2cc0);
+}
+.scene-drop h2 {
+  font-size: 32px;
+  font-weight: 900;
+  color: #fff;
+}
+.scene-drop .q-mark {
+  font-size: 64px;
+  opacity: 0.3;
+  position: absolute;
+  top: 20%;
+  left: 10%;
+}
+
+/* Scene 4: With Tripix */
+.scene-with {
+  background: linear-gradient(180deg, #0d0b1a 0%, #1a1030 100%);
+  padding: 20px;
+  gap: 12px;
+}
+.scene-label-good {
+  padding: 6px 16px;
+  background: rgba(108,71,255,0.15);
+  border: 1px solid rgba(108,71,255,0.3);
+  border-radius: 100px;
+  color: #9B7BFF;
+  font-size: 13px;
+  font-weight: 700;
+}
+.tripix-mock-card {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border-radius: 20px;
+  padding: 20px;
+  border: 1px solid rgba(108,71,255,0.2);
+}
+.tripix-mock-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #9B7BFF;
+  margin-bottom: 16px;
+  direction: rtl;
+}
+.split-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  direction: rtl;
+}
+.split-row:last-child { border: none; }
+.split-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.split-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.split-person { font-size: 13px; color: #ccc; }
+.split-amount { font-size: 13px; font-weight: 700; }
+.split-amount.owes { color: #ff6b6b; }
+.split-amount.gets { color: #4ade80; }
+
+.tripix-time {
+  font-size: 48px;
+  font-weight: 900;
+  color: #fff;
+  margin-top: 8px;
+}
+.tripix-time span { color: #9B7BFF; }
+
+/* Scene 5: CTA */
+.scene-cta {
+  background: linear-gradient(160deg, #6C47FF 0%, #9B7BFF 50%, #6C47FF 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+  gap: 16px;
+}
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.cta-logo {
+  width: 72px;
+  height: 72px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
+.scene-cta h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  line-height: 1.5;
+  direction: rtl;
+}
+.cta-btn {
+  padding: 14px 32px;
+  background: #fff;
+  border-radius: 100px;
+  color: #6C47FF;
+  font-size: 15px;
+  font-weight: 800;
+  font-family: 'Heebo', sans-serif;
+  border: none;
+  cursor: pointer;
+}
+
+/* Reel timeline */
+.reel-timeline {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px 8px;
+  justify-content: center;
+}
+.reel-tl-dot {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.2);
+  flex: 1;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.reel-tl-dot.active-tl { background: #fff; }
+
+/* Reel sidebar */
+.reel-sidebar {
+  position: absolute;
+  left: 12px;
+  bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  z-index: 5;
+}
+.reel-sb-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.reel-sb-circle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.reel-sb-count {
+  font-size: 10px;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Reel bottom info */
+.reel-bottom {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  left: 52px;
+  z-index: 5;
+}
+.reel-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.reel-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+}
+.reel-user-name { font-size: 13px; font-weight: 700; color: #fff; }
+.reel-follow-btn {
+  padding: 3px 10px;
+  background: transparent;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Heebo', sans-serif;
+}
+.reel-caption-preview {
+  font-size: 12px;
+  color: rgba(255,255,255,0.9);
+  direction: rtl;
+  line-height: 1.4;
+  max-height: 36px;
+  overflow: hidden;
+}
+.reel-music {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.reel-music-icon { font-size: 12px; }
+.reel-music-name {
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+/* ============================================
+   REEL 3: FULL DEMO
+   ============================================ */
+.reel-3-content {
+  width: 100%;
+  height: 100%;
+}
+
+.demo-scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 12px;
+  transition: opacity 0.5s;
+  opacity: 0;
+}
+.demo-scene.active-demo { opacity: 1; }
+
+/* Demo scenes */
+.demo-intro {
+  background: linear-gradient(160deg, #0d0b1a 0%, #1a1030 100%);
+  text-align: center;
+}
+.demo-intro .person-emoji { font-size: 64px; margin-bottom: 16px; }
+.demo-intro h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.5;
+  direction: rtl;
+}
+.demo-intro .subtext {
+  font-size: 13px;
+  color: #9B7BFF;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.demo-feature {
+  padding: 20px;
+  gap: 16px;
+}
+.demo-feature-number {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #6C47FF, #9B7BFF);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+}
+.demo-feature-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  direction: rtl;
+  line-height: 1.4;
+}
+.demo-mockup {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border-radius: 20px;
+  padding: 16px;
+  border: 1px solid rgba(108,71,255,0.15);
+}
+
+/* Feature: Scan receipt */
+.scan-mock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.scan-receipt {
+  width: 140px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  color: #333;
+  font-size: 10px;
+  line-height: 1.6;
+  text-align: center;
+  transform: rotate(-3deg);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.scan-arrow { font-size: 24px; color: #6C47FF; }
+.scan-result {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.scan-tag {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Feature: Gmail */
+.gmail-mock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gmail-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  direction: rtl;
+}
+.gmail-icon { font-size: 20px; }
+.gmail-info { flex: 1; }
+.gmail-subject { font-size: 12px; color: #fff; font-weight: 600; }
+.gmail-detail { font-size: 10px; color: #888; }
+.gmail-check {
+  width: 20px;
+  height: 20px;
+  background: #4ade80;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #fff;
+}
+
+/* Feature: Dashboard mini */
+.mini-dash {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mini-dash-total {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 900;
+  color: #fff;
+}
+.mini-dash-total span { color: #9B7BFF; font-size: 18px; }
+.mini-bars {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 6px;
+  height: 60px;
+}
+.mini-bar {
+  width: 24px;
+  border-radius: 6px 6px 2px 2px;
+}
+
+/* Feature: Timeline */
+.timeline-mock {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  direction: rtl;
+}
+.tl-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  position: relative;
+}
+.tl-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 15px;
+  top: 36px;
+  bottom: -4px;
+  width: 2px;
+  background: rgba(108,71,255,0.3);
+}
+.tl-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.tl-text { font-size: 12px; color: #ccc; line-height: 1.4; }
+.tl-text strong { color: #fff; font-weight: 700; }
+.tl-date { font-size: 10px; color: #6C47FF; font-weight: 600; }
+
+/* Demo end */
+.demo-end {
+  background: linear-gradient(160deg, #6C47FF, #9B7BFF);
+  text-align: center;
+  gap: 20px;
+}
+.demo-end .features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+.demo-end .feat-chip {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 12px;
+  font-size: 12px;
+  color: #fff;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  direction: rtl;
+}
+.demo-end .price-tag {
+  font-size: 36px;
+  font-weight: 900;
+  color: #fff;
+}
+.demo-end .price-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.8);
+  direction: rtl;
+}
+
+/* Info box below mockup */
+.mockup-info {
+  margin-top: 24px;
+  padding: 20px;
+  background: rgba(108,71,255,0.06);
+  border: 1px solid rgba(108,71,255,0.15);
+  border-radius: 16px;
+  direction: rtl;
+}
+.mockup-info h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #9B7BFF;
+  margin-bottom: 8px;
+}
+.mockup-info p {
+  font-size: 13px;
+  color: #999;
+  line-height: 1.7;
+}
+.mockup-info .tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(108,71,255,0.15);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #9B7BFF;
+  font-weight: 600;
+  margin: 2px;
+}
+
+/* Click instruction */
+.click-hint {
+  text-align: center;
+  padding: 12px;
+  color: #666;
+  font-size: 12px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Tripix Content Preview</h1>
+  <p>3 פיסות תוכן שיווקי — מוקאפים אינטראקטיביים</p>
+</div>
+
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="showSection('post1')">📸 פוסט קרוסלה</button>
+  <button class="nav-tab" onclick="showSection('reel1')">🎬 רילס #1</button>
+  <button class="nav-tab" onclick="showSection('reel2')">🎬 רילס #2</button>
+</div>
+
+<!-- ============================
+     SECTION 1: INSTAGRAM CAROUSEL
+     ============================ -->
+<div class="section active" id="post1">
+  <div class="section-label">Instagram Post</div>
+  <h2 class="section-title">פוסט קרוסלה — "רציתי לבכות"</h2>
+  <p class="section-desc">קרוסלה של 3 שקפים שמובילה מהכאב לפתרון. לחצו על החצים כדי לעבור בין השקפים.</p>
+
+  <div class="carousel-container">
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="ig-header">
+          <div class="ig-avatar">T</div>
+          <div>
+            <span class="ig-username">tripix.app</span>
+            <span class="ig-verified"></span>
+          </div>
+          <div class="ig-dots">···</div>
+        </div>
+
+        <div class="carousel-track" id="carouselTrack">
+          <!-- Slide 1 -->
+          <div class="carousel-slide slide-1 active-slide" id="slide0">
+            <div class="emoji-big">😰</div>
+            <h2>חזרתי מתאילנד.<br>פתחתי את האקסל.<br>רציתי לבכות.</h2>
+          </div>
+          <!-- Slide 2 -->
+          <div class="carousel-slide slide-2" id="slide1">
+            <div class="slide-2-label">✨ או שאפשר ככה</div>
+            <div class="dashboard-mock">
+              <div class="dash-total">
+                <div><span class="amount">8,450</span> <span class="currency">₪</span></div>
+                <div class="subtitle">תאילנד · 10 ימים · 3 נותרו</div>
+              </div>
+              <div class="dash-chart">
+                <div class="chart-bar" style="height:70%;background:#6C47FF;"><span class="bar-label">אוכל</span></div>
+                <div class="chart-bar" style="height:50%;background:#9B7BFF;"><span class="bar-label">לינה</span></div>
+                <div class="chart-bar" style="height:35%;background:#c4b0ff;"><span class="bar-label">תחבורה</span></div>
+                <div class="chart-bar" style="height:60%;background:#10B981;"><span class="bar-label">פעילות</span></div>
+                <div class="chart-bar" style="height:25%;background:#F59E0B;"><span class="bar-label">קניות</span></div>
+              </div>
+              <div class="dash-categories">
+                <div class="cat-item"><div class="cat-dot" style="background:#6C47FF;"></div><span class="cat-name">אוכל</span><span class="cat-amount">2,800₪</span></div>
+                <div class="cat-item"><div class="cat-dot" style="background:#9B7BFF;"></div><span class="cat-name">לינה</span><span class="cat-amount">2,100₪</span></div>
+                <div class="cat-item"><div class="cat-dot" style="background:#10B981;"></div><span class="cat-name">פעילויות</span><span class="cat-amount">1,950₪</span></div>
+                <div class="cat-item"><div class="cat-dot" style="background:#F59E0B;"></div><span class="cat-name">קניות</span><span class="cat-amount">1,600₪</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Slide 3 -->
+          <div class="carousel-slide slide-3" id="slide2">
+            <div class="logo-big">T</div>
+            <h2>חינם. לגמרי. בלי קאץ׳.</h2>
+            <div class="url">tripix.app</div>
+          </div>
+
+          <div class="carousel-arrows">
+            <button class="carousel-arrow" onclick="moveSlide(-1)">‹</button>
+            <button class="carousel-arrow" onclick="moveSlide(1)">›</button>
+          </div>
+        </div>
+
+        <div class="carousel-dots" id="carouselDots">
+          <div class="carousel-dot active" onclick="goSlide(0)"></div>
+          <div class="carousel-dot" onclick="goSlide(1)"></div>
+          <div class="carousel-dot" onclick="goSlide(2)"></div>
+        </div>
+
+        <div class="ig-actions">
+          <svg class="ig-action-icon" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <svg class="ig-action-icon" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <svg class="ig-action-icon" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          <svg class="ig-action-icon ig-save" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </div>
+
+        <div class="ig-caption">
+          <div class="ig-caption-text">
+            <strong>tripix.app</strong> בואו נדבר רגע על הרגע הזה. אתם חוזרים מטיול. עייפים. ואז — "כמה בכלל הוצאתי?" <span class="ig-caption-more">...עוד</span>
+          </div>
+          <div class="ig-hashtags">#Tripix #ניהול_טיול #טיולים #תאילנד #מעקב_הוצאות</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================
+     SECTION 2: REEL #1 — SPLIT
+     ============================ -->
+<div class="section" id="reel1">
+  <div class="section-label">Instagram Reel · 22 שניות</div>
+  <h2 class="section-title">רילס — "3 שניות vs 3 שעות"</h2>
+  <p class="section-desc">לחצו על הסרטון כדי לעבור בין הסצנות</p>
+
+  <div class="reels-container">
+    <div class="reel-phone">
+      <div class="reel-frame">
+        <div class="reel-screen" id="reel2Screen" onclick="nextReel2Scene()">
+
+          <div class="reel-2-content">
+            <!-- Scene 1: Hook -->
+            <div class="reel-scene scene-hook active-scene" data-reel2="0">
+              <h2>סוף טיול חברים.<br><br>הגיע הרגע.</h2>
+              <div style="font-size:48px;margin-top:20px;">😬</div>
+            </div>
+
+            <!-- Scene 2: Without Tripix -->
+            <div class="reel-scene scene-without" data-reel2="1">
+              <div class="scene-label-bad">❌ בלי Tripix</div>
+              <div class="mess-table">
+                <div class="mess-row"><span class="mess-item">🍜 ארוחת ערב</span><span class="mess-price">340 ฿</span><span class="mess-q">מי שילם?</span></div>
+                <div class="mess-row"><span class="mess-item">🚕 גראב לחוף</span><span class="mess-price">180 ฿</span><span class="mess-q">לחלק?</span></div>
+                <div class="mess-row"><span class="mess-item">🏨 מלון 3 לילות</span><span class="mess-price">4,500 ฿</span><span class="mess-q">???</span></div>
+              </div>
+              <div class="whatsapp-bubbles">
+                <div class="wa-bubble green">אני כבר שילמתי יותר מכולם 😤</div>
+                <div class="wa-bubble gray">רגע מי שילם על הסים?</div>
+                <div class="wa-bubble green">אני לא זוכר כלום</div>
+              </div>
+              <div class="time-label">⏱ 3 שעות אחר כך...</div>
+            </div>
+
+            <!-- Scene 3: DROP -->
+            <div class="reel-scene scene-drop" data-reel2="2">
+              <div class="q-mark">?</div>
+              <h2>עם Tripix?</h2>
+            </div>
+
+            <!-- Scene 4: With Tripix -->
+            <div class="reel-scene scene-with" data-reel2="3">
+              <div class="scene-label-good">✨ עם Tripix</div>
+              <div class="tripix-mock-card">
+                <div class="tripix-mock-title">💰 חלוקת הוצאות — תאילנד</div>
+                <div class="split-row">
+                  <div class="split-name"><div class="split-avatar" style="background:#6C47FF;">ד</div><span class="split-person">דניאל</span></div>
+                  <span class="split-amount gets">מקבל 340₪</span>
+                </div>
+                <div class="split-row">
+                  <div class="split-name"><div class="split-avatar" style="background:#10B981;">מ</div><span class="split-person">מיכל</span></div>
+                  <span class="split-amount owes">חייבת 520₪</span>
+                </div>
+                <div class="split-row">
+                  <div class="split-name"><div class="split-avatar" style="background:#F59E0B;">ע</div><span class="split-person">עומר</span></div>
+                  <span class="split-amount gets">מקבל 180₪</span>
+                </div>
+                <div class="split-row">
+                  <div class="split-name"><div class="split-avatar" style="background:#3B82F6;">ש</div><span class="split-person">שירה</span></div>
+                  <span class="split-amount owes">חייבת 0₪</span>
+                </div>
+              </div>
+              <div class="tripix-time"><span>3</span> שניות.</div>
+            </div>
+
+            <!-- Scene 5: CTA -->
+            <div class="reel-scene scene-cta" data-reel2="4">
+              <div class="cta-logo">T</div>
+              <h2>כל הטיול.<br>מקום אחד.</h2>
+              <button class="cta-btn">חינם — לינק בביו 👆</button>
+            </div>
+          </div>
+
+          <!-- Reel UI overlay -->
+          <div class="reel-sidebar">
+            <div class="reel-sb-icon"><div class="reel-sb-circle">♡</div><div class="reel-sb-count">2.4K</div></div>
+            <div class="reel-sb-icon"><div class="reel-sb-circle">💬</div><div class="reel-sb-count">186</div></div>
+            <div class="reel-sb-icon"><div class="reel-sb-circle">➤</div><div class="reel-sb-count">412</div></div>
+          </div>
+          <div class="reel-bottom">
+            <div class="reel-user">
+              <div class="reel-user-avatar">T</div>
+              <span class="reel-user-name">tripix.app</span>
+              <button class="reel-follow-btn">עקוב</button>
+            </div>
+            <div class="reel-caption-preview">3 שעות של "מי חייב למי" או 3 שניות עם Tripix 🤷‍♂️</div>
+            <div class="reel-music"><span class="reel-music-icon">♫</span><span class="reel-music-name">Trending Audio · Original</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="reel-timeline" id="reel2Timeline">
+        <div class="reel-tl-dot active-tl" onclick="goReel2Scene(0)"></div>
+        <div class="reel-tl-dot" onclick="goReel2Scene(1)"></div>
+        <div class="reel-tl-dot" onclick="goReel2Scene(2)"></div>
+        <div class="reel-tl-dot" onclick="goReel2Scene(3)"></div>
+        <div class="reel-tl-dot" onclick="goReel2Scene(4)"></div>
+      </div>
+      <div class="click-hint">👆 לחצו על המסך כדי להתקדם</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================
+     SECTION 3: REEL #2 — DEMO
+     ============================ -->
+<div class="section" id="reel2">
+  <div class="section-label">Instagram Reel · 48 שניות</div>
+  <h2 class="section-title">רילס — "60 שניות, 6 פיצ׳רים, 0 שקלים"</h2>
+  <p class="section-desc">דמו מוצר מלא — לחצו על המסך כדי לעבור בין הפיצ׳רים</p>
+
+  <div class="reels-container">
+    <div class="reel-phone">
+      <div class="reel-frame">
+        <div class="reel-screen" id="reel3Screen" onclick="nextReel3Scene()">
+          <div class="reel-3-content">
+
+            <!-- Demo Intro -->
+            <div class="demo-scene demo-intro active-demo" data-demo="0">
+              <div class="person-emoji">🙋‍♂️</div>
+              <h2>תנו לי 60 שניות<br>ואני אראה לכם למה<br>תמחקו את האקסל</h2>
+              <div class="subtext">⬇️ מתחילים</div>
+            </div>
+
+            <!-- Feature 1: Scan -->
+            <div class="demo-scene demo-feature active-demo" data-demo="1" style="background:linear-gradient(180deg,#0d0b1a,#1a1030);opacity:0;">
+              <div class="demo-feature-number">1</div>
+              <div class="demo-feature-title">סורק קבלה → AI עושה הכל</div>
+              <div class="demo-mockup">
+                <div class="scan-mock">
+                  <div class="scan-receipt">
+                    <div style="font-weight:700;margin-bottom:4px;">🧾 RESTAURANT</div>
+                    Pad Thai ......... 120฿<br>
+                    Tom Yum ......... 95฿<br>
+                    Beer Chang ...... 70฿<br>
+                    <div style="border-top:1px dashed #ccc;margin-top:6px;padding-top:6px;font-weight:700;">TOTAL: 285 ฿</div>
+                  </div>
+                  <div class="scan-arrow">⬇️ AI</div>
+                  <div class="scan-result">
+                    <span class="scan-tag" style="background:rgba(108,71,255,0.2);color:#9B7BFF;">285 ฿</span>
+                    <span class="scan-tag" style="background:rgba(16,185,129,0.2);color:#10B981;">🍜 אוכל</span>
+                    <span class="scan-tag" style="background:rgba(245,158,11,0.2);color:#F59E0B;">≈ 30₪</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 2: Gmail -->
+            <div class="demo-scene demo-feature" data-demo="2" style="background:linear-gradient(180deg,#0d0b1a,#0a1520);">
+              <div class="demo-feature-number">2</div>
+              <div class="demo-feature-title">מייבא הזמנות מ-Gmail בלחיצה</div>
+              <div class="demo-mockup">
+                <div class="gmail-mock">
+                  <div class="gmail-row">
+                    <div class="gmail-icon">✈️</div>
+                    <div class="gmail-info"><div class="gmail-subject">Booking.com — טיסה TLV→BKK</div><div class="gmail-detail">15.07.2026 · 23:45</div></div>
+                    <div class="gmail-check">✓</div>
+                  </div>
+                  <div class="gmail-row">
+                    <div class="gmail-icon">🏨</div>
+                    <div class="gmail-info"><div class="gmail-subject">Agoda — Sukhumvit Hotel</div><div class="gmail-detail">16-22.07.2026 · 6 לילות</div></div>
+                    <div class="gmail-check">✓</div>
+                  </div>
+                  <div class="gmail-row">
+                    <div class="gmail-icon">🚗</div>
+                    <div class="gmail-info"><div class="gmail-subject">Rentalcars — SUV Pickup</div><div class="gmail-detail">22.07.2026 · Chiang Mai</div></div>
+                    <div class="gmail-check">✓</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 3: Dashboard -->
+            <div class="demo-scene demo-feature" data-demo="3" style="background:linear-gradient(180deg,#0d0b1a,#1a1030);">
+              <div class="demo-feature-number">3</div>
+              <div class="demo-feature-title">יודע בדיוק לאן הכסף הולך</div>
+              <div class="demo-mockup">
+                <div class="mini-dash">
+                  <div class="mini-dash-total">8,450 <span>₪</span></div>
+                  <div class="mini-bars">
+                    <div class="mini-bar" style="height:100%;background:#6C47FF;"></div>
+                    <div class="mini-bar" style="height:70%;background:#9B7BFF;"></div>
+                    <div class="mini-bar" style="height:85%;background:#10B981;"></div>
+                    <div class="mini-bar" style="height:50%;background:#F59E0B;"></div>
+                    <div class="mini-bar" style="height:35%;background:#3B82F6;"></div>
+                    <div class="mini-bar" style="height:60%;background:#c4b0ff;"></div>
+                    <div class="mini-bar" style="height:45%;background:#ff6b6b;"></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;direction:rtl;">
+                    <span style="font-size:11px;color:#888;">ממוצע יומי: <strong style="color:#fff;">845₪</strong></span>
+                    <span style="font-size:11px;color:#888;">נותרו: <strong style="color:#4ade80;">3 ימים</strong></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 4: Timeline -->
+            <div class="demo-scene demo-feature" data-demo="4" style="background:linear-gradient(180deg,#0d0b1a,#10081a);">
+              <div class="demo-feature-number">4</div>
+              <div class="demo-feature-title">כל האירועים בציר זמן אחד</div>
+              <div class="demo-mockup">
+                <div class="timeline-mock">
+                  <div class="tl-item">
+                    <div class="tl-dot" style="background:rgba(59,130,246,0.2);">✈️</div>
+                    <div><div class="tl-text"><strong>TLV → BKK</strong><br>טיסה · EL AL 083</div><div class="tl-date">15.07 · 23:45</div></div>
+                  </div>
+                  <div class="tl-item">
+                    <div class="tl-dot" style="background:rgba(16,185,129,0.2);">🏨</div>
+                    <div><div class="tl-text"><strong>Sukhumvit Hotel</strong><br>צ׳ק אין · 6 לילות</div><div class="tl-date">16.07 · 14:00</div></div>
+                  </div>
+                  <div class="tl-item">
+                    <div class="tl-dot" style="background:rgba(245,158,11,0.2);">🚗</div>
+                    <div><div class="tl-text"><strong>איסוף רכב</strong><br>Chiang Mai · SUV</div><div class="tl-date">22.07 · 10:00</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Demo End -->
+            <div class="demo-scene demo-end" data-demo="5">
+              <div class="cta-logo">T</div>
+              <div class="features-grid">
+                <div class="feat-chip">📸 סריקת קבלות</div>
+                <div class="feat-chip">✈️ ייבוא Gmail</div>
+                <div class="feat-chip">📊 דשבורד חכם</div>
+                <div class="feat-chip">👥 חלוקת הוצאות</div>
+                <div class="feat-chip">📅 ציר זמן</div>
+                <div class="feat-chip">🧳 רשימת אריזה</div>
+              </div>
+              <div class="price-tag">₪0</div>
+              <div class="price-sub">חינם. לגמרי. בלי מנוי. בלי קאץ׳.</div>
+              <button class="cta-btn">לינק בביו 👆</button>
+            </div>
+
+          </div>
+
+          <!-- Reel UI -->
+          <div class="reel-sidebar">
+            <div class="reel-sb-icon"><div class="reel-sb-circle">♡</div><div class="reel-sb-count">5.1K</div></div>
+            <div class="reel-sb-icon"><div class="reel-sb-circle">💬</div><div class="reel-sb-count">324</div></div>
+            <div class="reel-sb-icon"><div class="reel-sb-circle">➤</div><div class="reel-sb-count">891</div></div>
+          </div>
+          <div class="reel-bottom">
+            <div class="reel-user">
+              <div class="reel-user-avatar">T</div>
+              <span class="reel-user-name">tripix.app</span>
+              <button class="reel-follow-btn">עקוב</button>
+            </div>
+            <div class="reel-caption-preview">60 שניות. 6 פיצ'רים. 0 שקלים. 💜</div>
+            <div class="reel-music"><span class="reel-music-icon">♫</span><span class="reel-music-name">Upbeat Travel · Trending</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="reel-timeline" id="reel3Timeline">
+        <div class="reel-tl-dot active-tl" onclick="goReel3Scene(0)"></div>
+        <div class="reel-tl-dot" onclick="goReel3Scene(1)"></div>
+        <div class="reel-tl-dot" onclick="goReel3Scene(2)"></div>
+        <div class="reel-tl-dot" onclick="goReel3Scene(3)"></div>
+        <div class="reel-tl-dot" onclick="goReel3Scene(4)"></div>
+        <div class="reel-tl-dot" onclick="goReel3Scene(5)"></div>
+      </div>
+      <div class="click-hint">👆 לחצו על המסך כדי להתקדם</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== CAROUSEL =====
+let currentSlide = 0;
+const totalSlides = 3;
+
+function goSlide(n) {
+  const slides = document.querySelectorAll('.carousel-slide');
+  const dots = document.querySelectorAll('.carousel-dot');
+  slides[currentSlide].classList.remove('active-slide');
+  slides[currentSlide].classList.add('exit-left');
+  setTimeout(() => slides[currentSlide === 0 ? totalSlides - 1 : currentSlide - 1].classList.remove('exit-left'), 400);
+  dots[currentSlide].classList.remove('active');
+  currentSlide = n;
+  slides.forEach(s => { s.classList.remove('active-slide','exit-left'); });
+  slides[currentSlide].classList.add('active-slide');
+  dots[currentSlide].classList.add('active');
+}
+
+function moveSlide(dir) {
+  let next = currentSlide + dir;
+  if (next < 0) next = totalSlides - 1;
+  if (next >= totalSlides) next = 0;
+  goSlide(next);
+}
+
+// ===== REEL 2 =====
+let reel2Current = 0;
+const reel2Total = 5;
+
+function goReel2Scene(n) {
+  document.querySelectorAll('[data-reel2]').forEach(s => s.classList.remove('active-scene'));
+  document.querySelector(`[data-reel2="${n}"]`).classList.add('active-scene');
+  document.querySelectorAll('#reel2Timeline .reel-tl-dot').forEach((d,i) => d.classList.toggle('active-tl', i<=n));
+  reel2Current = n;
+}
+
+function nextReel2Scene() {
+  goReel2Scene(reel2Current < reel2Total - 1 ? reel2Current + 1 : 0);
+}
+
+// ===== REEL 3 =====
+let reel3Current = 0;
+const reel3Total = 6;
+
+function goReel3Scene(n) {
+  document.querySelectorAll('[data-demo]').forEach(s => s.classList.remove('active-demo'));
+  document.querySelector(`[data-demo="${n}"]`).classList.add('active-demo');
+  document.querySelectorAll('#reel3Timeline .reel-tl-dot').forEach((d,i) => d.classList.toggle('active-tl', i<=n));
+  reel3Current = n;
+}
+
+function nextReel3Scene() {
+  goReel3Scene(reel3Current < reel3Total - 1 ? reel3Current + 1 : 0);
+}
+
+// ===== SECTIONS =====
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+}
+</script>
+
+</body>
+</html>

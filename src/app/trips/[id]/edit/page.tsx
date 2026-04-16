@@ -143,6 +143,15 @@ export default function EditTripPage() {
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
           <h3 className="font-bold text-sm text-gray-700">✈️ יעד</h3>
           <div className="relative">
+            {/* Flag when not searching */}
+            {!showDestList && (() => {
+              const sel = filteredDests.find(d => d.nameHe === destination || d.id === destination)
+              return sel ? (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xl leading-none pointer-events-none z-10">
+                  {sel.flag}
+                </span>
+              ) : null
+            })()}
             <input
               type="text"
               value={showDestList ? destSearch : destination}
@@ -156,11 +165,11 @@ export default function EditTripPage() {
               }}
               onBlur={() => setTimeout(() => setShowDestList(false), 150)}
               placeholder="חפש מדינה / עיר..."
-              className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 pr-10"
             />
             {showDestList && filteredDests.length > 0 && (
               <div className="absolute top-full left-0 right-0 bg-white rounded-xl shadow-lg border mt-1 max-h-48 overflow-y-auto z-20">
-                {filteredDests.slice(0, 20).map(d => (
+                {filteredDests.slice(0, 60).map(d => (
                   <button
                     key={d.id}
                     onMouseDown={() => {
@@ -169,10 +178,13 @@ export default function EditTripPage() {
                       setCountryKey(d.name)
                       setShowDestList(false)
                     }}
-                    className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center"
+                    className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center gap-2"
                   >
-                    <span className="text-gray-400 text-xs">{d.currency}</span>
-                    <span>{d.nameHe}</span>
+                    <span className="text-gray-400 text-xs flex-shrink-0">{d.currency}</span>
+                    <span className="flex items-center gap-2 flex-1 justify-end">
+                      <span>{d.nameHe}</span>
+                      <span className="text-base leading-none">{d.flag}</span>
+                    </span>
                   </button>
                 ))}
               </div>

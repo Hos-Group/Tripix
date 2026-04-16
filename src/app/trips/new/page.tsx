@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plane, ChevronLeft, Users, User, Baby, Heart, Plus, Trash2, Briefcase } from 'lucide-react'
+import { Plane, ChevronLeft, Users, User, Baby, Heart, Plus, Trash2, Briefcase, Search, X, ChevronDown, Building2, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrip } from '@/contexts/TripContext'
-import { searchDestinations, getDestinationCities } from '@/lib/destinations'
+import { searchDestinations, getDestinationCities, hasStates, getCountryStates, getStateCities } from '@/lib/destinations'
 import DateRangePicker from '@/components/DateRangePicker'
 import { Analytics } from '@/lib/analytics'
 
@@ -35,7 +35,7 @@ const TRIP_TYPES = [
     color: 'bg-blue-50 text-blue-600 border-blue-200',
     desc: 'משפחה עם ילדים',
     emoji: '👨‍👩‍👧‍👦',
-    welcomeTitle: 'אין כמו טיול משפחתי! 👨‍👩‍👧‍👦',
+    welcomeTitle: 'אין כמו נסיעה משפחתית! 👨‍👩‍👧‍👦',
     welcomeText: 'אטרקציות לילדים, בטיחות, רשימת אריזה — הכל מסודר.',
     defaultCount: 4,
     defaultCategories: ['hotel', 'activity', 'food', 'transport'],
@@ -63,7 +63,7 @@ const TRIP_TYPES = [
     color: 'bg-orange-50 text-orange-600 border-orange-200',
     desc: 'קבוצת חברים',
     emoji: '🎉',
-    welcomeTitle: 'טיול עם חברים — הכי כיף! 🎉',
+    welcomeTitle: 'נסיעה עם חברים — הכי כיף! 🎉',
     welcomeText: 'שיתוף הוצאות, לוגיסטיקה קבוצתית, בילויים — הכל מסודר.',
     defaultCount: 4,
     defaultCategories: ['hotel', 'food', 'activity', 'nightlife'],
@@ -95,12 +95,14 @@ export default function NewTripPage() {
   const searchParams = useSearchParams()
 
   const [step, setStep] = useState(1)
+  const [tripCategory, setTripCategory] = useState<'business' | 'pleasure' | null>(null)
   const [selectedType, setSelectedType] = useState<TripTypeItem | null>(null)
   const [destination, setDestination] = useState('')   // country key e.g. "Thailand"
   const [selectedCities, setSelectedCities] = useState<string[]>([])   // multiple cities
   const [customCityInput, setCustomCityInput] = useState('') // manual city input
   const [destSearch, setDestSearch] = useState('')
   const [showDestList, setShowDestList] = useState(false)
+  const [selectedState, setSelectedState] = useState('')   // US state / Australian state / Canadian province
 
   // Pre-fill destination from quiz (?dest=בנגקוק, תאילנד)
   useEffect(() => {
@@ -122,15 +124,55 @@ export default function NewTripPage() {
   const [travelers, setTravelers] = useState([{ id: 'traveler_1', name: '', nameEn: '', translating: false }])
   const [saving, setSaving] = useState(false)
 
+  // Business trip details
+  const [companyName, setCompanyName]         = useState('')
+  const [businessId, setBusinessId]           = useState('')
+  const [department, setDepartment]           = useState('')
+  const [deptCustom, setDeptCustom]           = useState('')
+  const [deptOpen, setDeptOpen]               = useState(false)
+
+  // Company search autocomplete
+  const [companySuggestions, setCompanySuggestions] = useState<Array<{ id: number; name: string; nameEn: string; address: string }>>([])
+  const [companySearchOpen, setCompanySearchOpen]   = useState(false)
+  const [companySearching, setCompanySearching]     = useState(false)
+  const companySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const companyWrapperRef  = useRef<HTMLDivElement>(null)
+
+  const searchCompanies = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setCompanySuggestions([]); setCompanySearchOpen(false); return }
+    setCompanySearching(true)
+    try {
+      const res  = await fetch(`/api/company-search?q=${encodeURIComponent(q)}&limit=8`)
+      const data = await res.json() as Array<{ id: number; name: string; nameEn: string; address: string }>
+      setCompanySuggestions(data)
+      setCompanySearchOpen(data.length > 0)
+    } catch { /* silent */ } finally { setCompanySearching(false) }
+  }, [])
+
+  function handleCompanyInput(val: string) {
+    setCompanyName(val)
+    if (companySearchTimer.current) clearTimeout(companySearchTimer.current)
+    companySearchTimer.current = setTimeout(() => searchCompanies(val), 350)
+  }
+
+  function selectCompany(c: { id: number; name: string; nameEn: string; address: string }) {
+    setCompanyName(c.name)
+    setBusinessId(String(c.id))
+    setCompanySearchOpen(false)
+    setCompanySuggestions([])
+  }
+
   // ── Traveler name helpers ─────────────────────────────────────────────────
   const HE_REGEX = /[\u0590-\u05FF]/
+  // Per-traveler debounce timers and request tokens to prevent stale results
+  const translateTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const translateTokens = useRef<Record<number, number>>({})
 
   async function translateNameToEn(hebrewName: string): Promise<string> {
     try {
       const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(hebrewName)}&langpair=he|en`)
       const data = await res.json() as { responseData?: { translatedText?: string } }
       const translated = data.responseData?.translatedText?.trim() || ''
-      // MyMemory sometimes returns transliteration — clean up
       return translated.replace(/[^a-zA-Z\s'-]/g, '').trim()
     } catch {
       return ''
@@ -145,36 +187,65 @@ export default function NewTripPage() {
     return null
   }
 
-  async function handleTravelerNameChange(i: number, value: string) {
+  function handleTravelerNameChange(i: number, value: string) {
     // Block digits
     if (/\d/.test(value)) return
 
-    const updated = [...travelers]
-    updated[i] = { ...updated[i], name: value, nameEn: '' }
-    setTravelers(updated)
+    // Update name immediately, clear previous suggestion
+    setTravelers(prev => {
+      const updated = [...prev]
+      updated[i] = { ...updated[i], name: value, nameEn: '', translating: false }
+      return updated
+    })
 
-    // If Hebrew detected and looks like a full name — auto-translate
+    // Cancel pending timer for this traveler
+    if (translateTimers.current[i]) clearTimeout(translateTimers.current[i])
+
+    // Debounce: only translate when user stops typing (600ms) + at least 2 Hebrew words
     if (HE_REGEX.test(value) && value.trim().split(/\s+/).length >= 2) {
-      updated[i] = { ...updated[i], translating: true }
-      setTravelers([...updated])
-      const en = await translateNameToEn(value.trim())
-      const final = [...travelers]
-      final[i] = { ...final[i], name: value, nameEn: en, translating: false }
-      setTravelers(final)
+      // Increment token — any older async call will see a mismatch and discard its result
+      const token = (translateTokens.current[i] || 0) + 1
+      translateTokens.current[i] = token
+
+      translateTimers.current[i] = setTimeout(async () => {
+        // Show spinner
+        setTravelers(prev => {
+          const updated = [...prev]
+          updated[i] = { ...updated[i], translating: true }
+          return updated
+        })
+
+        const en = await translateNameToEn(value.trim())
+
+        // Only apply if this is still the latest request for this traveler
+        if (translateTokens.current[i] !== token) return
+
+        setTravelers(prev => {
+          const updated = [...prev]
+          // Guard: make sure the Hebrew name hasn't changed while we waited
+          if (updated[i].name !== value) return prev
+          updated[i] = { ...updated[i], nameEn: en, translating: false }
+          return updated
+        })
+      }, 600)
     }
   }
 
   function confirmTranslation(i: number) {
-    const updated = [...travelers]
-    updated[i] = { ...updated[i], name: updated[i].nameEn, nameEn: '', translating: false }
-    setTravelers(updated)
+    setTravelers(prev => {
+      const updated = [...prev]
+      updated[i] = { ...updated[i], name: updated[i].nameEn, nameEn: '', translating: false }
+      return updated
+    })
   }
 
   function editTranslation(i: number, value: string) {
     if (/\d/.test(value)) return
-    const updated = [...travelers]
-    updated[i] = { ...updated[i], nameEn: value }
-    setTravelers(updated)
+    setTravelers(prev => {
+      const updated = [...prev]
+      updated[i] = { ...updated[i], nameEn: value }
+      return updated
+    })
   }
 
   const filteredDests = searchDestinations(destSearch)
@@ -201,11 +272,11 @@ export default function NewTripPage() {
       : selectedCities
 
     // Combine first city + country for display, e.g. "בנגקוק, תאילנד"
-    const countryHe = filteredDests.find(d => d.name === destination)?.nameHe || destination
+    const countryHe = filteredDests.find(d => d.id === destination)?.nameHe || destination
     const destDisplay = allCities.length > 0
       ? `${allCities[0]}, ${countryHe}`
       : countryHe
-    const tripName = name.trim() || `טיול ל${allCities.length > 0 ? allCities[0] : countryHe}`
+    const tripName = name.trim() || `נסיעה ל${allCities.length > 0 ? allCities[0] : countryHe}`
 
     setSaving(true)
     try {
@@ -221,9 +292,21 @@ export default function NewTripPage() {
         travelers: travelers
           .filter(t => t.name.trim())
           .map(t => ({ id: t.id, name: t.name.trim() })),
-        notes: JSON.stringify({ type: selectedType?.id || null, cities: allCities }),
+        notes: JSON.stringify({
+          type: selectedType?.id || null,
+          cities: allCities,
+          ...(tripCategory === 'business' && (companyName.trim() || businessId.trim() || department.trim()) ? {
+            business: {
+              companyName: companyName.trim() || undefined,
+              businessId:  businessId.trim()  || undefined,
+              department:  (department === 'other' ? deptCustom.trim() : department) || undefined,
+            },
+          } : {}),
+        }),
       }
-      if (user?.id) insertData.user_id = user.id
+      if (user?.id) {
+        insertData.user_id = user.id
+      }
 
       const { data, error } = await supabase.from('trips').insert(insertData).select('id').single()
       if (error) throw error
@@ -231,11 +314,11 @@ export default function NewTripPage() {
       await refreshTrips()
       if (data?.id) setCurrentTripId(data.id)
       Analytics.tripCreated(destDisplay, selectedType?.id || 'unknown')
-      toast.success('הטיול נוצר! 🚀')
+      toast.success('הנסיעה נוצרה! 🚀')
       router.push('/dashboard')
     } catch (err) {
       console.error(err)
-      toast.error('שגיאה ביצירת הטיול')
+      toast.error('שגיאה ביצירת הנסיעה')
     }
     setSaving(false)
   }
@@ -255,7 +338,8 @@ export default function NewTripPage() {
   }
 
   const goBack = () => {
-    if (step > 1) setStep(step - 1)
+    if (step > 1) { setStep(step - 1) }
+    else if (tripCategory !== null) { setTripCategory(null) }
     else router.back()
   }
 
@@ -292,27 +376,68 @@ export default function NewTripPage() {
               ))}
             </div>
           ) : (
-            <h1 className="text-xl font-bold">טיול חדש</h1>
+            <h1 className="text-xl font-bold">נסיעה חדשה</h1>
           )}
         </div>
 
         <AnimatePresence mode="wait">
-          {/* ── Step 1 — Trip Type ── */}
-          {step === 1 && (
+          {/* ── Step 1a — Business or Pleasure ── */}
+          {step === 1 && tripCategory === null && (
             <motion.div
-              key="step1"
+              key="step1a"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="space-y-3"
+              className="space-y-4"
             >
               <div className="rounded-3xl p-6 text-white text-center" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
                 <Plane className="w-10 h-10 mx-auto mb-2" />
-                <p className="font-bold text-lg">מה סוג הטיול?</p>
-                <p className="text-sm opacity-70 mt-1">בחר סוג כדי להתאים את החוויה</p>
+                <p className="font-bold text-xl">ביזנס או פלאז׳ר?</p>
+                <p className="text-sm opacity-70 mt-1">בחר כדי להתאים את הנסיעה</p>
               </div>
 
-              {TRIP_TYPES.map((type) => (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setTripCategory('business')}
+                  className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-slate-200 bg-slate-50 active:scale-[0.97] transition-all"
+                >
+                  <span className="text-4xl">💼</span>
+                  <div className="text-center">
+                    <p className="font-bold text-slate-800 text-base">ביזנס</p>
+                    <p className="text-xs text-slate-500 mt-0.5">עסקים ופגישות</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setTripCategory('pleasure')}
+                  className="flex flex-col items-center gap-3 p-6 rounded-2xl border-2 active:scale-[0.97] transition-all"
+                  style={{ borderColor: '#9B7BFF', background: 'linear-gradient(135deg, #f5f0ff 0%, #ede8ff 100%)' }}
+                >
+                  <span className="text-4xl">🌴</span>
+                  <div className="text-center">
+                    <p className="font-bold text-violet-700 text-base">פלאז׳ר</p>
+                    <p className="text-xs text-violet-400 mt-0.5">חופשה ובילוי</p>
+                  </div>
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Step 1b — Trip Type ── */}
+          {step === 1 && tripCategory !== null && (
+            <motion.div
+              key="step1b"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-3"
+            >
+              <div className="rounded-3xl p-5 text-white text-center" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+                <p className="font-bold text-lg">מה סוג הנסיעה?</p>
+                <p className="text-sm opacity-70 mt-1">בחר כדי להתאים את החוויה</p>
+              </div>
+
+              {TRIP_TYPES.filter(t => tripCategory === 'business' ? t.id === 'business' : t.id !== 'business').map((type) => (
                 <button
                   key={type.id}
                   onClick={() => handleTypeSelect(type)}
@@ -367,11 +492,20 @@ export default function NewTripPage() {
 
                 {/* Country search */}
                 <div className="relative">
+                  {/* Flag badge when country selected */}
+                  {destination && (() => {
+                    const sel = filteredDests.find(d => d.id === destination)
+                    return sel ? (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xl leading-none pointer-events-none z-10">
+                        {sel.flag}
+                      </span>
+                    ) : null
+                  })()}
                   <input
                     type="text"
                     value={
                       destination
-                        ? filteredDests.find(d => d.name === destination)?.nameHe || destination
+                        ? filteredDests.find(d => d.id === destination)?.nameHe || destination
                         : destSearch
                     }
                     onChange={(e) => {
@@ -383,24 +517,28 @@ export default function NewTripPage() {
                     }}
                     onFocus={() => setShowDestList(true)}
                     placeholder="חפש מדינה (עברית או אנגלית)..."
-                    className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                    className={`w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 ${destination ? 'pr-10' : ''}`}
                   />
                   {showDestList && !destination && (
                     <div className="absolute top-full left-0 right-0 bg-white rounded-xl shadow-lg border mt-1 max-h-48 overflow-y-auto z-20">
-                      {filteredDests.slice(0, 20).map(d => (
+                      {filteredDests.slice(0, 60).map(d => (
                         <button
                           key={d.id}
                           onClick={() => {
-                            setDestination(d.name)
+                            setDestination(d.id)
                             setSelectedCities([])
+                            setSelectedState('')
                             setCustomCityInput('')
                             setDestSearch('')
                             setShowDestList(false)
                           }}
-                          className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center"
+                          className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center gap-2"
                         >
-                          <span className="text-gray-400 text-xs">{d.currency}</span>
-                          <span>{d.nameHe}</span>
+                          <span className="text-gray-400 text-xs flex-shrink-0">{d.currency}</span>
+                          <span className="flex items-center gap-2 flex-1 justify-end">
+                            <span>{d.nameHe}</span>
+                            <span className="text-base leading-none">{d.flag}</span>
+                          </span>
                         </button>
                       ))}
                       {filteredDests.length === 0 && (
@@ -419,6 +557,32 @@ export default function NewTripPage() {
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-2"
                     >
+                      {/* State/Province picker — for USA, Canada, Australia */}
+                      {hasStates(destination) && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-gray-500 font-medium">🗺️ {destination === 'USA' ? 'מדינה' : 'מחוז / מדינה'}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {getCountryStates(destination).map(state => (
+                              <button
+                                key={state}
+                                onClick={() => {
+                                  setSelectedState(state)
+                                  setSelectedCities([])
+                                }}
+                                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
+                                  selectedState === state
+                                    ? 'text-white border-transparent shadow-sm'
+                                    : 'bg-gray-50 text-gray-600 border-gray-200'
+                                }`}
+                                style={selectedState === state ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}
+                              >
+                                {selectedState === state ? '✓ ' : ''}{state}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-gray-500 font-medium">🏙️ ערים שתבקרו</p>
                         {selectedCities.length > 0 && (
@@ -427,30 +591,38 @@ export default function NewTripPage() {
                       </div>
 
                       {/* Known cities chips — multi-select */}
-                      {getDestinationCities(destination).length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {getDestinationCities(destination).map(city => {
-                            const isSelected = selectedCities.includes(city)
-                            return (
-                              <button
-                                key={city}
-                                onClick={() => {
-                                  setSelectedCities(prev =>
-                                    isSelected ? prev.filter(c => c !== city) : [...prev, city]
-                                  )
-                                }}
-                                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
-                                  isSelected
-                                    ? 'text-white border-transparent shadow-sm'
-                                    : 'bg-gray-50 text-gray-600 border-gray-200'
-                                }`}
-                                style={isSelected ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}
-                              >
-                                {isSelected ? '✓ ' : ''}{city}
-                              </button>
-                            )
-                          })}
-                        </div>
+                      {(() => {
+                        const cities = hasStates(destination) && selectedState
+                          ? getStateCities(destination, selectedState)
+                          : getDestinationCities(destination)
+                        return cities.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {cities.map(city => {
+                              const isSelected = selectedCities.includes(city)
+                              return (
+                                <button
+                                  key={city}
+                                  onClick={() => {
+                                    setSelectedCities(prev =>
+                                      isSelected ? prev.filter(c => c !== city) : [...prev, city]
+                                    )
+                                  }}
+                                  className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all active:scale-95 ${
+                                    isSelected
+                                      ? 'text-white border-transparent shadow-sm'
+                                      : 'bg-gray-50 text-gray-600 border-gray-200'
+                                  }`}
+                                  style={isSelected ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}
+                                >
+                                  {isSelected ? '✓ ' : ''}{city}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                      {hasStates(destination) && !selectedState && (
+                        <p className="text-xs text-gray-400 text-center py-1">בחר מדינה כדי לראות ערים</p>
                       )}
 
                       {/* Selected cities display */}
@@ -613,7 +785,7 @@ export default function NewTripPage() {
             >
               <div className="text-center">
                 <div className="text-4xl mb-2">📅</div>
-                <h2 className="text-xl font-bold">מתי הטיול?</h2>
+                <h2 className="text-xl font-bold">מתי הנסיעה?</h2>
                 <p className="text-sm text-gray-500 mt-1">לחצו על תאריך היציאה ואחר כך על החזרה</p>
               </div>
 
@@ -628,20 +800,167 @@ export default function NewTripPage() {
               {/* Optional fields */}
               <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">שם הטיול (אופציונלי)</label>
+                  <label className="text-xs text-gray-500 font-medium">שם הנסיעה (אופציונלי)</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder={`ברירת מחדל: "טיול ל${selectedCities[0] || destination || 'יעד'}"`}
+                    placeholder={`ברירת מחדל: "נסיעה ל${selectedCities[0] || destination || 'יעד'}"`}
                     className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm outline-none mt-1 focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
 
+                {/* Business trip: company details */}
+                {tripCategory === 'business' && (
+                  <div className="space-y-3 pt-2 border-t border-dashed border-slate-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🏢</span>
+                      <span className="text-xs font-bold text-slate-700">פרטי חברה / עוסק</span>
+                      <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-medium">אופציונלי</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 -mt-1">
+                      פרטים אלו יעזרו למשוך אוטומטית חשבוניות ומסמכים מהמייל
+                    </p>
+
+                    {/* Company name — autocomplete from רשם החברות */}
+                    <div ref={companyWrapperRef} className="relative">
+                      <label className="text-xs text-gray-500 font-medium">שם חברה / עוסק מורשה</label>
+                      <div className="relative mt-1">
+                        <input
+                          type="text"
+                          value={companyName}
+                          onChange={(e) => handleCompanyInput(e.target.value)}
+                          onFocus={() => companySuggestions.length > 0 && setCompanySearchOpen(true)}
+                          placeholder='לדוגמה: Google Israel, עוסק מורשה שלמה כהן'
+                          className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 pr-9"
+                          dir="auto"
+                          autoComplete="off"
+                        />
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                          {companySearching
+                            ? <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            : companyName
+                              ? <button type="button" className="pointer-events-auto text-gray-400 active:scale-90"
+                                  onClick={() => { setCompanyName(''); setBusinessId(''); setCompanySearchOpen(false) }}>
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              : <Search className="w-3.5 h-3.5 text-gray-300" />
+                          }
+                        </div>
+                      </div>
+
+                      {/* Autocomplete dropdown */}
+                      {companySearchOpen && companySuggestions.length > 0 && (
+                        <div
+                          className="absolute z-50 top-full mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+                          style={{ maxHeight: 260 }}
+                        >
+                          {companySuggestions.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={() => selectCompany(c)}
+                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-right border-b border-gray-50 last:border-0"
+                            >
+                              <Building2 className="w-4 h-4 text-primary/40 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 truncate">{c.name}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[10px] text-gray-400 font-mono">ח.פ {c.id}</p>
+                                  {c.address && <p className="text-[10px] text-gray-400 truncate">{c.address}</p>}
+                                </div>
+                              </div>
+                              {businessId === String(c.id) && <Check className="w-3.5 h-3.5 text-primary flex-shrink-0" />}
+                            </button>
+                          ))}
+                          <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+                            <p className="text-[10px] text-gray-400">מקור: רשם החברות — משרד המשפטים ישראל</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* ח.פ — auto-filled but editable */}
+                      <div>
+                        <label className="text-xs text-gray-500 font-medium">ח.פ. / מספר עוסק</label>
+                        <input
+                          type="text"
+                          value={businessId}
+                          onChange={(e) => setBusinessId(e.target.value)}
+                          placeholder="123456789"
+                          className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none mt-1 focus:ring-2 focus:ring-primary/20"
+                          dir="ltr"
+                          inputMode="numeric"
+                        />
+                      </div>
+
+                      {/* Department — dropdown */}
+                      <div className="relative">
+                        <label className="text-xs text-gray-500 font-medium">מחלקה</label>
+                        <button
+                          type="button"
+                          onClick={() => setDeptOpen(o => !o)}
+                          className="w-full flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        >
+                          <span className={department ? 'text-gray-800' : 'text-gray-400'}>
+                            {department === 'other'
+                              ? (deptCustom || 'הקלד...')
+                              : department || 'בחר מחלקה'}
+                          </span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${deptOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {deptOpen && (
+                          <div className="absolute z-50 top-full mt-1 w-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                            {[
+                              { v: 'RnD',        label: 'R&D / פיתוח' },
+                              { v: 'Sales',      label: 'Sales / מכירות' },
+                              { v: 'Marketing',  label: 'Marketing / שיווק' },
+                              { v: 'Finance',    label: 'Finance / כספים' },
+                              { v: 'HR',         label: 'HR / משאבי אנוש' },
+                              { v: 'Operations', label: 'Operations / תפעול' },
+                              { v: 'Legal',      label: 'Legal / משפטי' },
+                              { v: 'IT',         label: 'IT / מחשוב' },
+                              { v: 'Management', label: 'Management / הנהלה' },
+                              { v: 'other',      label: 'אחר — הקלד בחופשי' },
+                            ].map(opt => (
+                              <button
+                                key={opt.v}
+                                type="button"
+                                onMouseDown={() => { setDepartment(opt.v); setDeptOpen(false) }}
+                                className={`w-full text-right px-4 py-2.5 text-sm border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors flex items-center justify-between ${department === opt.v ? 'text-primary font-semibold' : 'text-gray-700'}`}
+                              >
+                                {opt.label}
+                                {department === opt.v && <Check className="w-3.5 h-3.5 text-primary" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Custom department text — shown when "other" is selected */}
+                    {department === 'other' && (
+                      <div>
+                        <input
+                          type="text"
+                          value={deptCustom}
+                          onChange={(e) => setDeptCustom(e.target.value)}
+                          placeholder="הקלד שם מחלקה..."
+                          className="w-full bg-gray-50 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                          dir="auto"
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Budget + currency selector */}
                 <div>
                   <label className="text-xs text-gray-500 font-medium">
-                    תקציב (אופציונלי) — באיזה מטבע תנהל את הטיול?
+                    תקציב (אופציונלי) — באיזה מטבע תנהל את הנסיעה?
                   </label>
                   <div className="flex gap-2 mt-1">
                     <input
@@ -678,7 +997,7 @@ export default function NewTripPage() {
                 className="w-full text-white rounded-2xl py-4 font-bold text-lg active:scale-95 transition-transform disabled:opacity-50 shadow-md"
                 style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
               >
-                {saving ? 'יוצר טיול...' : '🚀 יאללה, טסים!'}
+                {saving ? 'יוצרת נסיעה...' : '🚀 יאללה, טסים!'}
               </button>
             </motion.div>
           )}

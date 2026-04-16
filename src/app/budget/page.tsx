@@ -9,8 +9,10 @@ import { supabase } from '@/lib/supabase'
 import { formatMoney, getTripDays } from '@/lib/utils'
 import { Expense, CATEGORY_META, Category } from '@/types'
 import { CategoryIconBadge } from '@/lib/iconConfig'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function BudgetPage() {
+  const { t, dir } = useLanguage()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [budget, setBudget] = useState<number>(0)
   const [editingBudget, setEditingBudget] = useState(false)
@@ -72,14 +74,14 @@ export default function BudgetPage() {
   }
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-4 pb-6" dir={dir}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/dashboard" className="active:scale-95 transition-transform">
           <ChevronLeft className="w-5 h-5 text-gray-500" />
         </Link>
         <div>
-          <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>מעקב תקציב</h1>
+          <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{t('budget_title')}</h1>
         </div>
       </div>
 
@@ -90,7 +92,7 @@ export default function BudgetPage() {
             <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
               <Target className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-bold">הגדר תקציב לטיול</span>
+            <span className="text-sm font-bold">{t('budget_set')}</span>
           </div>
           <div className="flex gap-2">
             <input type="number" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)}
@@ -98,7 +100,7 @@ export default function BudgetPage() {
             <button onClick={saveBudget}
               className="text-white rounded-2xl px-6 py-3 text-sm font-bold active:scale-95"
               style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
-              שמור
+              {t('save')}
             </button>
           </div>
         </div>
@@ -137,7 +139,7 @@ export default function BudgetPage() {
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2">
             <div className={`rounded-2xl p-3 text-center border ${remaining >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-              <p className="text-[10px] text-gray-500 mb-1">נותר</p>
+              <p className="text-[10px] text-gray-500 mb-1">{t('budget_remaining')}</p>
               <p className={`text-sm font-black ${remaining >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {formatMoney(Math.abs(remaining))}
               </p>

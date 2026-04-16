@@ -4,17 +4,20 @@ import { useState, useEffect, useRef } from 'react'
 import {
   User, Lock, Bell, Shield, Info, LogOut, ChevronLeft, Save,
   Users, Coins, Mail, Copy, CheckCheck, Eye, EyeOff, Plus,
-  Trash2, ScanLine, Edit3, Camera, AlertCircle, Loader2,
+  Trash2, ScanLine, Edit3, Camera, AlertCircle, Loader2, Globe,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import GmailConnect from '@/components/GmailConnect'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/contexts/LanguageContext'
+import { Lang, LANG_META } from '@/lib/i18n'
 
-type SettingsPage = 'main' | 'account' | 'notifications' | 'security' | 'about' | 'currency' | 'email_inbox' | 'gmail' | 'travelers'
+type SettingsPage = 'main' | 'language' | 'account' | 'notifications' | 'security' | 'about' | 'currency' | 'email_inbox' | 'gmail' | 'travelers'
 
 const MENU_ITEMS = [
+  { id: 'language'   as const, label: 'שפה', icon: Globe, color: 'text-indigo-500', bg: 'bg-indigo-50' },
   { id: 'account'    as const, label: 'פרטי חשבון',         icon: User,    color: 'text-blue-500',    bg: 'bg-blue-50' },
   { id: 'travelers'  as const, label: 'נוסעים קבועים',       icon: Users,   color: 'text-violet-500',  bg: 'bg-violet-50', badge: 'חדש' },
   { id: 'currency'   as const, label: 'מטבע ברירת מחדל',    icon: Coins,   color: 'text-yellow-500',  bg: 'bg-yellow-50' },
@@ -324,7 +327,7 @@ function TravelersSettingsPage({ userId }: { userId: string }) {
       </div>
 
       <p className="text-xs text-gray-500">
-        שמור נוסעים קבועים עם פרטי דרכון — יהיו זמינים בכל טיול חדש שתיצור
+        שמור נוסעים קבועים עם פרטי דרכון — יהיו זמינים בכל נסיעה חדשה שתיצור
       </p>
 
       {/* Travelers list */}
@@ -377,7 +380,7 @@ function TravelersSettingsPage({ userId }: { userId: string }) {
             <Users className="w-7 h-7 text-violet-400" />
           </div>
           <p className="text-sm font-semibold text-gray-700 mb-1">אין נוסעים קבועים עדיין</p>
-          <p className="text-xs text-gray-400">הוסף נוסעים כדי לקצר את תהליך יצירת הטיול</p>
+          <p className="text-xs text-gray-400">הוסף נוסעים כדי לקצר את תהליך יצירת הנסיעה</p>
         </div>
       )}
 
@@ -497,7 +500,7 @@ function TravelersSettingsPage({ userId }: { userId: string }) {
       <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4">
         <p className="text-xs text-primary/80 font-medium">💡 טיפ</p>
         <p className="text-xs text-gray-500 mt-1">
-          הנוסעים יהיו זמינים לבחירה בכל טיול חדש שתיצור. הפרטים נשמרים רק במכשיר זה.
+          הנוסעים יהיו זמינים לבחירה בכל נסיעה חדשה שתיצור. הפרטים נשמרים רק במכשיר זה.
         </p>
       </div>
     </motion.div>
@@ -507,6 +510,7 @@ function TravelersSettingsPage({ userId }: { userId: string }) {
 // ─── Main Settings Page ────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { user, displayName } = useAuth()
+  const { lang, setLang } = useLanguage()
   const [page, setPage] = useState<SettingsPage>('main')
   const [defaultCurrency, setDefaultCurrency] = useState('ILS')
   const [inboxKey, setInboxKey] = useState<string | null>(null)
@@ -660,6 +664,46 @@ export default function SettingsPage() {
           חזרה להגדרות
         </button>
 
+        {/* ── Language page ───────────────────────────────────────── */}
+        {page === 'language' && (
+          <div>
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+              <button onClick={() => setPage('main')}
+                className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center">
+                <ChevronLeft className="w-4 h-4 text-gray-600 rotate-180" />
+              </button>
+              <h2 className="font-bold text-gray-900">שפה / Language / Idioma</h2>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-500 mb-4">בחר את שפת הממשק / Choose interface language</p>
+              {(Object.entries(LANG_META) as [Lang, typeof LANG_META[Lang]][]).map(([code, meta]) => (
+                <button
+                  key={code}
+                  onClick={() => { setLang(code); toast.success(code === 'he' ? 'שפה שונתה' : code === 'en' ? 'Language changed' : 'Idioma cambiado') }}
+                  className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all ${
+                    lang === code
+                      ? 'border-primary bg-primary/5'
+                      : 'border-gray-100 bg-white'
+                  }`}
+                >
+                  <span className="text-3xl">{meta.flag}</span>
+                  <div className="flex-1 text-right">
+                    <div className="font-bold text-gray-900">{meta.nativeName}</div>
+                    <div className="text-sm text-gray-500">{meta.label}</div>
+                  </div>
+                  {lang === code && (
+                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Account page ────────────────────────────────────────── */}
         {page === 'account' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
@@ -787,7 +831,7 @@ export default function SettingsPage() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
             <div>
               <h1 className="text-xl font-bold">📬 חיבור מייל חכם</h1>
-              <p className="text-xs text-gray-500 mt-1">קבל אישורי הזמנה ישירות לטיול — אוטומטי לחלוטין</p>
+              <p className="text-xs text-gray-500 mt-1">קבל אישורי הזמנה ישירות לנסיעה — אוטומטי לחלוטין</p>
             </div>
 
             <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg">
@@ -814,7 +858,7 @@ export default function SettingsPage() {
                 { step: '1', title: 'העתק את הכתובת', desc: 'העתק את כתובת המייל האישית שלמעלה', icon: '📋' },
                 { step: '2', title: 'הוסף ל-BCC', desc: 'כשאתה מזמין מלון, טיסה, שכירות רכב — הוסף לשדה BCC לפני השליחה', icon: '✉️' },
                 { step: '3', title: 'Tripix יעשה את השאר', desc: 'המערכת תנתח את המייל ותוסיף את ההוצאה אוטומטית', icon: '🤖' },
-                { step: '4', title: 'בדוק ואשר', desc: 'תקבל עדכון בטיול שלך — אפשר לשנות בקלות אם צריך', icon: '✅' },
+                { step: '4', title: 'בדוק ואשר', desc: 'תקבל עדכון בנסיעה שלך — אפשר לשנות בקלות אם צריך', icon: '✅' },
               ].map(item => (
                 <div key={item.step} className="flex gap-3 items-start">
                   <span className="text-xl flex-shrink-0">{item.icon}</span>
@@ -925,7 +969,7 @@ export default function SettingsPage() {
             <div className="rounded-2xl p-6 text-white text-center"
               style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
               <p className="text-3xl font-black tracking-tight mb-1">Tripix</p>
-              <p className="text-white/80 text-sm">מנהל הטיול החכם שלך</p>
+              <p className="text-white/80 text-sm">מנהל הנסיעות החכם שלך</p>
               <div className="mt-3 bg-white/20 rounded-xl px-4 py-1.5 inline-block">
                 <p className="text-xs font-bold">גרסה 1.0.0</p>
               </div>
@@ -935,7 +979,7 @@ export default function SettingsPage() {
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
               <p className="font-bold text-sm">מה זה Tripix? ✈️</p>
               <p className="text-xs text-gray-600 leading-relaxed">
-                Tripix הוא אפליקציית ניהול נסיעות חכמה שמאחדת את כל הכלים שאתה צריך לטיול מושלם:
+                Tripix הוא אפליקציית ניהול נסיעות חכמה שמאחדת את כל הכלים שאתה צריך לנסיעה מושלמת:
                 מעקב הוצאות, ניהול מסמכים, עוזר AI, לוח מסע ועוד — הכל במקום אחד.
               </p>
               <div className="grid grid-cols-2 gap-2 pt-1">

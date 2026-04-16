@@ -266,20 +266,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'DB error' }, { status: 500 })
   }
 
-  // ── Auto-create expense if matched ────────────────────────────────────────
+  // ── Auto-create document + expense if matched with high confidence ───────
   if (parsed && matchedTripId && parsed.confidence >= 0.7) {
-    const expenseCategory = ({
-      hotel:       'hotel',
-      flight:      'flight',
-      car_rental:  'taxi',
-      activity:    'activity',
-      tour:        'activity',
-      insurance:   'other',
-      inflight:    'other',
-      other:       'other',
-    } as Record<string, string>)[parsed.booking_type] || 'other'
+    const CATEGORY_MAP: Record<string, string> = {
+      hotel:      'hotel',
+      flight:     'flight',
+      car_rental: 'car_rental',
+      taxi:       'taxi',
+      activity:   'activity',
+      tour:       'activity',
+      insurance:  'insurance',
+      inflight:   'flight',
+      food:       'food',
+      sim:        'sim',
+      visa:       'visa',
+      ferry:      'ferry',
+      train:      'train',
+      other:      'other',
+    }
+    const DOC_TYPE_MAP: Record<string, string> = {
+      hotel:      'hotel',
+      flight:     'flight',
+      car_rental: 'other',
+      taxi:       'other',
+      activity:   'activity',
+      tour:       'activity',
+      insurance:  'insurance',
+      inflight:   'flight',
+      food:       'other',
+      sim:        'other',
+      visa:       'visa',
+      ferry:      'ferry',
+      train:      'other',
+      other:      'other',
+    }
 
-    const expenseTitle =
+    const bookingTitle =
       parsed.hotel_name ||
       (parsed.airline && parsed.flight_number
         ? `${parsed.airline} ${parsed.flight_number}`
@@ -288,30 +310,68 @@ export async function POST(req: NextRequest) {
       parsed.vendor ||
       email.subject.slice(0, 60)
 
-    const { data: expense } = await supabase
+    // ── 1. Document record — shows up in Documents page ─────────────────
+    const { data: docRecord, error: docError } = await supabase
+      .from('documents')
+      .insert({
+        trip_id:        matchedTripId,
+        user_id:        userId,
+        name:           bookingTitle,
+        doc_type:       DOC_TYPE_MAP[parsed.booking_type] || 'other',
+        file_url:       null,
+        file_type:      'email',
+        extracted_data: parsed,
+        booking_ref:    parsed.confirmation_number || null,
+        flight_number:  parsed.flight_number || null,
+        valid_from:     parsed.check_in || parsed.departure_date || null,
+        valid_until:    parsed.check_out || parsed.return_date || null,
+        notes:          `מ: ${email.from}\nנושא: ${email.subject}`,
+      })
+      .select('id')
+      .single()
+
+    if (docError) {
+      console.error('[email-ingest] Document insert error:', docError.message)
+    }
+
+    // ── 2. Expense record — shows up in Expenses page ───────────────────
+    const { data: expense, error: expenseError } = await supabase
       .from('expenses')
       .insert({
-        trip_id:     matchedTripId,
-        user_id:     userId,
-        title:       expenseTitle,
-        amount:      parsed.amount || 0,
-        currency:    parsed.currency || 'ILS',
-        category:    expenseCategory,
-        date:        parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0],
-        notes:       `מספר אישור: ${parsed.confirmation_number}\nיובא אוטומטית מ: ${email.from}`,
-        source:      'email',
+        trip_id:         matchedTripId,
+        user_id:         userId,
+        title:           bookingTitle,
+        amount:          parsed.amount || 0,
+        currency:        parsed.currency || 'ILS',
+        amount_ils:      parsed.amount || 0,
+        category:        CATEGORY_MAP[parsed.booking_type] || 'other',
+        expense_date:    parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0],
+        notes:           `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${email.from}`,
+        source:          'scan',
+        is_paid:         true,
         email_ingest_id: ingestRecord!.id,
       })
       .select('id')
       .single()
 
-    if (expense) {
-      // Update ingest with expense link
-      await supabase
-        .from('email_ingests')
-        .update({ expense_id: expense.id, status: 'processed' })
-        .eq('id', ingestRecord!.id)
+    if (expenseError) {
+      console.error('[email-ingest] Expense insert error:', expenseError.message)
     }
+
+    // ── 3. Link everything in email_ingests ──────────────────────────────
+    await supabase
+      .from('email_ingests')
+      .update({
+        expense_id: expense?.id || null,
+        status:     'processed',
+      })
+      .eq('id', ingestRecord!.id)
+
+    console.log(
+      `[email-ingest] ✓ created doc="${bookingTitle}" ` +
+      `doc_id=${docRecord?.id} expense_id=${expense?.id} ` +
+      `trip=${matchedTripId} conf=${parsed.confidence}`,
+    )
   }
 
   return NextResponse.json({

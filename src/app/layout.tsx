@@ -2,10 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import { Analytics } from '@vercel/analytics/react'
-import BottomNav from '@/components/layout/BottomNav'
-import GlobalHeader from '@/components/layout/GlobalHeader'
 import Providers from '@/components/Providers'
-import TourGuideWrapper from '@/components/TourGuideWrapper'
+import LayoutWrapper from '@/components/layout/LayoutWrapper'
 import './globals.css'
 
 const inter = Inter({
@@ -37,11 +35,7 @@ export const viewport: Viewport = {
   themeColor: '#6C47FF',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="he" dir="rtl" className={inter.variable}>
       <head>
@@ -52,12 +46,9 @@ export default function RootLayout({
       </head>
       <body className="bg-surface-secondary text-gray-900 antialiased">
         <Providers>
-          <GlobalHeader />
-          <main className="min-h-screen max-w-lg mx-auto px-4 pt-16 pb-24">
+          <LayoutWrapper>
             {children}
-          </main>
-          <BottomNav />
-          <TourGuideWrapper />
+          </LayoutWrapper>
           <Analytics />
           <Toaster
             position="top-center"

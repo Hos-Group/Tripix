@@ -10,10 +10,11 @@ import {
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
-import { formatMoney, formatDate } from '@/lib/utils'
+import { formatMoney, formatDate, cn } from '@/lib/utils'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document as TripDoc } from '@/types'
 import { DocEventIconBadge, CategoryIconBadge } from '@/lib/iconConfig'
 import { useTrip } from '@/contexts/TripContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { eachDayOfInterval, parseISO, format, isToday, differenceInDays } from 'date-fns'
 import CurrencySelector from '@/components/CurrencySelector'
 import DocumentViewer  from '@/components/DocumentViewer'
@@ -378,17 +379,16 @@ function extractDocId(notes: string | null | undefined): string | null {
   return match ? match[1] : null
 }
 
-// ── Hebrew weekday names ───────────────────────────────────────────────────────
-const HEB_WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
-
-function hebrewWeekday(dateStr: string): string {
+function getWeekday(dateStr: string, weekdays: string[]): string {
   const d = parseISO(dateStr)
-  return HEB_WEEKDAYS[d.getDay()]
+  return weekdays[d.getDay()]
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function TimelinePage() {
   const { currentTrip } = useTrip()
+  const { t, dir } = useLanguage()
+  const WEEKDAYS = [t('day_sun'), t('day_mon'), t('day_tue'), t('day_wed'), t('day_thu'), t('day_fri'), t('day_sat')]
 
   const [expenses,    setExpenses]    = useState<Expense[]>([])
   const [documents,   setDocuments]   = useState<TripDoc[]>([])
@@ -465,7 +465,10 @@ export default function TimelinePage() {
   }, [expenses, currentTrip])
 
   // Currency conversion
-  const RATE: Record<Currency, number> = { ILS: 1, USD: 1/3.70, THB: 1/0.105, EUR: 1/4.00, GBP: 1/4.65 }
+  const RATE: Record<Currency, number> = {
+    ILS: 1, USD: 1/3.70, THB: 1/0.105, EUR: 1/4.00, GBP: 1/4.65,
+    JPY: 1/0.025, AED: 1/1.01, SGD: 1/2.74, TRY: 1/0.11, CHF: 1/4.10, AUD: 1/2.38, CAD: 1/2.72,
+  }
   const convert = (ils: number) => {
     const val = ils * RATE[currency]
     return `${CURRENCY_SYMBOL[currency]}${Math.round(val).toLocaleString('he-IL')}`
@@ -528,9 +531,17 @@ export default function TimelinePage() {
 
   if (!currentTrip) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-3 text-center px-6">
-        <p className="text-gray-400">לא נבחר טיול</p>
-        <Link href="/trips" className="text-primary text-sm font-medium">בחר טיול →</Link>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center px-6">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-gray-100">
+          <Calendar className="w-8 h-8 text-gray-300" />
+        </div>
+        <div>
+          <p className="font-bold text-gray-700 mb-1">לא נבחרה נסיעה</p>
+          <p className="text-sm text-gray-400">כדי לראות ציר זמן בחר נסיעה תחילה</p>
+        </div>
+        <Link href="/trips" className="bg-primary text-white text-sm font-bold px-5 py-2.5 rounded-2xl active:scale-95 transition-transform">
+          בחר נסיעה
+        </Link>
       </div>
     )
   }
@@ -539,7 +550,7 @@ export default function TimelinePage() {
   const daysRemaining = Math.max(0, differenceInDays(parseISO(currentTrip.end_date), new Date()))
 
   return (
-    <div className="space-y-4 pb-8" dir="rtl">
+    <div className="space-y-4 pb-8" dir={dir}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-1">
@@ -555,20 +566,24 @@ export default function TimelinePage() {
 
         <div className="flex items-center gap-2">
           {/* View mode toggle — pill style */}
-          <div className="flex items-center p-0.5 bg-surface-secondary rounded-2xl">
+          <div className="flex items-center p-1 bg-surface-secondary rounded-2xl gap-0.5">
             <button
               onClick={() => setViewMode('timeline')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${viewMode === 'timeline' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'}`}
-              title="ציר זמן"
-            >
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all',
+                viewMode === 'timeline' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'
+              )}>
               <LayoutList className="w-3.5 h-3.5" />
+              <span>{t('timeline_view')}</span>
             </button>
             <button
               onClick={() => setViewMode('summary')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${viewMode === 'summary' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'}`}
-              title="סיכום נסיעה"
-            >
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all',
+                viewMode === 'summary' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'
+              )}>
               <BarChart2 className="w-3.5 h-3.5" />
+              <span>{t('timeline_summary')}</span>
             </button>
           </div>
 
@@ -954,7 +969,7 @@ export default function TimelinePage() {
                         style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
                         {day.dayNumber >= 1 ? (
                           <>
-                            <span className="text-[9px] leading-none opacity-70">יום</span>
+                            <span className="text-[9px] leading-none opacity-70">{t('timeline_day')}</span>
                             <span className="text-xs font-bold">{day.dayNumber}</span>
                           </>
                         ) : (
@@ -962,7 +977,7 @@ export default function TimelinePage() {
                         )}
                       </div>
                       <span className="text-xs text-gray-400">
-                        {hebrewWeekday(day.date)}, {format(parseISO(day.date), 'dd.MM')}
+                        {getWeekday(day.date, WEEKDAYS)}, {format(parseISO(day.date), 'dd.MM')}
                       </span>
                       {day.isToday && (
                         <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">היום</span>
@@ -982,41 +997,66 @@ export default function TimelinePage() {
                       day.isToday ? 'ring-2 ring-primary ring-offset-1' : ''
                     }`}>
 
-                    {/* Day header */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-50">
+                    {/* Day header — sticky with gradient pill */}
+                    <div className={cn(
+                      'flex items-center gap-3 px-4 py-3 border-b border-gray-50 sticky top-0 z-10',
+                      day.isToday ? 'bg-primary/[0.03]' : 'bg-white'
+                    )}>
+                      {/* Gradient day-number pill */}
                       <div
-                        className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
-                          !day.isToday && day.isPast ? 'bg-gray-800 text-white' :
+                        className={cn(
+                          'w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 text-center shadow-sm',
+                          !day.isToday && day.isPast ? 'bg-gray-700 text-white' :
                           !day.isToday ? 'bg-gray-100 text-gray-500' : ''
-                        }`}
+                        )}
                         style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
                         {day.dayNumber >= 1 ? (
                           <>
-                            <span className="text-[10px] font-normal leading-none opacity-70">יום</span>
-                            <span className="text-sm font-bold leading-tight">{day.dayNumber}</span>
+                            <span className="text-[9px] font-medium leading-none opacity-60 tracking-wide">{t('timeline_day')}</span>
+                            <span className="text-base font-black leading-tight">{day.dayNumber}</span>
                           </>
                         ) : (
                           <>
-                            <span className="text-[9px] leading-none">לפני</span>
-                            <span className="text-[9px] leading-none">הטיול</span>
+                            <span className="text-[8px] leading-none">{t('timeline_before_trip')}</span>
                           </>
                         )}
                       </div>
+
+                      {/* Date + weekday info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-800">
-                            {hebrewWeekday(day.date)}, {format(parseISO(day.date), 'dd.MM')}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={cn(
+                            'text-sm font-bold',
+                            day.isToday ? 'text-primary' : day.isPast ? 'text-gray-700' : 'text-gray-800'
+                          )}>
+                            {t('timeline_day')} {getWeekday(day.date, WEEKDAYS)}
+                          </span>
+                          <span className="text-xs text-gray-400 font-medium tabular-nums">
+                            {format(parseISO(day.date), 'dd.MM.yyyy')}
                           </span>
                           {day.isToday && (
-                            <span className="text-[10px] bg-primary text-white px-1.5 py-0.5 rounded-full font-medium">היום</span>
+                            <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-bold tracking-wide">היום</span>
                           )}
                         </div>
                         {hasDocEvents && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            {day.docEvents.map(ev => ev.icon).slice(0, 4).join(' ')}
+                          <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-0.5">
+                            {day.docEvents.map(ev => ev.icon).slice(0, 5).join(' ')}
                           </p>
                         )}
                       </div>
+
+                      {/* Daily total — if has expenses */}
+                      {hasExpenses && (
+                        <div className="text-left flex-shrink-0">
+                          <p className={cn(
+                            'text-sm font-black',
+                            day.isToday ? 'text-primary' : 'text-gray-800'
+                          )}>
+                            {convert(day.totalIls)}
+                          </p>
+                          <p className="text-[10px] text-gray-400 text-left">{day.expenses.length} פריטים</p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Doc events — always visible */}
@@ -1068,16 +1108,15 @@ export default function TimelinePage() {
                         <button
                           onClick={() => setExpandedExpDay(isExpExpanded ? null : day.date)}
                           className="w-full flex items-center gap-2 bg-surface-secondary active:bg-gray-100 active:scale-[0.98] transition-all rounded-2xl px-4 py-2.5">
+                          <ChevronDown className={cn('w-4 h-4 text-gray-400 transition-transform flex-shrink-0', isExpExpanded && 'rotate-180')} />
+                          <span className="text-xs font-semibold text-gray-500 flex-1 text-right">
+                            {isExpExpanded ? 'סגור הוצאות' : `הצג ${day.expenses.length} הוצאות`}
+                          </span>
                           <div className="flex items-center gap-0.5">
-                            {Array.from(new Set(day.expenses.map(e => e.category))).slice(0, 4).map(cat => (
-                              <span key={cat} className="text-xs">{CATEGORY_META[cat as Category]?.icon}</span>
+                            {Array.from(new Set(day.expenses.map(e => e.category))).slice(0, 5).map(cat => (
+                              <span key={cat} className="text-sm">{CATEGORY_META[cat as Category]?.icon}</span>
                             ))}
                           </div>
-                          <span className="text-sm font-bold text-gray-800 flex-1 text-right">
-                            {convert(day.totalIls)}
-                          </span>
-                          <span className="text-[10px] text-gray-400">{day.expenses.length} פריטים</span>
-                          <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform flex-shrink-0 ${isExpExpanded ? 'rotate-180' : ''}`} />
                         </button>
 
                         {/* Expanded expense list */}
@@ -1096,39 +1135,42 @@ export default function TimelinePage() {
 
                                   return (
                                     <div key={exp.id}
-                                      className="flex items-center gap-3 bg-white rounded-2xl px-3 py-2.5 shadow-sm border border-gray-50">
-                                      <CategoryIconBadge category={exp.category as Category} size="sm" />
+                                      className="flex items-center gap-3 bg-white rounded-2xl py-2.5 shadow-sm border border-gray-50 overflow-hidden"
+                                      style={{ borderRightWidth: 3, borderRightColor: meta.color, borderRightStyle: 'solid' }}>
+                                      <div className="pr-0 pl-3 flex items-center gap-3 flex-1 min-w-0">
+                                        <CategoryIconBadge category={exp.category as Category} size="sm" />
 
-                                      <div className="flex-1 min-w-0">
-                                        {isEditing ? (
-                                          <input
-                                            autoFocus
-                                            value={editTitle}
-                                            onChange={e => setEditTitle(e.target.value)}
-                                            onKeyDown={e => {
-                                              if (e.key === 'Enter') handleRename(exp)
-                                              if (e.key === 'Escape') setEditingId(null)
-                                            }}
-                                            className="w-full text-xs border-b border-primary outline-none bg-transparent pb-0.5"
-                                            dir="rtl"
-                                          />
-                                        ) : (
-                                          <p className="text-xs font-semibold text-gray-800 truncate">{exp.title}</p>
-                                        )}
-                                        <p className="text-[10px] text-gray-400">{meta.label}</p>
-                                      </div>
+                                        <div className="flex-1 min-w-0">
+                                          {isEditing ? (
+                                            <input
+                                              autoFocus
+                                              value={editTitle}
+                                              onChange={e => setEditTitle(e.target.value)}
+                                              onKeyDown={e => {
+                                                if (e.key === 'Enter') handleRename(exp)
+                                                if (e.key === 'Escape') setEditingId(null)
+                                              }}
+                                              className="w-full text-xs border-b border-primary outline-none bg-transparent pb-0.5"
+                                              dir="rtl"
+                                            />
+                                          ) : (
+                                            <p className="text-xs font-semibold text-gray-800 truncate">{exp.title}</p>
+                                          )}
+                                          <p className="text-[10px]" style={{ color: meta.color }}>{meta.label}</p>
+                                        </div>
 
-                                      <div className="text-left flex-shrink-0">
-                                        <p className="text-xs font-bold">{convert(exp.amount_ils)}</p>
-                                        {exp.currency !== 'ILS' && (
-                                          <p className="text-[10px] text-gray-400">
-                                            {CURRENCY_SYMBOL[exp.currency]}{exp.amount}
-                                          </p>
-                                        )}
+                                        <div className="text-left flex-shrink-0">
+                                          <p className="text-sm font-black text-gray-900">{convert(exp.amount_ils)}</p>
+                                          {exp.currency !== 'ILS' && (
+                                            <p className="text-[10px] text-gray-400">
+                                              {CURRENCY_SYMBOL[exp.currency]}{exp.amount}
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
 
                                       {isEditing ? (
-                                        <div className="flex gap-1 flex-shrink-0">
+                                        <div className="flex gap-1 flex-shrink-0 pl-3">
                                           <button onClick={() => handleRename(exp)}
                                             className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 active:scale-90">
                                             <Check className="w-3.5 h-3.5" />
@@ -1139,7 +1181,7 @@ export default function TimelinePage() {
                                           </button>
                                         </div>
                                       ) : (
-                                        <div className="flex gap-1 flex-shrink-0">
+                                        <div className="flex gap-1 flex-shrink-0 pl-3">
                                           {extractDocId(exp.notes) && (
                                             <button
                                               onClick={() => handleOpenDoc(exp)}
@@ -1183,13 +1225,15 @@ export default function TimelinePage() {
             </div>
 
             {expenses.length === 0 && days.every(d => d.docEvents.length === 0) && (
-              <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
-                <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+              <div className="bg-white rounded-3xl p-10 text-center shadow-sm">
+                <div className="w-20 h-20 rounded-3xl mx-auto mb-5 flex items-center justify-center shadow-lg"
                   style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
-                  <Calendar className="w-8 h-8 text-white" />
+                  <Calendar className="w-10 h-10 text-white" />
                 </div>
-                <p className="font-bold text-gray-800 mb-1">הציר ריק עדיין</p>
-                <p className="text-sm text-gray-400">הוסף מסמכים כדי לראות את לוח הנסיעה</p>
+                <p className="text-lg font-black text-gray-800 mb-1.5">{t('timeline_empty')}</p>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  הוסף הוצאות ומסמכים<br />כדי לראות את לוח הנסיעה
+                </p>
               </div>
             )}
           </motion.div>

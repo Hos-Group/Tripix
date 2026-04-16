@@ -16,7 +16,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { DocumentBlockParam, TextBlockParam } from '@anthropic-ai/sdk/resources/messages/messages'
 
 export interface ParsedBooking {
-  booking_type: 'hotel' | 'flight' | 'car_rental' | 'activity' | 'tour' | 'insurance' | 'inflight' | 'other'
+  booking_type: 'hotel' | 'flight' | 'car_rental' | 'activity' | 'tour' | 'insurance' | 'inflight' | 'taxi' | 'food' | 'sim' | 'other'
   vendor: string               // "Booking.com", "El Al", "Airbnb" etc.
   destination_city: string     // "Barcelona", "Bangkok"
   destination_country: string  // "Spain", "Thailand"
@@ -35,6 +35,10 @@ export interface ParsedBooking {
   summary: string              // 1-line Hebrew summary
   confidence: number           // 0-1 how sure is the AI
   trip_relevant?: boolean      // true if booking matches the given trip context
+  // Business-specific fields
+  is_business_expense?: boolean // true if it's a tax invoice / company-addressed bill
+  tax_invoice_number?: string   // חשבונית מס number (Israeli VAT invoice)
+  invoice_to?: string           // company/entity the invoice is addressed to
 }
 
 /** Optional trip context to feed Claude for context-aware parsing */
@@ -43,6 +47,13 @@ export interface TripContext {
   startDate:      string    // YYYY-MM-DD
   endDate:        string    // YYYY-MM-DD
   travelerNames:  string[]  // ["Omer Halevy", "Noa Cohen"]
+  // Extended context for higher-accuracy matching
+  tripType?:      string    // 'business' | 'family' | 'solo' | 'friends' | 'couple' | 'beach' | 'ski'
+  cities?:        string[]  // specific cities in the trip: ['Bangkok', 'Chiang Mai', 'Phuket']
+  numTravelers?:  number    // total number of travelers
+  currency?:      string    // expected currency: 'ILS', 'USD', 'EUR', 'THB'
+  tripName?:      string    // trip name — helps match email subjects like "Your trip to Barcelona"
+  companyName?:   string    // for business trips — match invoices addressed to this company
 }
 
 // ─── Known booking sender domains ────────────────────────────────────────────
@@ -79,8 +90,22 @@ export const KNOWN_BOOKING_DOMAINS: ReadonlySet<string> = new Set([
   'accor.com', 'radissonhotels.com', 'bestwestern.com', 'wyndham.com',
   // Car rental
   'hertz.com', 'avis.com', 'sixt.com', 'europcar.com', 'budget.com', 'enterprise.com',
-  // Insurance
-  'harel.co.il', 'phoenix.co.il', 'migdal.co.il',
+  // Insurance — Israeli + international
+  'harel.co.il', 'phoenix.co.il', 'migdal.co.il', 'clalbit.co.il',
+  'menora.co.il', 'ayalon.co.il', 'allianz.com', 'worldnomads.com',
+  'axa-travel.com', 'covertrip.com', 'heymondo.com',
+  // Business travel management
+  'travelperk.com', 'navan.com', 'concur.com', 'egencia.com',
+  'cytric.com', 'amexgbt.com', 'cwt.com',
+  // Israeli SIM / roaming
+  'partner.co.il', 'hot.net.il', 'cellcom.co.il', 'pelephone.co.il',
+  'golan.co.il', 'azi.co.il',
+  // International SIM
+  'airalo.com', 'truphone.com', 'flexiroam.com', 'simly.io',
+  // Restaurant/food delivery receipts (for business expense reporting)
+  'wolt.com', 'tenbis.co.il', '10bis.co.il', 'mishloha.co.il',
+  // Israeli taxi apps
+  'yango.com', 'gett.com', 'cabapp.co.il',
 ])
 
 /** Return true if from-address contains a known booking domain */
@@ -94,7 +119,7 @@ export function isKnownBookingSender(fromAddress: string): boolean {
 // This saves ~60-70% of Claude API calls.
 
 const BOOKING_SUBJECT_KEYWORDS = [
-  // English
+  // English — bookings
   'confirmation', 'confirmed', 'reservation', 'itinerary', 'e-ticket', 'eticket',
   'voucher', 'receipt', 'invoice', 'boarding pass', 'check-in', 'checkin',
   'booking', 'order confirmed', 'ticket', 'payment received', 'booking ref',
@@ -103,9 +128,16 @@ const BOOKING_SUBJECT_KEYWORDS = [
   'inflight purchase', 'onboard purchase', 'in-flight receipt', 'onboard receipt',
   'wifi purchase', 'in-flight wifi', 'duty free', 'duty-free', 'onboard order',
   'seat upgrade', 'baggage receipt', 'extra baggage', 'meal order',
-  // Hebrew
-  'אישור', 'הזמנה', 'כרטיס', 'טיסה', 'קבלה', 'חשבונית', 'תשלום', 'צ\'ק-אין',
+  // Business travel
+  'tax invoice', 'expense report', 'business receipt', 'sim activation',
+  'data plan', 'roaming plan', 'travel insurance policy', 'policy document',
+  'per diem', 'travel allowance', 'reimbursement',
+  // Hebrew — bookings
+  'אישור', 'הזמנה', 'כרטיס', 'טיסה', 'קבלה', 'צ\'ק-אין',
   'דיוטי פרי', 'שדרוג מושב', 'ווי-פיי בטיסה', 'קנייה בטיסה',
+  // Hebrew — business
+  'חשבונית מס', 'חשבונית', 'קבלה', 'תשלום', 'ביטוח נסיעות', 'פוליסת ביטוח',
+  'כרטיס סים', 'רומינג', 'אשל', 'דמי שהייה', 'ניהול הוצאות',
 ]
 
 const SPAM_SUBJECT_KEYWORDS = [
@@ -151,7 +183,7 @@ export function quickPreFilter(
 // ─── Prompts ──────────────────────────────────────────────────────────────────
 
 const BASE_BOOKING_FIELDS = `{
-  "booking_type": "hotel|flight|car_rental|activity|tour|insurance|taxi|inflight|other",
+  "booking_type": "hotel|flight|car_rental|activity|tour|insurance|taxi|food|sim|inflight|other",
   "vendor": "שם הפלטפורמה/חברה",
   "destination_city": "עיר היעד",
   "destination_country": "מדינת היעד באנגלית",
@@ -160,7 +192,7 @@ const BASE_BOOKING_FIELDS = `{
   "departure_date": "YYYY-MM-DD או null",
   "return_date": "YYYY-MM-DD או null",
   "amount": 0.00,
-  "currency": "EUR|ILS|USD|GBP|THB|JPY",
+  "currency": "EUR|ILS|USD|GBP|THB|JPY|AED|TRY",
   "confirmation_number": "מספר אישור — חובה אם קיים, אחרת N/A",
   "traveler_names": ["שמות הנוסעים"],
   "hotel_name": "שם המלון אם רלוונטי",
@@ -169,32 +201,41 @@ const BASE_BOOKING_FIELDS = `{
   "num_guests": 1,
   "summary": "תקציר קצר בעברית — מה הוזמן, מתי, כמה עלה",
   "confidence": 0.9,
-  "trip_relevant": true
+  "trip_relevant": true,
+  "is_business_expense": false,
+  "tax_invoice_number": "מספר חשבונית מס — אם קיים, אחרת null",
+  "invoice_to": "שם החברה/עוסק שאליו מופנית החשבונית — אם קיים, אחרת null"
 }`
 
 const BOOKING_TYPE_GUIDE = `
 סוגי הזמנות:
 - hotel = מלון, צימר, Airbnb, hostel, villa
 - flight = טיסה (כולל low-cost: Ryanair, WizzAir, EasyJet וכו')
-- car_rental = השכרת רכב
+- car_rental = השכרת רכב (Hertz, Avis, Sixt, Europcar וכו')
 - activity = אטרקציה, סיור, כרטיס כניסה, טיול מאורגן
 - tour = חבילת נסיעה מאורגנת
-- insurance = ביטוח נסיעות
-- taxi = Uber, Gett, Bolt, Yango, מונית
-- inflight = רכישה במהלך הטיסה: WiFi, אוכל, משקאות, duty-free, שדרוג מושב, כבודה עודפת, מוצרים אחרים שנרכשו על הסיפון
+- insurance = ביטוח נסיעות (פוליסה, אישור כיסוי)
+- taxi = Uber, Gett, Bolt, Yango, מונית, נסיעה ספציפית
+- food = מסעדה, קפה, קייטרינג, Wolt, deliveroo (קבלה על ארוחה)
+- sim = כרטיס SIM, גלישה בחו"ל, רומינג, data plan, אירוטל
+- inflight = רכישה במהלך הטיסה: WiFi, אוכל, duty-free, שדרוג מושב, כבודה עודפת
 
 ⚠️ זיהוי רכישות בטיסה (inflight):
 - WiFi / internet בטיסה → inflight
 - אוכל ומשקאות שהוזמנו בטיסה → inflight
 - duty-free שנרכש על הסיפון → inflight
-- שדרוג מושב שנרכש בטיסה (לא מראש) → inflight
+- שדרוג מושב שנרכש בטיסה → inflight
 - כבודה עודפת שנשלמה בטיסה → inflight
-- לשייך לאותה טיסה לפי תאריך / מספר טיסה
+
+⚠️ זיהוי חשבוניות עסקיות:
+- is_business_expense = true אם: חשבונית מס (לא קבלה רגילה), מופנית לחברה/עוסק, VAT invoice
+- tax_invoice_number = מספר חשבונית מס ישראלי (מספר רץ, בד"כ 6-9 ספרות)
+- invoice_to = שם החברה/עוסק שאליו מופנית החשבונית (כפי שמופיע בחשבונית)
 
 ⚠️ destination_city:
 - מלון/פעילות: העיר שבה נמצא המלון/הפעילות
 - טיסה: עיר היעד (הגעה), לא עיר המוצא (TLV → BKK → "Bangkok")
-- טיסת חזרה: יעד ההלוך
+- SIM/ביטוח: עיר/מדינת הנסיעה
 
 כללי confidence:
 - 0.9-1.0: אישור ברור — מספר הזמנה + תאריכים + סכום
@@ -241,18 +282,49 @@ function buildTripAwarePrompt(ctx: TripContext): string {
     ? ctx.travelerNames.join(', ')
     : 'לא ידוע'
 
+  const citiesLine   = ctx.cities?.length   ? `  ערים:        ${ctx.cities.join(', ')}` : ''
+  const typeLine     = ctx.tripType         ? `  סוג:         ${ctx.tripType}` : ''
+  const countLine    = ctx.numTravelers     ? `  נוסעים:      ${ctx.numTravelers}` : ''
+  const currLine     = ctx.currency         ? `  מטבע:        ${ctx.currency}` : ''
+  const nameLine     = ctx.tripName         ? `  שם הנסיעה:   "${ctx.tripName}"` : ''
+  const companyLine  = ctx.companyName      ? `  חברה/עוסק:   "${ctx.companyName}"` : ''
+
+  const extras = [citiesLine, typeLine, countLine, currLine, nameLine, companyLine].filter(Boolean).join('\n')
+
+  // Pre-trip booking window: visa/insurance can be bought 12 months before departure
+  const windowStart = new Date(ctx.startDate)
+  windowStart.setDate(windowStart.getDate() - 365)
+  const windowStartStr = windowStart.toISOString().slice(0, 10)
+
+  const isBusinessTrip = ctx.tripType === 'business'
+
+  // Business-specific instructions
+  const businessSection = isBusinessTrip ? `
+══════════════════════════════════════════
+💼 נסיעה עסקית — יש לזהות גם:
+  ✅ חשבוניות מס (tax invoices) — is_business_expense: true
+  ✅ קבלות מסעדות ובתי קפה — booking_type: "food"
+  ✅ כרטיסי SIM / רומינג — booking_type: "sim"
+  ✅ ביטוח עסקי לנסיעה — booking_type: "insurance"
+  ✅ השכרת רכב עסקי — booking_type: "car_rental"
+${ctx.companyName ? `  ✅ חשבוניות על שם "${ctx.companyName}" — invoice_to: "${ctx.companyName}"` : ''}
+  ✅ כרטיסי אשראי חברה / הוצאות להחזר
+
+  is_business_expense = true אם: מכיל מספר חשבונית מס, מופנה לחברה, VAT receipt
+══════════════════════════════════════════` : ''
+
   return `אתה מנתח מיילי אישור הזמנה עבור נסיעה ספציפית.
 
 ══════════════════════════════════════════
 🧳 פרטי הנסיעה שאנחנו מחפשים הזמנות עבורה:
-  יעד:     ${ctx.destination}
-  תאריכים: ${ctx.startDate} עד ${ctx.endDate}
-  נוסעים:  ${names}
-══════════════════════════════════════════
+  יעד:         ${ctx.destination}
+  תאריכים:     ${ctx.startDate} עד ${ctx.endDate}
+  נוסעים:      ${names}${extras ? '\n' + extras : ''}
+══════════════════════════════════════════${businessSection}
 
 שאלות שיש לענות עליהן:
 1. האם זה מייל אישור הזמנה אמיתי? (לא שיווקי)
-2. האם ההזמנה קשורה לנסיעה לעיל? (יעד + תאריכים)
+2. האם ההזמנה קשורה לנסיעה לעיל? (יעד + תאריכים + נוסעים)
 3. חלץ את פרטי ההזמנה
 
 ייתכן שהמייל הוא הזמנה אמיתית לנסיעה אחרת (trip_relevant: false אבל confidence גבוה).
@@ -262,7 +334,7 @@ function buildTripAwarePrompt(ctx: TripContext): string {
 ✅ כרטיס טיסה — מספר טיסה, תאריך, שם נוסע
 ✅ אישור מלון — שם מלון, תאריכי צ'ק-אין/אאוט
 ✅ אישור פעילות/אטרקציה עם תאריך ומחיר
-✅ חשבונית/קבלה — סכום ושירות
+✅ חשבונית/קבלה — סכום ושירות${isBusinessTrip ? '\n✅ קבלת מסעדה/אוכל עם תאריך וסכום\n✅ קבלת SIM / רומינג' : ''}
 ✅ ביטוח נסיעות
 
 מייל שיווקי (confidence <= 0.2, trip_relevant: false):
@@ -271,10 +343,11 @@ function buildTripAwarePrompt(ctx: TripContext): string {
 ❌ אין מספר הזמנה ספציפי ואין שם נוסע
 ${BOOKING_TYPE_GUIDE}
 
-trip_relevant = true רק אם:
-  • יעד ההזמנה תואם ל-"${ctx.destination}"
-  • תאריכי ההזמנה בטווח ${ctx.startDate} עד ${ctx.endDate} (± 180 ימים לפני)
-  • OR שם הנוסע מופיע בהזמנה: ${names}
+trip_relevant = true אם מתקיים לפחות אחד מהבאים:
+  • יעד ההזמנה תואם ל-"${ctx.destination}"${ctx.cities?.length ? ` או לאחת מהערים: ${ctx.cities.join(', ')}` : ''}
+  • תאריכי ההזמנה בטווח ${windowStartStr} עד ${ctx.endDate}
+    (365 ימים לפני הנסיעה — ויזה/ביטוח נרכשים חודשים מראש)
+  • שם הנוסע מופיע בהזמנה: ${names}${ctx.currency ? `\n  • המטבע בהזמנה הוא ${ctx.currency}` : ''}${ctx.companyName ? `\n  • החשבונית מופנית ל-"${ctx.companyName}"` : ''}
 
 החזר JSON בלבד (ללא markdown, ללא backticks):
 ${BASE_BOOKING_FIELDS}`

@@ -16,6 +16,7 @@ import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document a
 import { DocEventIconBadge } from '@/lib/iconConfig'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import GmailScanButton from '@/components/GmailScanButton'
 import CurrencySelector from '@/components/CurrencySelector'
 
@@ -109,6 +110,7 @@ function extractUpcomingEvents(docs: TripDoc[], todayStr: string): UpcomingEvent
 export default function DashboardPage() {
   const { currentTrip, trips, loading: tripsLoading } = useTrip()
   const { displayName } = useAuth()
+  const { t, dir } = useLanguage()
   const [expenses, setExpenses]         = useState<Expense[]>([])
   const [documents, setDocuments]       = useState<TripDoc[]>([])
   const [loading, setLoading]           = useState(true)
@@ -170,6 +172,7 @@ export default function DashboardPage() {
 
   const RATE_FROM_ILS: Record<Currency, number> = {
     ILS: 1, USD: 1 / 3.70, THB: 1 / 0.105, EUR: 1 / 4.00, GBP: 1 / 4.65,
+    JPY: 1 / 0.025, AED: 1 / 1.01, SGD: 1 / 2.74, TRY: 1 / 0.11, CHF: 1 / 4.10, AUD: 1 / 2.38, CAD: 1 / 2.72,
   }
   const convert = (ils: number) => {
     const val = ils * RATE_FROM_ILS[displayCurrency]
@@ -218,15 +221,15 @@ export default function DashboardPage() {
           {displayName && (
             <p className="text-gray-400 text-sm mb-1">שלום {displayName} 👋</p>
           )}
-          <h2 className="text-2xl font-bold tracking-tight mb-2">מוכן לטיול הראשון?</h2>
+          <h2 className="text-2xl font-bold tracking-tight mb-2">{t('dash_ready')}</h2>
           <p className="text-gray-500 text-sm leading-relaxed mb-8">
-            צור טיול ראשון כדי להתחיל לעקוב אחר ההוצאות, המסמכים ולוח הזמנים שלך
+            צור נסיעה ראשונה כדי להתחיל לעקוב אחר ההוצאות, המסמכים ולוח הזמנים שלך
           </p>
           <Link href="/trips/new"
             className="w-full text-white rounded-2xl py-4 font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-all shadow-fab"
             style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
             <Plus className="w-5 h-5" />
-            צור טיול ראשון
+            {t('dash_first_trip')}
           </Link>
           <Link href="/quiz"
             className="w-full mt-3 border border-violet-200 bg-violet-50 text-violet-600 rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
@@ -255,7 +258,7 @@ export default function DashboardPage() {
 
   // ── Main Revolut-style dashboard ───────────────────────────────────────────
   return (
-    <div className="page-enter -mx-4">
+    <div className="page-enter -mx-4" dir={dir}>
       {/* ══════════════════════════════════════════════════════
           HERO SECTION — full-width gradient background
           ════════════════════════════════════════════════════ */}
@@ -279,7 +282,7 @@ export default function DashboardPage() {
               {displayName ? `שלום, ${displayName}` : 'ברוך הבא'}
             </p>
             <p className="text-primary-dark font-bold text-sm truncate max-w-[180px]">
-              {currentTrip?.name || 'בחר טיול'}
+              {currentTrip?.name || t('dash_no_trip')}
             </p>
           </div>
           <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
@@ -295,13 +298,13 @@ export default function DashboardPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.05 }}
           >
-            {/* Split the number like Revolut: integer · decimal */}
+            {/* Big balance — currency symbol + formatted number */}
             <div className="flex items-end justify-center gap-1 leading-none">
-              <span className="text-[52px] font-black tracking-tight text-primary-dark">
-                {convert(totalIls).replace(/[^\d,]/g, '').split(',')[0]}
-              </span>
               <span className="text-2xl font-bold text-primary-dark/70 mb-2">
                 {CURRENCY_SYMBOL[displayCurrency]}
+              </span>
+              <span className="text-[52px] font-black tracking-tight text-primary-dark">
+                {Math.round(totalIls * RATE_FROM_ILS[displayCurrency]).toLocaleString('he-IL')}
               </span>
             </div>
           </motion.div>
@@ -317,7 +320,7 @@ export default function DashboardPage() {
               className="flex items-center gap-2 px-4 py-1.5 rounded-full active:scale-95 transition-all"
               style={{ background: 'rgba(255,255,255,0.50)', backdropFilter: 'blur(8px)' }}>
               <Plane className="w-3 h-3 text-primary-dark" />
-              <span className="text-xs font-semibold text-primary-dark">כל הטיולים</span>
+              <span className="text-xs font-semibold text-primary-dark">{t('dash_all_trips')}</span>
               <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                 <span className="text-[9px] font-bold text-white">{trips.length}</span>
               </div>
@@ -382,7 +385,7 @@ export default function DashboardPage() {
           {[
             { label: 'ממוצע יומי', value: convert(avgDaily),  icon: TrendingUp,   color: '#10B981', bg: '#ECFDF5' },
             { label: 'היום',       value: convert(todayTotal), icon: CalendarDays, color: '#F59E0B', bg: '#FFFBEB' },
-            { label: 'ימי טיול',   value: `${totalTripDays}`, icon: Plane,        color: '#3B82F6', bg: '#EFF6FF' },
+            { label: t('dash_travel_days'),  value: `${totalTripDays}`, icon: Plane,        color: '#3B82F6', bg: '#EFF6FF' },
           ].map((s, i) => (
             <motion.div key={i}
               initial={{ opacity: 0, x: 10 }}

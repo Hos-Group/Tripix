@@ -13,7 +13,7 @@ interface Message {
 }
 
 const QUICK_ACTIONS = [
-  { label: 'מה כדאי לעשות?', icon: MapPin, prompt: 'מה כדאי לעשות ביעד הטיול שלי? תן לי 5 המלצות' },
+  { label: 'מה כדאי לעשות?', icon: MapPin, prompt: 'מה כדאי לעשות ביעד הנסיעה שלי? תן לי 5 המלצות' },
   { label: 'איפה לאכול?', icon: Utensils, prompt: 'תמליץ על מסעדות טובות ביעד שלי' },
   { label: 'סיכום הוצאות', icon: Wallet, prompt: 'תן לי סיכום של ההוצאות שלי עד עכשיו' },
   { label: 'טיפים מקומיים', icon: HelpCircle, prompt: 'מה חשוב לדעת על היעד שלי? טיפים מקומיים' },
@@ -87,7 +87,7 @@ export default function AssistantPage() {
         <div>
           <h1 className="text-sm font-bold">Tripix AI</h1>
           <p className="text-[10px] text-gray-400">
-            {currentTrip ? `${currentTrip.name} · ${currentTrip.destination}` : 'עוזר טיול חכם'}
+            {currentTrip ? `${currentTrip.name} · ${currentTrip.destination}` : 'עוזר נסיעה חכם'}
           </p>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default function AssistantPage() {
             </div>
             <h2 className="font-black text-xl mb-1 text-gray-800">שלום! אני Tripix AI</h2>
             <p className="text-sm text-gray-400 mb-8 leading-relaxed">
-              אני מכיר את הטיול שלך ויכול לעזור<br />עם כל שאלה — שאל אותי!
+              אני מכיר את הנסיעה שלך ויכול לעזור<br />עם כל שאלה — שאל אותי!
             </p>
 
             {/* Quick actions */}
@@ -190,7 +190,7 @@ export default function AssistantPage() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && sendMessage(input)}
-            placeholder="שאל אותי כל דבר על הטיול..."
+            placeholder="שאל אותי כל דבר על הנסיעה..."
             className="flex-1 bg-gray-100 rounded-2xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
           />
           <button
