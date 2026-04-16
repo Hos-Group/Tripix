@@ -12,7 +12,6 @@ interface Partner {
   category: 'esim' | 'insurance' | 'car_rental'
   description: string
   discount: string
-  commission: string
   rating: number
   features: string[]
   affiliateUrl: string
@@ -29,7 +28,6 @@ const PARTNERS: Partner[] = [
     category: 'esim',
     description: 'eSIM עם כיסוי ב-200+ מדינות. ActivatIon מיידי, ללא כרטיס פיזי.',
     discount: '10% הנחה עם קוד TRIPIX',
-    commission: 'עד 10% עמלה',
     rating: 4.8,
     features: ['200+ מדינות', 'הפעלה מיידית', 'תוכניות גמישות', 'אפליקציה נוחה'],
     affiliateUrl: 'https://www.airalo.com/?aff=tripix',
@@ -43,7 +41,6 @@ const PARTNERS: Partner[] = [
     category: 'esim',
     description: 'eSIM עם גלישה ללא הגבלה. אידיאלי לנוסעים תכופים.',
     discount: '5% הנחה עם קוד TRIPIX5',
-    commission: 'עד 8% עמלה',
     rating: 4.6,
     features: ['גלישה ללא הגבלה', '170+ מדינות', 'שירות 24/7', 'תוקף עד 90 יום'],
     affiliateUrl: 'https://esim.holafly.com/?aff=tripix',
@@ -56,7 +53,6 @@ const PARTNERS: Partner[] = [
     category: 'esim',
     description: 'eSIM חסכוני לנסיעות קצרות. מחירים תחרותיים לאסיה.',
     discount: 'עד 15% חיסכון לעומת רואומינג',
-    commission: 'עד 7% עמלה',
     rating: 4.5,
     features: ['מחירים נמוכים', 'אסיה ואירופה', 'ללא הסכם', 'שכבות מהירות'],
     affiliateUrl: 'https://www.getnomad.app/?ref=tripix',
@@ -69,7 +65,6 @@ const PARTNERS: Partner[] = [
     category: 'insurance',
     description: 'ביטוח נסיעות המובחר לנוסעים פעילים. כיסוי רחב ושירות מצוין.',
     discount: 'מחיר תחרותי, כיסוי מקיף',
-    commission: 'עד 10% עמלה',
     rating: 4.7,
     features: ['פעילויות אקסטרים', 'כיסוי רפואי', 'ביטול נסיעה', 'חבצלת חירום 24/7'],
     affiliateUrl: 'https://www.worldnomads.com/?affiliate=tripix',
@@ -82,7 +77,6 @@ const PARTNERS: Partner[] = [
     category: 'insurance',
     description: 'ביטוח בריאות ונסיעות לנוסעים ארוכי טווח. מנוי חודשי גמיש.',
     discount: 'מ-$42 לחודש',
-    commission: 'עד 10% עמלה',
     rating: 4.5,
     features: ['מנוי חודשי', 'כיסוי רפואי', '180 מדינות', 'אפשרות ביטול בכל עת'],
     affiliateUrl: 'https://safetywing.com/?referral=tripix',
@@ -94,7 +88,6 @@ const PARTNERS: Partner[] = [
     category: 'insurance',
     description: 'ביטוח מותאם אישית לכל סוג נסיעה. כיסוי ממוקד ומחירים הוגנים.',
     discount: 'ביטוח מותאם לצרכים שלך',
-    commission: 'עד 8% עמלה',
     rating: 4.3,
     features: ['ביטוח מותאם', 'ביטול גמיש', 'כיסוי COVID', 'אונליין 100%'],
     affiliateUrl: 'https://battleface.com/?ref=tripix',
@@ -107,7 +100,6 @@ const PARTNERS: Partner[] = [
     category: 'car_rental',
     description: 'השוואת מחירים מ-900+ חברות השכרה ברחבי העולם. הטוב ביותר.',
     discount: 'מציאת המחיר הנמוך ביותר',
-    commission: 'עד 8% עמלה',
     rating: 4.6,
     features: ['900+ ספקים', 'ביטול חינם', 'ללא תשלום מקדמה', '60,000+ נקודות איסוף'],
     affiliateUrl: 'https://www.rentalcars.com/?affiliateCode=tripix',
@@ -120,7 +112,6 @@ const PARTNERS: Partner[] = [
     category: 'car_rental',
     description: 'השכרת רכב עם ביטוח מלא כלול. ללא הפתעות מחיר.',
     discount: 'ביטוח מלא כלול במחיר',
-    commission: 'עד 70% מרווח',
     rating: 4.5,
     features: ['ביטוח מלא', 'ביטול חינם', 'תמיכה 24/7', 'ערבות מחיר'],
     affiliateUrl: 'https://www.discovercars.com/?a_aid=tripix',

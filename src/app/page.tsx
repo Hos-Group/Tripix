@@ -109,7 +109,6 @@ const partners = [
     icon: <Globe className="w-5 h-5" />,
     color: '#00C2FF',
     bg: '#EFF9FF',
-    commission: '10%',
     desc: 'eSIM גלובלי לכל יעד',
   },
   {
@@ -118,7 +117,6 @@ const partners = [
     icon: <Globe className="w-5 h-5" />,
     color: '#FF6B35',
     bg: '#FFF3EE',
-    commission: '8%',
     desc: 'גלישה ללא הגבלה בחו"ל',
   },
   {
@@ -127,7 +125,6 @@ const partners = [
     icon: <Globe className="w-5 h-5" />,
     color: '#4CAF50',
     bg: '#F0FAF0',
-    commission: '9%',
     desc: 'חיבור אמין ב-190+ מדינות',
   },
   {
@@ -136,7 +133,6 @@ const partners = [
     icon: <Shield className="w-5 h-5" />,
     color: '#2196F3',
     bg: '#EFF5FF',
-    commission: '12%',
     desc: 'ביטוח נסיעות מקיף לנוסעים',
   },
   {
@@ -145,7 +141,6 @@ const partners = [
     icon: <Shield className="w-5 h-5" />,
     color: '#9C27B0',
     bg: '#F5EEFF',
-    commission: '10%',
     desc: 'ביטוח חודשי לנוודים דיגיטליים',
   },
   {
@@ -154,7 +149,6 @@ const partners = [
     icon: <Car className="w-5 h-5" />,
     color: '#FF9800',
     bg: '#FFF8EE',
-    commission: '7%',
     desc: 'השוואת מחירי השכרת רכב',
   },
   {
@@ -163,7 +157,6 @@ const partners = [
     icon: <Car className="w-5 h-5" />,
     color: '#F44336',
     bg: '#FFF0EE',
-    commission: '8%',
     desc: 'השכרת רכב ב-145 מדינות',
   },
 ]
@@ -895,10 +888,6 @@ export default function MarketingPage() {
                 </div>
                 <h3 className="font-black text-gray-900 text-base mb-1">{partner.name}</h3>
                 <p className="text-gray-500 text-xs leading-relaxed mb-3">{partner.desc}</p>
-                <div className="flex items-center gap-1 text-xs font-semibold text-gray-400">
-                  <Check className="w-3 h-3" style={{ color: partner.color }} />
-                  עמלה {partner.commission} על כל הזמנה
-                </div>
               </motion.div>
             ))}
           </div>
