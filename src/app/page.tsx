@@ -467,7 +467,7 @@ export default function MarketingPage() {
             {[
               { label: 'תכונות', id: 'features' },
               { label: 'שותפויות', id: 'partners' },
-              { label: 'מחיר', id: 'pricing' },
+              { label: '🎉 חינם לתמיד', id: 'pricing' },
             ].map((item) => (
               <button
                 key={item.id}
@@ -494,7 +494,7 @@ export default function MarketingPage() {
               className="text-sm font-semibold px-5 py-2 rounded-xl text-white transition-all hover:opacity-90 hover:scale-[1.02] active:scale-95"
               style={{ background: scrolled ? `linear-gradient(135deg, ${PRIMARY}, ${PRIMARY_LIGHT})` : 'white', color: scrolled ? 'white' : PRIMARY }}
             >
-              התחל בחינם
+              הצטרף עכשיו
             </Link>
           </div>
 
@@ -521,7 +521,7 @@ export default function MarketingPage() {
               {[
                 { label: 'תכונות', id: 'features' },
                 { label: 'שותפויות', id: 'partners' },
-                { label: 'מחיר', id: 'pricing' },
+                { label: '🎉 חינם לתמיד', id: 'pricing' },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -546,7 +546,7 @@ export default function MarketingPage() {
                   className="text-center py-3 rounded-xl font-semibold text-white"
                   style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${PRIMARY_LIGHT})` }}
                 >
-                  התחל בחינם
+                  הצטרף עכשיו
                 </Link>
               </div>
             </div>
@@ -595,7 +595,7 @@ export default function MarketingPage() {
                 style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
               >
                 <Star className="w-4 h-4 fill-yellow-300 text-yellow-300" />
-                מנהל הנסיעות הטוב ביותר לישראלים
+                חינם לתמיד · מנהל הנסיעות הטוב ביותר לישראלים
               </motion.div>
 
               {/* Headline */}
@@ -638,7 +638,7 @@ export default function MarketingPage() {
                     boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
                   }}
                 >
-                  התחל בחינם
+                  הצטרף עכשיו
                   <ArrowLeft className="w-4 h-4" />
                 </Link>
                 <button
@@ -826,7 +826,7 @@ export default function MarketingPage() {
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl font-bold text-white text-base transition-all hover:scale-[1.03] active:scale-95 shadow-lg"
               style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${PRIMARY_LIGHT})`, boxShadow: `0 8px 24px ${PRIMARY}40` }}
             >
-              מתחילים עכשיו — בחינם
+              מצטרפים עכשיו — ללא עלות
               <ArrowLeft className="w-4 h-4" />
             </Link>
           </motion.div>
@@ -989,7 +989,7 @@ export default function MarketingPage() {
             className="inline-block px-4 py-1.5 rounded-full text-sm font-bold mb-6"
             style={{ background: `${PRIMARY}15`, color: PRIMARY }}
           >
-            מחיר
+            🎉 חינם לתמיד
           </motion.div>
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -1053,7 +1053,7 @@ export default function MarketingPage() {
                 className="block w-full py-4 rounded-2xl font-bold text-center transition-all hover:scale-[1.02] active:scale-95"
                 style={{ background: 'white', color: PRIMARY, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
               >
-                התחל בחינם ←
+                הצטרף עכשיו ←
               </Link>
             </div>
           </motion.div>
@@ -1065,7 +1065,7 @@ export default function MarketingPage() {
             transition={{ duration: 0.6, delay: 0.5 }}
             className="text-gray-400 text-sm"
           >
-            ללא כרטיס אשראי · ללא התחייבות · ביטול בכל עת
+            ✅ ללא כרטיס אשראי · ✅ ללא תשלום · ✅ חינם לתמיד
           </motion.p>
         </div>
       </section>
@@ -1128,7 +1128,7 @@ export default function MarketingPage() {
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white transition-all hover:opacity-90"
                 style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${PRIMARY_LIGHT})` }}
               >
-                התחל בחינם
+                הצטרף עכשיו
                 <ArrowLeft className="w-4 h-4" />
               </Link>
               <div className="mt-4 flex gap-3">
