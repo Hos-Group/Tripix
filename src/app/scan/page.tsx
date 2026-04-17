@@ -617,7 +617,7 @@ export default function ScanPage() {
         {/* Choose */}
         {step === 'choose' && (
           <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            <p className="text-sm text-gray-500 text-center">בחרו מה לסרוק — Claude ינתח הכל אוטומטית</p>
+            <p className="text-sm text-gray-500 text-center">בחרו מה לסרוק — Tripix ינתח הכל אוטומטית</p>
 
             {/* Primary camera button */}
             <button onClick={() => { setMode('receipt'); cameraRef.current?.click() }}
