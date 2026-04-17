@@ -461,9 +461,9 @@ function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_de
 
   // ── Rule 3: Travel-core with NO destination — require high confidence ──────
   if (TRAVEL_CORE_TYPES.has(booking.booking_type) && !hasExtractedDest) {
-    if (booking.confidence < 0.82) {
+    if (booking.confidence < 0.60) {
       console.log(
-        `[checkRelevance] ✗ no dest extracted + conf=${booking.confidence} < 0.82: "${booking.vendor}"`,
+        `[checkRelevance] ✗ no dest extracted + conf=${booking.confidence} < 0.60: "${booking.vendor}"`,
       )
       return 'wrong_dest'
     }
@@ -652,15 +652,18 @@ async function processMessages(
       stats.parsed++
       if (parsedBooking.confidence < 0.7) continue
 
-      // ── Deduplication: skip if same Gmail message ID already stored ─────
+      // ── Deduplication: check email_ingests.gmail_message_id ────────────
       const gmidKey = `GMID:${msg.id}`
-      const { data: existing } = await supabase
-        .from('documents')
-        .select('id')
-        .like('notes', `${gmidKey}%`)
+      const { data: existingIngest } = await supabase
+        .from('email_ingests')
+        .select('id, status')
         .eq('user_id', userId)
+        .eq('gmail_message_id', msg.id)
         .maybeSingle()
-      if (existing) { console.log(`[processMessages] dup skip GMID=${msg.id}`); continue }
+      if (existingIngest) {
+        console.log(`[processMessages] dup skip GMID=${msg.id} (status=${existingIngest.status})`)
+        continue
+      }
 
       // ── Match to a trip ─────────────────────────────────────────────────
       let matchedTripId = forceTripId
@@ -746,7 +749,13 @@ async function processMessages(
         }
       }
 
-      if (!matchedTripId || !ingestRecord) continue
+      // If no trip matched, still save ingest for manual assignment — don't discard
+      if (!ingestRecord) continue
+      if (!matchedTripId) {
+        // Saved to email_ingests with status='unmatched' — user can assign manually
+        console.log(`[processMessages] ✓ saved unmatched ingest: "${bookingTitle}" (no trip found)`)
+        continue
+      }
 
       // ── 2. documents record — visible in Documents page ─────────────────
       const { data: docRecord, error: docError } = await supabase
@@ -819,6 +828,27 @@ async function processMessages(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Extract city names from a trip destination string and trip name.
+ * Handles formats like "Bangkok, Thailand", "Paris / Lyon", "תאילנד - פוקט ובנגקוק"
+ */
+function extractCitiesFromDestination(destination: string, tripName?: string): string[] {
+  const cities: string[] = []
+  const text = [destination, tripName].filter(Boolean).join(' ')
+
+  // Split by common separators
+  const parts = text.split(/[,/|•\-–—+&;]+/).map(p => p.trim()).filter(p => p.length >= 3)
+
+  for (const part of parts) {
+    // Skip country-level words that aren't cities
+    const lower = part.toLowerCase()
+    if (['and', 'or', 'the', 'in', 'to', 'from', 'via', 'with'].includes(lower)) continue
+    cities.push(part)
+  }
+
+  return Array.from(new Set(cities)).slice(0, 6)
+}
+
+/**
  * Scan ALL connected Gmail accounts for a user for booking emails,
  * auto-create expenses, and return aggregated stats.
  *
@@ -855,7 +885,7 @@ export async function scanUserGmail(
     end_date:       tr.end_date,
     travelerNames:  ((tr.travelers as Array<{ name: string }> | null) || []).map(t => t.name).filter(Boolean),
     tripType:       undefined,
-    cities:         undefined,
+    cities:         extractCitiesFromDestination(tr.destination, tr.name),
   }))
 
   const stats: ScanStats = {
@@ -965,7 +995,7 @@ export async function scanIncrementalGmail(
     travelerNames: ((tr.travelers as Array<{ name: string }> | null) || [])
                      .map(t => t.name).filter(Boolean),
     tripType:      undefined,
-    cities:        undefined,
+    cities:        extractCitiesFromDestination(tr.destination, tr.name),
   }))
 
   // ── Process each account ──────────────────────────────────────────────────
@@ -1146,7 +1176,7 @@ export async function scanPushMessages(
     travelerNames: ((tr.travelers as Array<{ name: string }> | null) || [])
                      .map(t => t.name).filter(Boolean),
     tripType:      undefined,
-    cities:        undefined,
+    cities:        extractCitiesFromDestination(tr.destination, tr.name),
   }))
 
   // ── 5. Full pipeline via existing processMessages helper ─────────────────

@@ -416,7 +416,11 @@ export function matchTripToBooking(
   }
 
   // Minimum score threshold to consider a match
-  if (bestScore < 40) {
+  if (trips.length === 1 && bestScore > 0) {
+    // Only 1 trip exists — auto-assign if any signal found
+    return { trip: bestTrip, score: bestScore, reason: bestReason || 'טיול יחיד — שיוך אוטומטי' }
+  }
+  if (bestScore < 20) {
     return {
       trip: null,
       score: bestScore,
