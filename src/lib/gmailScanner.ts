@@ -501,6 +501,10 @@ export interface ScanStats {
   created:          number
   scannedWithPDF:   number
   scannedEmailOnly: number
+  /** Accounts that need re-authorization (invalid_grant / revoked token) */
+  revokedAccounts?: string[]
+  /** Human-readable error for the last scan, if any */
+  scanError?:       string
 }
 
 export interface CreatedDoc {
@@ -1015,7 +1019,24 @@ export async function scanUserGmail(
         }
       } catch { /* non-fatal */ }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       console.error(`[gmailScanner] Error scanning ${conn.gmail_address}:`, err)
+
+      // Detect revoked / invalid refresh token → mark in DB so UI can prompt re-auth
+      if (msg.includes('invalid_grant') || msg.includes('Token has been expired or revoked')) {
+        console.warn(`[gmailScanner] Token revoked for ${conn.gmail_address} — marking needs_reauth`)
+        await supabase
+          .from('gmail_connections')
+          .update({ needs_reauth: true })
+          .eq('id', conn.id)
+          .catch(() => { /* non-fatal if column missing */ })
+
+        if (!stats.revokedAccounts) stats.revokedAccounts = []
+        stats.revokedAccounts.push(conn.gmail_address)
+        stats.scanError = `חיבור Gmail ל-${conn.gmail_address} פג תוקף — יש להתחבר מחדש`
+      } else {
+        stats.scanError = msg
+      }
     }
   }
 

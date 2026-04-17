@@ -26,6 +26,8 @@ interface ScanResult {
   created:          number
   scannedWithPDF?:  number
   scannedEmailOnly?: number
+  revokedAccounts?: string[]
+  scanError?:       string
 }
 
 interface GmailConnectProps {
@@ -153,6 +155,14 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
       if (!res.ok) { setScanError(json.error || 'שגיאה בסריקה'); return }
       setLastScan(json)
       setLastScanTime(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
+      // Surface token-revocation errors even when HTTP 200
+      if (json.revokedAccounts?.length) {
+        setScanError(json.scanError || `חיבור Gmail פג תוקף — יש להסיר ולחבר מחדש`)
+        // Remove the revoked connections from local state so user sees the add button
+        setConnections(prev => prev.filter(c => !json.revokedAccounts!.includes(c.gmail_address)))
+      } else if (json.scanError) {
+        setScanError(json.scanError)
+      }
     } catch {
       setScanError('שגיאת רשת — נסה שוב')
     } finally {
