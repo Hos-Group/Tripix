@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase'
 interface GmailConnection {
   id:            string
   gmail_address: string
+  needs_reauth?: boolean
 }
 
 interface ScanResult {
@@ -98,7 +99,7 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
     try {
       const { data, error } = await supabase
         .from('gmail_connections')
-        .select('id, gmail_address')
+        .select('id, gmail_address, needs_reauth')
         .eq('user_id', userId)
         .order('gmail_address')
       if (error) throw error
@@ -157,9 +158,11 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
       setLastScanTime(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
       // Surface token-revocation errors even when HTTP 200
       if (json.revokedAccounts?.length) {
-        setScanError(json.scanError || `חיבור Gmail פג תוקף — יש להסיר ולחבר מחדש`)
-        // Remove the revoked connections from local state so user sees the add button
-        setConnections(prev => prev.filter(c => !json.revokedAccounts!.includes(c.gmail_address)))
+        setScanError(json.scanError || `חיבור Gmail פג תוקף — יש לנתק ולחבר מחדש`)
+        // Mark revoked accounts with needs_reauth badge in UI
+        setConnections(prev => prev.map(c =>
+          json.revokedAccounts!.includes(c.gmail_address) ? { ...c, needs_reauth: true } : c
+        ))
       } else if (json.scanError) {
         setScanError(json.scanError)
       }
@@ -238,11 +241,18 @@ export default function GmailConnect({ userId }: GmailConnectProps) {
           <div className="space-y-2">
             {connections.map(conn => (
               <div key={conn.id}
-                className="flex items-center gap-2 bg-emerald-50 rounded-xl px-3 py-2.5">
-                <span className="text-emerald-500 text-base flex-shrink-0">✅</span>
-                <p className="flex-1 text-xs text-emerald-700 font-medium truncate" dir="ltr">
-                  {conn.gmail_address}
-                </p>
+                className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${conn.needs_reauth ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                <span className={`text-base flex-shrink-0 ${conn.needs_reauth ? 'text-red-400' : 'text-emerald-500'}`}>
+                  {conn.needs_reauth ? '⚠️' : '✅'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-medium truncate ${conn.needs_reauth ? 'text-red-700' : 'text-emerald-700'}`} dir="ltr">
+                    {conn.gmail_address}
+                  </p>
+                  {conn.needs_reauth && (
+                    <p className="text-[10px] text-red-500 mt-0.5">נדרש חיבור מחדש</p>
+                  )}
+                </div>
                 <button
                   onClick={() => handleDisconnect(conn)}
                   disabled={!!disconnecting || scanning}

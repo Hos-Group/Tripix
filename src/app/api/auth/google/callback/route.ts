@@ -208,13 +208,14 @@ export async function GET(req: NextRequest) {
 
   let dbError
   if (existing?.id) {
-    // Row exists → update tokens
+    // Row exists → update tokens + clear any reauth flag
     const { error } = await supabase
       .from('gmail_connections')
       .update({
         access_token:  tokens.access_token,
         refresh_token: tokens.refresh_token || null,
         token_expiry:  expiryDate,
+        needs_reauth:  false,
       })
       .eq('id', existing.id)
     dbError = error

@@ -914,11 +914,25 @@ export async function scanUserGmail(
   // ── 1. Load ALL Gmail connections for this user ───────────────────────────
   const { data: connections, error: connError } = await supabase
     .from('gmail_connections')
-    .select('id, user_id, gmail_address, access_token, refresh_token, token_expiry')
+    .select('id, user_id, gmail_address, access_token, refresh_token, token_expiry, needs_reauth')
     .eq('user_id', userId)
 
   if (connError || !connections?.length) {
     throw new Error('לא נמצא חיבור Gmail — יש להתחבר תחילה')
+  }
+
+  // Surface accounts that need re-auth immediately, before trying to scan
+  const revokedUpfront = (connections as Array<{ gmail_address: string; needs_reauth?: boolean }>)
+    .filter(c => c.needs_reauth)
+  if (revokedUpfront.length === connections.length) {
+    // ALL connections need reauth — throw so UI shows reconnect button
+    const addrs = revokedUpfront.map(c => c.gmail_address).join(', ')
+    const stats: ScanStats = {
+      scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
+      revokedAccounts: revokedUpfront.map(c => c.gmail_address),
+      scanError: `חיבור Gmail ל-${addrs} פג תוקף — יש להתחבר מחדש`,
+    }
+    return stats
   }
 
   // ── 2. Fetch user's trips for matching ────────────────────────────────────
