@@ -122,21 +122,62 @@ export const TRAVELER_META: Record<TravelerId, string> = {
   all: 'כולם',
 }
 
-// Shared trips
+// ── Collaborative Trips ──────────────────────────────────────
 export type TripType = 'personal' | 'bachelor' | 'bachelorette' | 'ski' | 'family' | 'friends' | 'couples' | 'work' | 'other'
-export type MemberRole = 'owner' | 'admin' | 'member'
-export type SplitType = 'equal' | 'custom' | 'full'
+export type MemberRole = 'owner' | 'editor' | 'viewer'
+export type MemberStatus = 'active' | 'pending' | 'declined'
+export type SplitType = 'equal' | 'custom'
 
+/** A participant entry inside splits.participants JSONB */
+export interface SplitParticipant {
+  user_id?: string
+  name: string
+  email?: string
+  amount: number
+  paid: boolean
+}
+
+/** Row in trip_members table */
 export interface TripMember {
   id: string
   trip_id: string
-  user_id: string
-  display_name: string
-  email: string | null
+  user_id: string | null
+  invited_email: string | null
+  invited_name: string | null
   role: MemberRole
-  joined_at: string
+  status: MemberStatus
+  joined_at: string | null
+  created_at: string
+  /** display helper — resolved at query time or UI level */
+  display_name?: string
 }
 
+/** Row in splits table */
+export interface Split {
+  id: string
+  trip_id: string
+  expense_id: string | null
+  paid_by_user_id: string | null
+  paid_by_name: string
+  total_amount: number
+  currency: string
+  description: string | null
+  split_type: SplitType
+  participants: SplitParticipant[]
+  created_at: string
+}
+
+/** Computed debt: person A owes person B */
+export interface DebtItem {
+  fromName: string
+  fromUserId?: string
+  toName: string
+  toUserId?: string
+  amount: number
+  currency: string
+}
+
+// Legacy aliases kept for backward compat
 export interface ExpenseSplit {
   id: string
   expense_id: string

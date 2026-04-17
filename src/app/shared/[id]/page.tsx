@@ -206,7 +206,7 @@ function OverviewTab({ members, balances, onAddMember, onRemoveMember }: {
         {members.map(m => {
           const bal = balances.find(b => b.member.id === m.id)
           const balance = bal?.balance || 0
-          const initials = m.display_name.slice(0, 2)
+          const initials = (m.display_name || '').slice(0, 2)
           const colors = ['#185FA5', '#D85A30', '#639922', '#7F77DD', '#D4537E', '#EF9F27', '#1D9E75', '#888780']
           const color = colors[members.indexOf(m) % colors.length]
 

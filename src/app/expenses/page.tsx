@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Search, Trash2, X, ChevronDown, Wallet } from 'lucide-react'
+import { Plus, Search, Trash2, X, ChevronDown, Wallet, Split } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -12,6 +12,7 @@ import { convertToILS } from '@/lib/rates'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
+import SplitExpense from '@/components/trip/SplitExpense'
 
 const CATEGORIES: Category[] = [
   'food', 'hotel', 'flight', 'taxi', 'activity', 'shopping',
@@ -30,6 +31,7 @@ export default function ExpensesPage() {
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState<Category | null>(null)
   const [saving, setSaving] = useState(false)
+  const [splitExpense, setSplitExpense] = useState<Expense | null>(null)
 
   // Form state
   const [title, setTitle]           = useState('')
@@ -337,11 +339,22 @@ export default function ExpensesPage() {
                             )}
                           </div>
 
-                          {/* Delete */}
-                          <button onClick={() => handleDelete(exp.id)}
-                            className="p-1.5 rounded-xl text-gray-300 active:text-red-400 active:bg-red-50 transition-all active:scale-90">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {/* Actions */}
+                          <div className="flex items-center gap-1">
+                            {/* Split */}
+                            <button
+                              onClick={() => setSplitExpense(exp)}
+                              className="p-1.5 rounded-xl text-gray-300 active:text-primary active:bg-primary/10 transition-all active:scale-90"
+                              title="פצל הוצאה"
+                            >
+                              <Split className="w-4 h-4" />
+                            </button>
+                            {/* Delete */}
+                            <button onClick={() => handleDelete(exp.id)}
+                              className="p-1.5 rounded-xl text-gray-300 active:text-red-400 active:bg-red-50 transition-all active:scale-90">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </motion.div>
                       )
                     })}
@@ -351,6 +364,39 @@ export default function ExpensesPage() {
             })}
         </div>
       )}
+      {/* ── Split Expense Modal ── */}
+      <AnimatePresence>
+        {splitExpense && currentTrip && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+            onClick={e => { if (e.target === e.currentTarget) setSplitExpense(null) }}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              className="bg-white w-full max-w-lg rounded-t-3xl p-5 pb-10 overflow-y-auto"
+              style={{ maxHeight: '85vh' }}
+            >
+              <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
+              <SplitExpense
+                tripId={currentTrip.id}
+                expenseId={splitExpense.id}
+                defaultAmount={splitExpense.amount_ils}
+                defaultCurrency={splitExpense.currency}
+                defaultDescription={splitExpense.title}
+                onSaved={() => setSplitExpense(null)}
+                onClose={() => setSplitExpense(null)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
