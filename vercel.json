@@ -1,16 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/gmail/incremental-scan",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/gmail/auto-scan",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/gmail/watch-renew",
-      "schedule": "0 7 */6 * *"
     }
   ],
   "build": {
