@@ -20,6 +20,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { scanUserGmail, ScanStats } from '@/lib/gmailScanner'
 
+export const maxDuration = 300
+
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

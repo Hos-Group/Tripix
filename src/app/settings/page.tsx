@@ -9,20 +9,19 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
-import GmailConnect from '@/components/GmailConnect'
+import EmailProviderConnect from '@/components/EmailProviderConnect'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { Lang, LANG_META } from '@/lib/i18n'
 
-type SettingsPage = 'main' | 'language' | 'account' | 'notifications' | 'security' | 'about' | 'currency' | 'email_inbox' | 'gmail' | 'travelers'
+type SettingsPage = 'main' | 'language' | 'account' | 'notifications' | 'security' | 'about' | 'currency' | 'email_sync' | 'email_inbox' | 'gmail' | 'travelers'
 
 const MENU_ITEMS = [
   { id: 'language'   as const, label: 'שפה', icon: Globe, color: 'text-indigo-500', bg: 'bg-indigo-50' },
   { id: 'account'    as const, label: 'פרטי חשבון',         icon: User,    color: 'text-blue-500',    bg: 'bg-blue-50' },
   { id: 'travelers'  as const, label: 'נוסעים קבועים',       icon: Users,   color: 'text-violet-500',  bg: 'bg-violet-50', badge: 'חדש' },
   { id: 'currency'   as const, label: 'מטבע ברירת מחדל',    icon: Coins,   color: 'text-yellow-500',  bg: 'bg-yellow-50' },
-  { id: 'email_inbox'as const, label: 'חיבור מייל חכם',     icon: Mail,    color: 'text-emerald-500', bg: 'bg-emerald-50', badge: 'חדש' },
-  { id: 'gmail'      as const, label: 'סנכרון Gmail',        icon: Mail,    color: 'text-red-500',     bg: 'bg-red-50' },
+  { id: 'email_sync' as const, label: 'סנכרון מייל',         icon: Mail,    color: 'text-blue-500',    bg: 'bg-blue-50' },
   { id: 'notifications' as const, label: 'התראות',           icon: Bell,    color: 'text-purple-500',  bg: 'bg-purple-50' },
   { id: 'security'   as const, label: 'אבטחה ופרטיות',      icon: Shield,  color: 'text-green-500',   bg: 'bg-green-50' },
   { id: 'about'      as const, label: 'אודות',               icon: Info,    color: 'text-gray-500',    bg: 'bg-gray-50' },
@@ -560,6 +559,15 @@ export default function SettingsPage() {
     fetchAliases()
     const saved = localStorage.getItem('tripix_default_currency')
     if (saved) setDefaultCurrency(saved)
+
+    // Navigate to email sync page if returning from OAuth callback
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('gmail') === 'connected' || params.get('gmail') === 'error' ||
+          params.get('microsoft') === 'connected' || params.get('microsoft') === 'error') {
+        setPage('email_sync')
+      }
+    }
   }, [displayName])
 
   const inboxEmail = inboxKey ? `${inboxKey}@in.tripix.app` : null
@@ -930,20 +938,18 @@ export default function SettingsPage() {
           </motion.div>
         )}
 
-        {/* ── Gmail ───────────────────────────────────────────────── */}
-        {page === 'gmail' && (
+        {/* ── Email Sync (all providers) ───────────────────────── */}
+        {(page === 'email_sync' || page === 'gmail') && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold">סנכרון Gmail</h1>
-              <p className="text-xs text-gray-500 mt-1">חבר את Gmail לסריקה אוטומטית של אישורי הזמנות</p>
+              <h1 className="text-xl font-bold">סנכרון מייל</h1>
+              <p className="text-xs text-gray-500 mt-1">חבר Gmail, Outlook, או כל מייל אחר לסריקה אוטומטית</p>
             </div>
-            {currentUserId ? <GmailConnect userId={currentUserId} /> : (
+            {currentUserId ? (
+              <EmailProviderConnect userId={currentUserId} inboxKey={inboxKey} />
+            ) : (
               <div className="bg-white rounded-2xl p-5 shadow-sm text-center text-sm text-gray-400">טוען...</div>
             )}
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-              <p className="text-xs text-blue-800 font-medium">🔐 פרטיות ואבטחה</p>
-              <p className="text-xs text-blue-700 mt-1">Tripix מבקש גישת קריאה בלבד. אנחנו לא שולחים, מוחקים או משנים מיילים.</p>
-            </div>
           </motion.div>
         )}
 
