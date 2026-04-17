@@ -802,23 +802,29 @@ async function processMessages(
       const { data: docRecord, error: docError } = await supabase
         .from('documents')
         .insert({
-          trip_id:        matchedTripId,
-          user_id:        userId,
-          name:           bookingTitle,
-          doc_type:       DOC_TYPE_MAP[parsedBooking.booking_type] || 'other',
-          file_url:       null,
-          file_type:      'gmail',
-          extracted_data: parsedBooking,
-          booking_ref:    parsedBooking.confirmation_number || null,
-          flight_number:  parsedBooking.flight_number || null,
-          valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
-          valid_until:    parsedBooking.check_out || parsedBooking.return_date || null,
-          notes:          `${gmidKey}\nמ: ${msg.from}\nתאריך: ${msg.date}`,
+          trip_id:          matchedTripId,
+          user_id:          userId,
+          name:             bookingTitle,
+          doc_type:         DOC_TYPE_MAP[parsedBooking.booking_type] || 'other',
+          file_url:         null,
+          file_type:        'gmail',
+          extracted_data:   parsedBooking,
+          booking_ref:      parsedBooking.confirmation_number || null,
+          flight_number:    parsedBooking.flight_number || null,
+          valid_from:       parsedBooking.check_in || parsedBooking.departure_date || null,
+          valid_until:      parsedBooking.check_out || parsedBooking.return_date || null,
+          notes:            `${gmidKey}\nמ: ${msg.from}\nתאריך: ${msg.date}`,
+          gmail_message_id: msg.id,  // migration 013 — DB-level dedup
         })
         .select('id')
         .single()
 
       if (docError) {
+        // Unique constraint violation = duplicate → skip silently
+        if (docError.code === '23505') {
+          console.log(`[processMessages] dup doc skipped (DB unique): GMID=${msg.id}`)
+          continue
+        }
         console.error('[processMessages] Document insert error:', docError.message)
       }
 
@@ -1678,19 +1684,31 @@ export async function scanTripGmail(
 
           const dedupDate = parsedBooking.check_in || parsedBooking.departure_date
 
-          // ── Deduplication 0: same Gmail message ID ────────────────────────
-          // Most reliable — each email has a unique Gmail message ID.
-          // Ensures re-scanning never re-imports the same email.
+          // ── Deduplication 0: same Gmail message ID (DB-level) ────────────
+          // Use the indexed gmail_message_id column (migration 013).
+          // Falls back to notes LIKE check if column doesn't exist yet.
           {
-            const gmidKey = `GMID:${msg.id}`
-            const { data: existingByGmid } = await supabase
+            const { data: existingByGmid, error: gmidErr } = await supabase
               .from('documents')
               .select('id')
               .eq('trip_id', tripId)
-              .like('notes', `${gmidKey}%`)
+              .eq('gmail_message_id', msg.id)
               .maybeSingle()
-            if (existingByGmid) {
-              console.log(`[gmailScanner/trip] skip dup by Gmail-ID: ${msg.id}`)
+
+            if (gmidErr?.code === 'PGRST204' || gmidErr?.message?.includes('gmail_message_id')) {
+              // Column not yet migrated — fall back to notes LIKE (migration 013 pending)
+              const { data: fallback } = await supabase
+                .from('documents')
+                .select('id')
+                .eq('trip_id', tripId)
+                .like('notes', `GMID:${msg.id}%`)
+                .maybeSingle()
+              if (fallback) {
+                console.log(`[gmailScanner/trip] skip dup by GMID (fallback notes): ${msg.id}`)
+                stats.filteredDuplicate++; continue
+              }
+            } else if (existingByGmid) {
+              console.log(`[gmailScanner/trip] skip dup by gmail_message_id: ${msg.id}`)
               stats.filteredDuplicate++; continue
             }
           }
@@ -1788,24 +1806,30 @@ export async function scanTripGmail(
             const { data: docRecord, error: docError } = await supabase
               .from('documents')
               .insert({
-                trip_id:        tripId,
-                user_id:        userId,
-                name:           bookingTitle,
-                doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
-                file_type:      sharedFileType,
-                file_url:       sharedFileUrl,
-                booking_ref:    parsedBooking.confirmation_number !== 'N/A'
-                                  ? parsedBooking.confirmation_number : null,
-                valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
-                valid_until:    parsedBooking.check_out || parsedBooking.return_date || null,
-                flight_number:  parsedBooking.flight_number || null,
-                notes:          `GMID:${msg.id}\nייובא מ-Gmail\nשולח: ${msg.from}${passengerNote}${boardingNote}\n${parsedBooking.summary || ''}`,
-                extracted_data: parsedBooking as unknown as Record<string, unknown>,
+                trip_id:          tripId,
+                user_id:          userId,
+                name:             bookingTitle,
+                doc_type:         docTypeMap[parsedBooking.booking_type] || 'other',
+                file_type:        sharedFileType,
+                file_url:         sharedFileUrl,
+                booking_ref:      parsedBooking.confirmation_number !== 'N/A'
+                                    ? parsedBooking.confirmation_number : null,
+                valid_from:       parsedBooking.check_in || parsedBooking.departure_date || null,
+                valid_until:      parsedBooking.check_out || parsedBooking.return_date || null,
+                flight_number:    parsedBooking.flight_number || null,
+                notes:            `GMID:${msg.id}\nייובא מ-Gmail\nשולח: ${msg.from}${passengerNote}${boardingNote}\n${parsedBooking.summary || ''}`,
+                extracted_data:   parsedBooking as unknown as Record<string, unknown>,
+                gmail_message_id: msg.id,  // migration 013 — DB-level dedup
               })
               .select('id')
               .single()
 
             if (docError) {
+              // Unique constraint violation = already imported → skip silently
+              if (docError.code === '23505') {
+                console.log(`[gmailScanner/trip] dup doc skipped (DB unique): "${bookingTitle}" GMID=${msg.id}`)
+                stats.filteredDuplicate++; continue
+              }
               const errMsg = `${docError.message}${docError.details ? ` — ${docError.details}` : ''}${docError.code ? ` (${docError.code})` : ''}`
               console.error('[gmailScanner/trip] Document insert error:', errMsg)
               stats.failedDB++
