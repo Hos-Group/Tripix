@@ -276,18 +276,49 @@ export interface MatchResult {
 }
 
 /**
- * Check if any traveler name token appears in the booking's traveler_names list.
+ * Check if any traveler name appears in the booking's traveler_names list.
+ *
+ * Matching logic (tiered):
+ *   1. Exact full name match (case-insensitive) → strongest signal
+ *   2. Last name + first name both appear (may be in different order)
+ *   3. Either last name OR full first name (≥ 4 chars) appears → partial match
+ *
+ * Returns: 'full' | 'partial' | false
  */
 function matchesTravelerNames(
   bookingNames: string[],
   tripNames:    string[],
-): boolean {
+): 'full' | 'partial' | false {
   if (!bookingNames.length || !tripNames.length) return false
-  const bookingLower = bookingNames.join(' ').toLowerCase()
+
+  const bookingText = bookingNames.join(' ').toLowerCase()
+
   for (const name of tripNames) {
-    const parts = name.toLowerCase().split(/\s+/).filter(p => p.length >= 2)
-    if (parts.some(p => bookingLower.includes(p))) return true
+    const trimmed = name.trim()
+    if (!trimmed) continue
+    const parts = trimmed.toLowerCase().split(/\s+/).filter(p => p.length >= 2)
+    if (parts.length === 0) continue
+
+    // 1. Full name exact match
+    if (bookingText.includes(trimmed.toLowerCase())) return 'full'
+
+    // 2. If 2+ parts: both first AND last appear
+    if (parts.length >= 2) {
+      const firstName = parts[0]
+      const lastName  = parts[parts.length - 1]
+      if (
+        firstName.length >= 2 && lastName.length >= 2 &&
+        bookingText.includes(firstName) && bookingText.includes(lastName)
+      ) return 'full'
+    }
+
+    // 3. Partial: last name (≥ 3 chars) OR first name (≥ 4 chars)
+    const lastName  = parts[parts.length - 1]
+    const firstName = parts[0]
+    if (lastName.length >= 3 && bookingText.includes(lastName)) return 'partial'
+    if (firstName.length >= 4 && bookingText.includes(firstName)) return 'partial'
   }
+
   return false
 }
 
@@ -390,13 +421,16 @@ export function matchTripToBooking(
       }
     }
 
-    // ── Traveler name match (+30) ─────────────────────────────────────────────
-    if (
-      trip.travelerNames?.length &&
-      matchesTravelerNames(booking.traveler_names || [], trip.travelerNames)
-    ) {
-      score += 30
-      reasons.push('שם נוסע תואם')
+    // ── Traveler name match (+30 full, +15 partial) ───────────────────────────
+    if (trip.travelerNames?.length) {
+      const nameMatch = matchesTravelerNames(booking.traveler_names || [], trip.travelerNames)
+      if (nameMatch === 'full') {
+        score += 30
+        reasons.push('שם נוסע תואם מלא')
+      } else if (nameMatch === 'partial') {
+        score += 15
+        reasons.push('שם נוסע תואם חלקי')
+      }
     }
 
     // ── Trip type bonus (+10) ─────────────────────────────────────────────────

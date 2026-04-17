@@ -17,6 +17,13 @@ import type { DocumentBlockParam, TextBlockParam } from '@anthropic-ai/sdk/resou
 
 export interface ParsedBooking {
   booking_type: 'hotel' | 'flight' | 'car_rental' | 'activity' | 'tour' | 'insurance' | 'inflight' | 'taxi' | 'food' | 'sim' | 'other'
+  /**
+   * Sub-type within the booking_type — more specific classification.
+   * For flights: 'booking_confirmation' (ordered ticket) vs 'boarding_pass' (day-of gate document).
+   * For hotels: 'booking_confirmation' vs 'voucher' (pre-paid) vs 'check_in_reminder'.
+   * For insurance: 'policy' document vs 'receipt'.
+   */
+  document_subtype: 'booking_confirmation' | 'boarding_pass' | 'e_ticket' | 'invoice' | 'receipt' | 'check_in_reminder' | 'itinerary' | 'policy' | 'voucher' | 'other'
   vendor: string               // "Booking.com", "El Al", "Airbnb" etc.
   destination_city: string     // "Barcelona", "Bangkok"
   destination_country: string  // "Spain", "Thailand"
@@ -31,6 +38,8 @@ export interface ParsedBooking {
   hotel_name?: string
   flight_number?: string
   airline?: string
+  seat_number?: string         // boarding pass seat (e.g. "14A")
+  gate?: string                // boarding gate (e.g. "B22") — boarding pass only
   num_guests?: number
   summary: string              // 1-line Hebrew summary
   confidence: number           // 0-1 how sure is the AI
@@ -184,6 +193,7 @@ export function quickPreFilter(
 
 const BASE_BOOKING_FIELDS = `{
   "booking_type": "hotel|flight|car_rental|activity|tour|insurance|taxi|food|sim|inflight|other",
+  "document_subtype": "booking_confirmation|boarding_pass|e_ticket|invoice|receipt|check_in_reminder|itinerary|policy|voucher|other",
   "vendor": "שם הפלטפורמה/חברה",
   "destination_city": "עיר היעד",
   "destination_country": "מדינת היעד באנגלית",
@@ -194,12 +204,14 @@ const BASE_BOOKING_FIELDS = `{
   "amount": 0.00,
   "currency": "EUR|ILS|USD|GBP|THB|JPY|AED|TRY",
   "confirmation_number": "מספר אישור — חובה אם קיים, אחרת N/A",
-  "traveler_names": ["שמות הנוסעים"],
+  "traveler_names": ["שמות כל הנוסעים — חשוב: לכלול את כולם אם מדובר בהזמנה קבוצתית"],
   "hotel_name": "שם המלון אם רלוונטי",
   "flight_number": "מספר טיסה",
   "airline": "חברת תעופה",
+  "seat_number": "מספר מושב (בורדינג פס בלבד) — אחרת null",
+  "gate": "שער עלייה למטוס (בורדינג פס בלבד) — אחרת null",
   "num_guests": 1,
-  "summary": "תקציר קצר בעברית — מה הוזמן, מתי, כמה עלה",
+  "summary": "תקציר קצר בעברית — מה הוזמן, מתי, כמה עלה, שמות הנוסעים",
   "confidence": 0.9,
   "trip_relevant": true,
   "is_business_expense": false,
@@ -208,7 +220,8 @@ const BASE_BOOKING_FIELDS = `{
 }`
 
 const BOOKING_TYPE_GUIDE = `
-סוגי הזמנות:
+══════════════════════════════════════════
+📋 סיווג booking_type:
 - hotel = מלון, צימר, Airbnb, hostel, villa
 - flight = טיסה (כולל low-cost: Ryanair, WizzAir, EasyJet וכו')
 - car_rental = השכרת רכב (Hertz, Avis, Sixt, Europcar וכו')
@@ -219,6 +232,55 @@ const BOOKING_TYPE_GUIDE = `
 - food = מסעדה, קפה, קייטרינג, Wolt, deliveroo (קבלה על ארוחה)
 - sim = כרטיס SIM, גלישה בחו"ל, רומינג, data plan, אירוטל
 - inflight = רכישה במהלך הטיסה: WiFi, אוכל, duty-free, שדרוג מושב, כבודה עודפת
+
+══════════════════════════════════════════
+📌 סיווג document_subtype — ← חשוב מאוד!
+
+boarding_pass (כרטיס עלייה למטוס):
+✅ מכיל שם נוסע + מספר טיסה + תאריך + שער (gate) + מושב (seat)
+✅ מכיל ברקוד / QR code
+✅ כותרת: "Boarding Pass", "כרטיס עלייה למטוס", "Carte d'embarquement"
+✅ נשלח ביום הטיסה או יום לפני
+⚠️ ה-boarding pass הוא לא אישור הזמנה — הוא נוצר רק לאחר עשיית check-in
+
+booking_confirmation (אישור הזמנה):
+✅ מכיל מספר הזמנה / אישור (PNR, booking ref)
+✅ מכיל פרטי מחיר ותנאי ביטול
+✅ נשלח מיד אחרי הרכישה
+✅ כותרת: "Booking Confirmed", "Your reservation", "Order Confirmation", "אישור הזמנה"
+
+e_ticket (כרטיס אלקטרוני):
+✅ מכיל מספר כרטיס (e-ticket number, בד"כ 13 ספרות לטיסות)
+✅ מכיל מסלול מלא (מוצא → יעד), תאריך ושעה
+✅ שונה מ-boarding_pass — הוא אינו כולל מושב/שער
+
+invoice (חשבונית):
+✅ מסמך פיסקלי עם מספר חשבונית (VAT invoice / חשבונית מס)
+✅ כולל פרטי החברה (עוסק מורשה/חברה), מע"מ
+
+receipt (קבלה):
+✅ אישור תשלום פשוט — ללא מספר חשבונית מס פורמלי
+
+check_in_reminder (תזכורת צ'ק-אין):
+✅ "Online check-in is now open", "עשה צ'ק-אין עכשיו"
+
+itinerary (תוכנית נסיעה):
+✅ מסמך מסלול — פירוט ימים, עצירות, לו"ז הנסיעה
+
+policy (פוליסת ביטוח):
+✅ מסמך ביטוח נסיעות עם מספר פוליסה, תאריכי כיסוי
+
+voucher (שובר):
+✅ שובר מימוש (מלון, פעילות, השכרת רכב) — מוצג בגישה לשירות
+
+other = כל שאר סוגי המסמכים
+
+══════════════════════════════════════════
+⚠️ זיהוי נוסעים (traveler_names) — חשוב!
+- כלול את כל שמות הנוסעים שמופיעים במסמך (לא רק הראשון)
+- עבור הזמנה קבוצתית: ["Omer Halevy", "Noa Cohen", "Dana Levi"]
+- שמות בפורמט מקורי כפי שמופיעים (UPPERCASE בסדר)
+- עבור boarding_pass: שם הנוסע הספציפי של הכרטיס הזה
 
 ⚠️ זיהוי רכישות בטיסה (inflight):
 - WiFi / internet בטיסה → inflight
@@ -238,7 +300,7 @@ const BOOKING_TYPE_GUIDE = `
 - SIM/ביטוח: עיר/מדינת הנסיעה
 
 כללי confidence:
-- 0.9-1.0: אישור ברור — מספר הזמנה + תאריכים + סכום
+- 0.9-1.0: אישור ברור — מספר הזמנה + תאריכים + סכום + שם נוסע
 - 0.7-0.8: אישור עם רוב הפרטים
 - 0.5-0.6: נראה כמו אישור, חסרים פרטים
 - 0.3-0.4: לא ברור

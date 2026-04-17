@@ -646,11 +646,52 @@ async function processMessages(
         } else { stats.scannedEmailOnly++ }
       } catch { stats.scannedEmailOnly++ }
 
-      // ── Claude parse ────────────────────────────────────────────────────
-      const parsedBooking = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
+      // ── Claude parse — trip-context-aware when possible ──────────────────
+      // Strategy:
+      //   1. If exactly 1 trip: use trip-context parse (higher accuracy, no double API call)
+      //   2. If forceTripId: use that trip's context
+      //   3. Multiple trips: generic parse (can't know which trip before parsing)
+      //      → lower threshold so borderline real bookings aren't silently dropped
+
+      let parsedBooking: ParsedBooking | null = null
+
+      const forcedOrSingleTrip: TripRecord | null =
+        forceTripId ? (trips.find(t => t.id === forceTripId) ?? trips[0] ?? null)
+        : trips.length === 1 ? trips[0]
+        : null
+
+      if (forcedOrSingleTrip) {
+        const ctx: TripContext = {
+          destination:   forcedOrSingleTrip.destination,
+          startDate:     forcedOrSingleTrip.start_date,
+          endDate:       forcedOrSingleTrip.end_date,
+          travelerNames: forcedOrSingleTrip.travelerNames || [],
+          cities:        forcedOrSingleTrip.cities,
+          tripType:      forcedOrSingleTrip.tripType,
+          tripName:      forcedOrSingleTrip.name,
+        }
+        parsedBooking = await parseTripBookingEmail(emailContent, msg.subject, ctx, pdfBase64)
+        // If Claude says explicitly not relevant to this trip and confidence is low,
+        // skip — saves storing unrelated bookings under the wrong trip.
+        if (parsedBooking?.trip_relevant === false && !forceTripId && parsedBooking.confidence < 0.70) {
+          console.log(
+            `[processMessages] ✗ trip-context: not relevant to "${forcedOrSingleTrip.name}"` +
+            ` (${parsedBooking.vendor}, conf=${parsedBooking.confidence})`,
+          )
+          continue
+        }
+      } else {
+        // Multiple trips: generic parse
+        parsedBooking = await parseBookingEmail(emailContent, msg.subject, pdfBase64)
+      }
+
       if (!parsedBooking) continue
       stats.parsed++
-      if (parsedBooking.confidence < 0.7) continue
+
+      // Confidence threshold: trip-context parse is more reliable → allow 0.55+
+      // Generic parse keeps 0.65+ to avoid noisy false positives
+      const confThreshold = forcedOrSingleTrip ? 0.55 : 0.65
+      if (parsedBooking.confidence < confThreshold) continue
 
       // ── Deduplication: check email_ingests.gmail_message_id ────────────
       const gmidKey = `GMID:${msg.id}`
@@ -888,6 +929,53 @@ export async function scanUserGmail(
     cities:         extractCitiesFromDestination(tr.destination, tr.name),
   }))
 
+  // ── Build a combined Gmail boost query from ALL active/upcoming trips ──────
+  // Includes: destination words, traveler first names — ensures trip emails
+  // are found even when they lack classic booking subject keywords.
+  const allTravelers: Array<{ id: string; name: string }> = []
+  const destTerms: string[] = []
+  const now = new Date()
+  const scanWindowEnd = new Date(now)
+  scanWindowEnd.setDate(scanWindowEnd.getDate() + 365) // upcoming year
+
+  for (const trip of tripList) {
+    // Include all trips active in the past 30 days or upcoming
+    const tripEnd = new Date(trip.end_date)
+    const tripStart = new Date(trip.start_date)
+    const windowStart = new Date(now)
+    windowStart.setDate(windowStart.getDate() - 30)
+    if (tripEnd < windowStart) continue // trip ended more than 30 days ago
+
+    // Destination words (skip very short words)
+    const countryKey = resolveTripCountry(trip.destination)
+    if (countryKey) {
+      const aliases = (COUNTRY_CITY_MAP[countryKey] || [])
+        .filter(a => a.length >= 4 && !/\s/.test(a))
+        .slice(0, 4)
+      destTerms.push(...aliases)
+    }
+    const destWords = trip.destination.split(/[\s,]+/).filter(w => w.length >= 4)
+    destTerms.push(...destWords.slice(0, 2))
+
+    // Traveler names
+    for (const t of ((trip as unknown as { travelerNames?: string[] }).travelerNames || [])) {
+      allTravelers.push({ id: trip.id + '-' + t, name: t })
+    }
+  }
+
+  // Build combined query: destinations OR traveler first names
+  const travelerTokens: string[] = []
+  for (const t of allTravelers) {
+    const tokens = travelerNameTokens(t)
+    if (tokens.length > 0) travelerTokens.push(tokens[0])
+  }
+  const combinedTerms = Array.from(new Set([...destTerms, ...travelerTokens].map(s => s.toLowerCase())))
+  const combinedQuery = combinedTerms.length > 0 ? combinedTerms.join(' OR ') : ''
+
+  if (combinedQuery) {
+    console.log(`[gmailScanner] Combined trip query (${combinedTerms.length} terms): "${combinedQuery.slice(0, 120)}…"`)
+  }
+
   const stats: ScanStats = {
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
   }
@@ -896,7 +984,8 @@ export async function scanUserGmail(
   for (const conn of connections as GmailConnection[]) {
     try {
       const accessToken = await getValidToken(supabase, conn)
-      const messages = await searchBookingEmails(accessToken, 30)
+      // Use combined trip query so trip-specific emails are prioritised
+      const messages = await searchBookingEmails(accessToken, 30, 100, combinedQuery)
       stats.scanned += messages.length
       console.log(`[gmailScanner] ${conn.gmail_address}: ${messages.length} messages found`)
       await processMessages(supabase, userId, accessToken, messages, tripList, stats, 'gmail_scan')
@@ -1570,32 +1659,28 @@ export async function scanTripGmail(
 
         try {
           const isFlight = parsedBooking.booking_type === 'flight'
+          const isBoardingPass = parsedBooking.document_subtype === 'boarding_pass'
 
-          // ── Primary passenger name (first in traveler_names list) ─────────
-          // Used to differentiate per-person tickets (same flight, diff passenger).
-          const firstPassenger = (parsedBooking.traveler_names?.[0] || '').trim()
+          // ── Build the list of passengers to create documents for ──────────
+          // For flights with multiple passengers: create one document per passenger.
+          // For boarding passes: only the specific traveler on that pass.
+          // For hotels/activities/etc: single document (not per-person).
+          const passengers: string[] = isFlight && (parsedBooking.traveler_names?.length ?? 0) > 0
+            ? parsedBooking.traveler_names!.map(n => n.trim()).filter(Boolean)
+            : ['']  // empty string = no passenger suffix
 
-          // ── Booking title ─────────────────────────────────────────────────
-          // For flights: append passenger name so each traveler's ticket gets
-          // its own document (e.g. "EL AL LY008 – Omer Halevy").
-          // For hotels/activities: keep plain title (one booking per reservation).
+          // ── Base title (without passenger name) ───────────────────────────
           const baseTitle =
             parsedBooking.hotel_name ||
             (parsedBooking.airline && parsedBooking.flight_number
               ? `${parsedBooking.airline} ${parsedBooking.flight_number}` : null) ||
             parsedBooking.vendor || msg.subject.slice(0, 60)
 
-          const bookingTitle = isFlight && firstPassenger
-            ? `${baseTitle} – ${firstPassenger}`
-            : baseTitle
-
           const dedupDate = parsedBooking.check_in || parsedBooking.departure_date
 
           // ── Deduplication 0: same Gmail message ID ────────────────────────
-          // Most reliable dedup — each email has a unique Gmail message ID.
-          // We store it as "GMID:<id>" prefix in the document notes field.
-          // This ensures re-scanning never re-imports the same email even if
-          // the AI extracts different names or booking refs on different runs.
+          // Most reliable — each email has a unique Gmail message ID.
+          // Ensures re-scanning never re-imports the same email.
           {
             const gmidKey = `GMID:${msg.id}`
             const { data: existingByGmid } = await supabase
@@ -1610,166 +1695,161 @@ export async function scanTripGmail(
             }
           }
 
-          // ── Deduplication 1: same booking_ref ─────────────────────────────
-          // For flights: airlines issue one booking ref per GROUP booking but
-          // separate tickets per passenger → include passenger name in the key.
-          // For hotels/activities: booking_ref alone is the unique key.
-          if (parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {
-            const refQuery = supabase
-              .from('documents')
-              .select('id')
-              .eq('trip_id', tripId)
-              .eq('booking_ref', parsedBooking.confirmation_number)
+          const safeId = msg.id.replace(/[^a-zA-Z0-9]/g, '')
 
-            if (isFlight && firstPassenger) {
-              // Same ref + same passenger → true duplicate (e.g. 2 confirmation emails)
-              // Different passenger → different ticket → allow
-              refQuery.eq('name', bookingTitle)
-            }
+          // ── Upload the file once (PDF or HTML snapshot) ───────────────────
+          // The same file is reused across all per-passenger documents
+          let sharedFileUrl: string | null = null
+          let sharedFileType = 'gmail'
 
-            const { data: existingByRef } = await refQuery.maybeSingle()
-            if (existingByRef) {
-              console.log(
-                `[gmailScanner/trip] skip dup by ref${isFlight ? '+passenger' : ''}: ` +
-                `"${bookingTitle}" ref=${parsedBooking.confirmation_number}`,
-              )
-              stats.filteredDuplicate++; continue
-            }
-          }
-
-          // ── Deduplication 2: same document name + same date ───────────────
-          // Booking.com / airlines send 10+ emails per booking (confirmation,
-          // payment, modification, reminder…). Without this check each email
-          // creates a separate document for the same reservation.
-          // Since bookingTitle now includes passenger name for flights, three
-          // tickets on the same flight will have three different titles and
-          // pass through correctly.
-          if (bookingTitle && dedupDate) {
-            const { data: existingByName } = await supabase
-              .from('documents')
-              .select('id')
-              .eq('trip_id', tripId)
-              .eq('name', bookingTitle)
-              .eq('valid_from', dedupDate)
-              .maybeSingle()
-            if (existingByName) {
-              console.log(`[gmailScanner/trip] skip dup by name+date: "${bookingTitle}" ${dedupDate}`)
-              stats.filteredDuplicate++; continue
-            }
-          }
-
-          // safeId: unique per-email, ensures different passengers' files don't collide
-          const safeId     = msg.id.replace(/[^a-zA-Z0-9]/g, '')
-          // safePassenger: sanitized passenger token for storage filenames
-          const safePassenger = firstPassenger
-            ? `-${firstPassenger.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}`
-            : ''
-
-          let fileUrl: string | null = null
-          let fileType = 'gmail'
-
-          // ── 1. Prefer PDF attachment — save as actual PDF file ────────────
           if (pdfBase64) {
             try {
-              const pdfName   = pdfFilename || `booking-${safeId}${safePassenger}.pdf`
-              const filePath  = `${tripId}/${pdfName}`
-              const pdfBuffer = Buffer.from(pdfBase64, 'base64')
+              const pdfName  = pdfFilename || `booking-${safeId}.pdf`
+              const filePath = `${tripId}/${pdfName}`
+              const pdfBuf   = Buffer.from(pdfBase64, 'base64')
               const { error: pdfErr } = await supabase.storage
                 .from('documents')
-                .upload(filePath, pdfBuffer, { contentType: 'application/pdf', upsert: true })
+                .upload(filePath, pdfBuf, { contentType: 'application/pdf', upsert: true })
               if (!pdfErr) {
-                const { data: urlData } = supabase.storage
-                  .from('documents').getPublicUrl(filePath)
-                fileUrl  = urlData?.publicUrl || null
-                fileType = 'pdf'
+                const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath)
+                sharedFileUrl  = urlData?.publicUrl || null
+                sharedFileType = 'pdf'
                 console.log(`[gmailScanner/trip] PDF saved: ${pdfName}`)
               } else {
                 console.warn('[gmailScanner/trip] PDF upload error:', pdfErr.message)
               }
-            } catch (pdfEx) {
-              console.warn('[gmailScanner/trip] PDF upload exception:', pdfEx)
-            }
+            } catch (pdfEx) { console.warn('[gmailScanner/trip] PDF upload exception:', pdfEx) }
           }
 
-          // ── 2. Fallback: save email body as HTML snapshot ─────────────────
-          if (!fileUrl && rawHtml) {
+          if (!sharedFileUrl && rawHtml) {
             try {
-              const filePath = `${tripId}/email-${safeId}${safePassenger}.html`
-              const htmlFile = buildEmailHtml(rawHtml, bookingTitle || msg.subject)
+              const filePath = `${tripId}/email-${safeId}.html`
+              const htmlFile = buildEmailHtml(rawHtml, baseTitle || msg.subject)
               const blob     = Buffer.from(htmlFile, 'utf-8')
               const { error: uploadErr } = await supabase.storage
                 .from('documents')
                 .upload(filePath, blob, { contentType: 'text/html; charset=utf-8', upsert: true })
-              if (uploadErr) {
-                console.warn('[gmailScanner/trip] HTML upload error:', uploadErr.message)
+              if (!uploadErr) {
+                const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath)
+                sharedFileUrl = urlData?.publicUrl || null
               } else {
-                const { data: urlData } = supabase.storage
-                  .from('documents').getPublicUrl(filePath)
-                fileUrl = urlData?.publicUrl || null
+                console.warn('[gmailScanner/trip] HTML upload error:', uploadErr.message)
               }
-            } catch (uploadEx) {
-              console.warn('[gmailScanner/trip] HTML upload exception:', uploadEx)
+            } catch (uploadEx) { console.warn('[gmailScanner/trip] HTML upload exception:', uploadEx) }
+          }
+
+          // ── Create one Document per passenger (for flights) ───────────────
+          // For non-flights: passengers = [''] → one document, no suffix
+          let firstDocCreated = false
+          for (const passenger of passengers) {
+            const bookingTitle = isFlight && passenger
+              ? `${baseTitle} – ${passenger}`
+              : baseTitle
+            const safePassenger = passenger
+              ? `-${passenger.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}`
+              : ''
+
+            // ── Per-passenger dedup: same booking_ref + passenger ─────────
+            if (parsedBooking.confirmation_number && parsedBooking.confirmation_number !== 'N/A') {
+              const refQuery = supabase
+                .from('documents')
+                .select('id')
+                .eq('trip_id', tripId)
+                .eq('booking_ref', parsedBooking.confirmation_number)
+              if (isFlight && passenger) refQuery.eq('name', bookingTitle)
+              const { data: existingByRef } = await refQuery.maybeSingle()
+              if (existingByRef) {
+                console.log(`[gmailScanner/trip] skip dup by ref+passenger: "${bookingTitle}"`)
+                stats.filteredDuplicate++; continue
+              }
             }
+
+            // ── Per-passenger dedup: same name + same date ────────────────
+            if (bookingTitle && dedupDate) {
+              const { data: existingByName } = await supabase
+                .from('documents')
+                .select('id')
+                .eq('trip_id', tripId)
+                .eq('name', bookingTitle)
+                .eq('valid_from', dedupDate)
+                .maybeSingle()
+              if (existingByName) {
+                console.log(`[gmailScanner/trip] skip dup by name+date: "${bookingTitle}" ${dedupDate}`)
+                stats.filteredDuplicate++; continue
+              }
+            }
+
+            // ── Insert document ───────────────────────────────────────────
+            const passengerNote = passenger ? `\nנוסע: ${passenger}` : ''
+            const boardingNote  = isBoardingPass && parsedBooking.seat_number
+              ? `\nמושב: ${parsedBooking.seat_number}${parsedBooking.gate ? ` | שער: ${parsedBooking.gate}` : ''}`
+              : ''
+
+            const { data: docRecord, error: docError } = await supabase
+              .from('documents')
+              .insert({
+                trip_id:        tripId,
+                user_id:        userId,
+                name:           bookingTitle,
+                doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
+                file_type:      sharedFileType,
+                file_url:       sharedFileUrl,
+                booking_ref:    parsedBooking.confirmation_number !== 'N/A'
+                                  ? parsedBooking.confirmation_number : null,
+                valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
+                valid_until:    parsedBooking.check_out || parsedBooking.return_date || null,
+                flight_number:  parsedBooking.flight_number || null,
+                notes:          `GMID:${msg.id}\nייובא מ-Gmail\nשולח: ${msg.from}${passengerNote}${boardingNote}\n${parsedBooking.summary || ''}`,
+                extracted_data: parsedBooking as unknown as Record<string, unknown>,
+              })
+              .select('id')
+              .single()
+
+            if (docError) {
+              const errMsg = `${docError.message}${docError.details ? ` — ${docError.details}` : ''}${docError.code ? ` (${docError.code})` : ''}`
+              console.error('[gmailScanner/trip] Document insert error:', errMsg)
+              stats.failedDB++
+              stats.lastDbError = errMsg
+            } else if (docRecord) {
+              stats.createdDocs.push({
+                id:       docRecord.id,
+                name:     bookingTitle || msg.subject.slice(0, 60),
+                doc_type: docTypeMap[parsedBooking.booking_type] || 'other',
+              })
+              stats.created++
+              firstDocCreated = true
+              console.log(
+                `[gmailScanner/trip] ✓ doc saved: "${bookingTitle}"` +
+                (isBoardingPass ? ' [boarding pass]' : '') +
+                (passenger ? ` [pax: ${passenger}]` : ''),
+              )
+            }
+          }  // end for passengers
+
+          // ── Create ONE Expense record (regardless of number of passengers) ─
+          if (firstDocCreated) {
+            const expenseTitle = isFlight && passengers.length > 1
+              ? `${baseTitle} (${passengers.length} נוסעים)`
+              : (isFlight && passengers[0] ? `${baseTitle} – ${passengers[0]}` : baseTitle)
+
+            const { error: expenseError } = await supabase
+              .from('expenses')
+              .insert({
+                trip_id:      tripId,
+                title:        expenseTitle,
+                amount:       parsedBooking.amount || 0,
+                currency:     parsedBooking.currency || 'ILS',
+                amount_ils:   parsedBooking.amount || 0,
+                category:     categoryMap[parsedBooking.booking_type] || 'other',
+                expense_date: parsedBooking.check_in || parsedBooking.departure_date || t.start_date,
+                notes:        `מספר אישור: ${parsedBooking.confirmation_number}\nייובא מ-Gmail: ${msg.from}`,
+                source:       'document',
+                is_paid:      true,
+              })
+            if (expenseError) console.error('[gmailScanner/trip] Expense insert error:', expenseError)
           }
 
-          // ── Create a Document record so it shows in the documents page ──
-          const { data: docRecord, error: docError } = await supabase
-            .from('documents')
-            .insert({
-              trip_id:        tripId,
-              user_id:        userId,
-              name:           bookingTitle,
-              doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
-              file_type:      fileType,  // 'pdf' if attachment found, 'gmail' for HTML snapshot
-              file_url:       fileUrl,
-              booking_ref:    parsedBooking.confirmation_number !== 'N/A'
-                                ? parsedBooking.confirmation_number : null,
-              valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
-              valid_until:    parsedBooking.check_out || parsedBooking.return_date   || null,
-              flight_number:  parsedBooking.flight_number || null,
-              notes:          `GMID:${msg.id}\nייובא מ-Gmail\nשולח: ${msg.from}\n${parsedBooking.summary || ''}`,
-              extracted_data: parsedBooking as unknown as Record<string, unknown>,
-            })
-            .select('id')
-            .single()
-
-          if (docError) {
-            const errMsg = `${docError.message}${docError.details ? ` — ${docError.details}` : ''}${docError.code ? ` (${docError.code})` : ''}`
-            console.error('[gmailScanner/trip] Document insert error:', errMsg, '\nPayload:', {
-              trip_id: tripId, name: bookingTitle, doc_type: docTypeMap[parsedBooking.booking_type] || 'other',
-            })
-            stats.failedDB++
-            stats.lastDbError = errMsg
-          } else if (docRecord) {
-            // ── Document saved ✅ — record it and increment counter ──────────
-            stats.createdDocs.push({
-              id:       docRecord.id,
-              name:     bookingTitle || msg.subject.slice(0, 60),
-              doc_type: docTypeMap[parsedBooking.booking_type] || 'other',
-            })
-            stats.created++
-          }
-
-          // ── Create an Expense record (best-effort — never blocks) ─────────
-          const { error: expenseError } = await supabase
-            .from('expenses')
-            .insert({
-              trip_id:      tripId,
-              title:        bookingTitle,
-              amount:       parsedBooking.amount || 0,
-              currency:     parsedBooking.currency || 'ILS',
-              amount_ils:   parsedBooking.amount || 0,
-              category:     categoryMap[parsedBooking.booking_type] || 'other',
-              expense_date: parsedBooking.check_in || parsedBooking.departure_date || t.start_date,
-              notes:        `מספר אישור: ${parsedBooking.confirmation_number}\nייובא מ-Gmail: ${msg.from}`,
-              source:       'document',
-              is_paid:      true,
-            })
-          if (expenseError) console.error('[gmailScanner/trip] Expense insert error:', expenseError)
-
-          // ── Save to email_ingests for audit trail + dedup key ────────────
-          // gmail_message_id is the primary dedup key for future scans —
-          // ensures re-scanning never re-processes the same email.
+          // ── Save to email_ingests for audit trail + dedup key ─────────────
           const rawText = htmlToText(emailContent).slice(0, 10000)
           const baseIngest = {
             user_id:      userId,
@@ -1780,7 +1860,7 @@ export async function scanTripGmail(
             trip_id:      tripId,
             match_score:  100,
             match_reason: 'ייבוא ידני לטיול',
-            status:       docRecord ? 'processed' : 'matched',
+            status:       firstDocCreated ? 'processed' : 'matched',
             source:       'gmail_trip_import',
           }
           const { error: i1 } = await supabase.from('email_ingests')
