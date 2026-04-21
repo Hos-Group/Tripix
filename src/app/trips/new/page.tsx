@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTrip } from '@/contexts/TripContext'
-import { searchDestinations, getDestinationCities, hasStates, getCountryStates, getStateCities } from '@/lib/destinations'
+import { searchDestinations, getDestinationCities, hasStates, getCountryStates, getStateCities, getDestinationConfig } from '@/lib/destinations'
 import DateRangePicker from '@/components/DateRangePicker'
 import { Analytics } from '@/lib/analytics'
 
@@ -359,15 +359,28 @@ export default function NewTripPage() {
       <div className="px-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          <button onClick={goBack} className="active:scale-95 transition-transform p-1">
-            <ChevronLeft className="w-5 h-5 text-gray-500" />
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="חזרה לשלב הקודם"
+            className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
           </button>
 
           {showProgress ? (
-            <div className="flex gap-1.5 flex-1 justify-center">
+            <div
+              className="flex gap-1.5 flex-1 justify-center"
+              role="progressbar"
+              aria-valuemin={1}
+              aria-valuemax={TOTAL_STEPS}
+              aria-valuenow={currentProgress}
+              aria-label={`שלב ${currentProgress} מתוך ${TOTAL_STEPS}`}
+            >
               {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
                 <div
                   key={i}
+                  aria-hidden="true"
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     i < currentProgress ? 'w-8' : 'bg-gray-200 w-4'
                   }`}
@@ -531,6 +544,9 @@ export default function NewTripPage() {
                             setCustomCityInput('')
                             setDestSearch('')
                             setShowDestList(false)
+                            // Auto-fill currency from destination config
+                            const cfg = getDestinationConfig(d.id)
+                            if (cfg?.currency) setCurrency(cfg.currency)
                           }}
                           className="w-full px-4 py-2.5 text-sm text-right hover:bg-gray-50 active:bg-gray-100 flex justify-between items-center gap-2"
                         >

@@ -9,8 +9,21 @@ import { Category, CATEGORY_META, Currency, CURRENCIES, CURRENCY_SYMBOL, DocType
 import DocumentViewer from '@/components/DocumentViewer'
 import { loadTravelers, getTravelerName, type Traveler } from '@/lib/travelers'
 import { convertToILS } from '@/lib/rates'
+import { getDestinationConfig, getDestinationCity } from '@/lib/destinations'
 import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  buildExpenseFingerprint,
+  insertWithDedup,
+  type DuplicateExpense,
+} from '@/lib/dedup'
+import {
+  computeFileHashFromBlob,
+  buildDedupKey,
+  findDuplicate,
+  isDedupViolation,
+  dedupReasonLabel,
+} from '@/lib/documentDedup'
 
 type ScanMode = 'choose' | 'receipt' | 'document' | 'passport'
 type ScanStep = 'choose' | 'loading' | 'review' | 'confirm' | 'done'
@@ -91,16 +104,15 @@ export default function ScanPage() {
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Receipt fields
   const [editTitle, setEditTitle] = useState('')
   const [editCategory, setEditCategory] = useState<Category>('food')
   const [editAmount, setEditAmount] = useState('')
-  const [editCurrency, setEditCurrency] = useState<Currency>('THB')
+  const [editCurrency, setEditCurrency] = useState<Currency>('ILS')
   const [editDate, setEditDate] = useState(new Date().toISOString().split('T')[0])
   const [editNotes, setEditNotes] = useState('')
 
-  // Passport fields
-  const [passport, setPassport] = useState<PassportData>({ firstName: '', lastName: '', passportNumber: '', dateOfBirth: '', gender: '', nationality: '', issuingCountry: '', issueDate: '', validUntil: '', traveler: 'omer' })
+  // Passport fields — default traveler = first traveler in trip (resolved after load)
+  const [passport, setPassport] = useState<PassportData>({ firstName: '', lastName: '', passportNumber: '', dateOfBirth: '', gender: '', nationality: '', issuingCountry: '', issueDate: '', validUntil: '', traveler: 'all' })
 
   // Flight fields
   const emptyLeg: FlightLeg = { flightNumber: '', airline: '', departureCity: '', departureAirport: '', arrivalCity: '', arrivalAirport: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', isConnection: false }
@@ -116,8 +128,37 @@ export default function ScanPage() {
   const [savedFileUrl, setSavedFileUrl] = useState<string | null>(null)
   const [showViewer, setShowViewer] = useState(false)
   const [dbTravelers, setDbTravelers] = useState<Traveler[]>([])
+  const [dupExpenseWarning, setDupExpenseWarning] = useState<DuplicateExpense | null>(null)
 
-  useEffect(() => { loadTravelers().then(setDbTravelers) }, [])
+  // Load travelers for current trip; default passport traveler to first traveler
+  useEffect(() => {
+    loadTravelers(currentTrip?.id).then(travelers => {
+      setDbTravelers(travelers)
+      if (travelers.length > 0) {
+        setPassport(prev => ({ ...prev, traveler: travelers[0].id }))
+      }
+    })
+  }, [currentTrip?.id])
+
+  // Set default currency from trip destination (runs client-side only, avoids SSR mismatch)
+  useEffect(() => {
+    const saved = localStorage.getItem('tripix_currency') as Currency | null
+    if (saved) {
+      setEditCurrency(saved)
+      setHotel(h => ({ ...h, currency: saved }))
+      setGeneric(g => ({ ...g, currency: saved }))
+      return
+    }
+    if (!currentTrip?.destination) return
+    const key = getDestinationCity(currentTrip.destination)
+    const cfg = getDestinationConfig(key)
+    if (cfg?.currency) {
+      const c = cfg.currency as Currency
+      setEditCurrency(c)
+      setHotel(h => ({ ...h, currency: c }))
+      setGeneric(g => ({ ...g, currency: c }))
+    }
+  }, [currentTrip?.id])
 
   // Auto-match passenger name to traveler
   const matchTraveler = (name: string): TravelerId => {
@@ -354,11 +395,19 @@ export default function ScanPage() {
 
   const handleConfirm = () => setStep('confirm')
 
-  const handleSave = async () => {
+  const handleSave = async (force = false) => {
     setSaving(true)
     try {
       if (!currentTrip) { toast.error('בחר טיול קודם'); return }
       const tripId = currentTrip.id
+
+      // SHA-256 the file BEFORE storage upload — lets us short-circuit when
+      // the same exact PDF/image was uploaded to this trip already.
+      let contentHash: string | null = null
+      if (file && mode !== 'receipt') {
+        try { contentHash = await computeFileHashFromBlob(file) }
+        catch (hashErr) { console.warn('[scan] hash failed:', hashErr) }
+      }
 
       // Upload file
       let fileUrl: string | null = null
@@ -375,56 +424,35 @@ export default function ScanPage() {
       }
 
       if (mode === 'receipt') {
+        const fingerprint = buildExpenseFingerprint(tripId, parseFloat(editAmount), editDate, editTitle.trim())
         const receiptAmountIls = await convertToILS(parseFloat(editAmount), editCurrency, editDate)
-        const { error } = await supabase.from('expenses').insert({
-          trip_id: tripId,
-          user_id: user?.id,
-          title: editTitle.trim(),
-          category: editCategory,
-          amount: parseFloat(editAmount),
-          currency: editCurrency,
-          amount_ils: receiptAmountIls,
-          expense_date: editDate,
-          notes: editNotes || null,
-          receipt_url: fileUrl,
-          source: noAiMode ? 'manual' : 'scan',
+        const result = await insertWithDedup({
+          table:       'expenses',
+          trip_id:     tripId,
+          payload:     {
+            trip_id:      tripId,
+            user_id:      user?.id,
+            title:        editTitle.trim(),
+            category:     editCategory,
+            amount:       parseFloat(editAmount),
+            currency:     editCurrency,
+            amount_ils:   receiptAmountIls,
+            expense_date: editDate,
+            notes:        editNotes || null,
+            receipt_url:  fileUrl,
+            source:       noAiMode ? 'manual' : 'scan',
+          },
+          contentHash: fingerprint,
+          softDedup:   true,
+          force,
         })
-        if (error) throw error
+        if (result.duplicate) {
+          setDupExpenseWarning(result.existing as DuplicateExpense)
+          setSaving(false)
+          return
+        }
       } else {
         const dt = getActiveDocType()
-
-        // Check for duplicate document (by booking_ref + traveler_id)
-        const dupKey = dt === 'passport' ? passport.passportNumber
-          : dt === 'flight' ? flight.bookingRef
-          : dt === 'hotel' ? hotel.bookingRef
-          : generic.bookingRef
-
-        const dupTraveler = dt === 'passport' ? passport.traveler
-          : dt === 'flight' ? flight.traveler
-          : dt === 'hotel' ? hotel.traveler
-          : generic.traveler
-
-        if (dupKey && dupKey.trim()) {
-          let dupQuery = supabase
-            .from('documents')
-            .select('id, name')
-            .eq('doc_type', dt)
-            .eq('booking_ref', dupKey.trim())
-
-          // For non-passport docs with same booking ref, also check traveler to allow different passengers
-          if (dt !== 'passport' && dupTraveler !== 'all') {
-            dupQuery = dupQuery.eq('traveler_id', dupTraveler)
-          }
-
-          const { data: duplicates } = await dupQuery
-
-          if (duplicates && duplicates.length > 0) {
-            toast.error(`מסמך כפול — "${duplicates[0].name}" כבר קיים במערכת`)
-            setSaving(false)
-            setStep('review')
-            return
-          }
-        }
 
         // Build document record based on type
         let docRecord: Record<string, unknown> = {
@@ -480,8 +508,46 @@ export default function ScanPage() {
           docRecord = { ...docRecord, name: generic.docName || 'מסמך', traveler_id: generic.traveler, booking_ref: generic.bookingRef || null, valid_from: generic.validFrom || null, valid_until: generic.validUntil || null }
         }
 
-        const { data: insertedDoc, error: docErr } = await supabase.from('documents').insert(docRecord).select('id').single()
-        if (docErr) throw docErr
+        // ── Unified dedup (content hash + logical signature) ─────────────
+        const dedupKey = buildDedupKey({
+          doc_type:      dt,
+          booking_ref:   docRecord.booking_ref as string | null,
+          traveler_id:   docRecord.traveler_id as string | null,
+          valid_from:    docRecord.valid_from  as string | null,
+          name:          docRecord.name        as string | null,
+          flight_number: docRecord.flight_number as string | null,
+        })
+        docRecord.content_hash = contentHash
+        docRecord.dedup_key    = dedupKey
+
+        if (!force) {
+          const existing = await findDuplicate(supabase, tripId, {
+            content_hash: contentHash,
+            dedup_key:    dedupKey,
+          })
+          if (existing) {
+            toast.error(`${dedupReasonLabel(existing.reason)} — "${existing.name}" כבר קיים`)
+            setSaving(false)
+            setStep('review')
+            return
+          }
+        }
+
+        const { data: insertedDoc, error: docErr } = await supabase
+          .from('documents')
+          .insert(docRecord)
+          .select('id')
+          .single()
+
+        if (docErr) {
+          if (isDedupViolation(docErr)) {
+            toast.error('המסמך כבר קיים בטיול הזה')
+            setSaving(false)
+            setStep('review')
+            return
+          }
+          throw docErr
+        }
 
         const docId = insertedDoc?.id
 
@@ -568,6 +634,7 @@ export default function ScanPage() {
     setDetectedDocType('other')
     setSavedFileUrl(null)
     setShowViewer(false)
+    setDupExpenseWarning(null)
     if (cameraRef.current) cameraRef.current.value = ''
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -617,23 +684,26 @@ export default function ScanPage() {
         {/* Choose */}
         {step === 'choose' && (
           <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-            <p className="text-sm text-gray-500 text-center">בחרו מה לסרוק — Tripix ינתח הכל אוטומטית</p>
+            <p className="text-sm text-gray-600 text-center">בחרו מה לסרוק — Tripix ינתח הכל אוטומטית</p>
 
             {/* Primary camera button */}
-            <button onClick={() => { setMode('receipt'); cameraRef.current?.click() }}
-              className="w-full relative overflow-hidden rounded-3xl p-7 active:scale-95 transition-all text-white"
+            <button
+              type="button"
+              onClick={() => { setMode('receipt'); cameraRef.current?.click() }}
+              aria-label="צלם קבלה — בינה מלאכותית תמלא את הפרטים אוטומטית"
+              className="w-full relative overflow-hidden rounded-3xl p-7 active:scale-95 transition-all text-white focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
               style={{ background: 'linear-gradient(140deg, #6C47FF 0%, #9B7BFF 60%, #B9A0FF 100%)', boxShadow: '0 12px 32px rgba(108,71,255,0.35)' }}>
-              <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <span className="w-32 h-32 rounded-full bg-white/8 animate-ping" style={{ background: 'rgba(255,255,255,0.06)' }} />
               </span>
               <div className="relative flex flex-col items-center gap-4">
                 <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center"
-                  style={{ backdropFilter: 'blur(8px)' }}>
+                  style={{ backdropFilter: 'blur(8px)' }} aria-hidden="true">
                   <Camera className="w-10 h-10 text-white" />
                 </div>
                 <div className="text-center">
                   <p className="font-black text-xl tracking-tight">צלם קבלה</p>
-                  <p className="text-sm text-white/75 mt-0.5">AI מחלץ הכל אוטומטית</p>
+                  <p className="text-sm text-white/85 mt-0.5">AI מחלץ הכל אוטומטית</p>
                 </div>
               </div>
             </button>
@@ -643,15 +713,19 @@ export default function ScanPage() {
               { m: 'document' as ScanMode, icon: Upload,   bg: 'rgba(59,130,246,0.10)',  iconColor: '#3B82F6', title: 'העלה מסמך הזמנה', sub: 'טיסה / מלון / מעבורת / פעילות', useCamera: false },
               { m: 'passport' as ScanMode, icon: FileText, bg: 'rgba(16,185,129,0.10)', iconColor: '#10B981', title: 'סרוק דרכון',          sub: 'חילוץ פרטי דרכון אוטומטי',    useCamera: false },
             ].map(({ m, icon: Icon, bg, iconColor, title, sub, useCamera }) => (
-              <button key={m} onClick={() => { setMode(m); (useCamera ? cameraRef : fileRef).current?.click() }}
-                className="w-full bg-white rounded-2xl p-5 shadow-card flex items-center gap-4 active:scale-95 transition-all border border-gray-50/80">
+              <button
+                key={m}
+                type="button"
+                onClick={() => { setMode(m); (useCamera ? cameraRef : fileRef).current?.click() }}
+                aria-label={`${title} — ${sub}`}
+                className="w-full bg-white rounded-2xl p-5 min-h-[80px] shadow-card flex items-center gap-4 active:scale-95 transition-all border border-gray-50/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: bg }}>
+                  style={{ background: bg }} aria-hidden="true">
                   <Icon className="w-6 h-6" style={{ color: iconColor }} />
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-sm text-gray-900">{title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
                 </div>
               </button>
             ))}
@@ -973,16 +1047,42 @@ export default function ScanPage() {
               )
             })()}
 
-            <div className="flex gap-2">
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 bg-green-500 text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-50">
-                {saving ? 'שומר...' : 'אישור ושמירה'}
-              </button>
-              <button onClick={() => setStep('review')}
-                className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">
-                חזור לעריכה
-              </button>
-            </div>
+            {/* Duplicate receipt warning — shown when a similar expense already exists */}
+            {dupExpenseWarning && mode === 'receipt' ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <p className="text-sm font-bold text-amber-800">הוצאה דומה כבר קיימת</p>
+                </div>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  {dupExpenseWarning.title} — {dupExpenseWarning.amount} {dupExpenseWarning.currency} ({dupExpenseWarning.expense_date})
+                </p>
+                <div className="flex gap-2 pt-0.5">
+                  <button
+                    onClick={() => handleSave(true)}
+                    disabled={saving}
+                    className="flex-1 text-xs bg-amber-100 text-amber-800 border border-amber-300 rounded-lg py-2 font-bold active:scale-95 transition-all disabled:opacity-40">
+                    {saving ? 'שומר...' : 'שמור בכל זאת'}
+                  </button>
+                  <button
+                    onClick={() => { setDupExpenseWarning(null); setStep('review') }}
+                    className="flex-1 text-xs bg-gray-100 text-gray-600 rounded-lg py-2 font-semibold active:scale-95">
+                    חזור לעריכה
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => handleSave()} disabled={saving}
+                  className="flex-1 bg-green-500 text-white rounded-xl py-3 font-medium active:scale-95 transition-transform disabled:opacity-50">
+                  {saving ? 'שומר...' : 'אישור ושמירה'}
+                </button>
+                <button onClick={() => setStep('review')}
+                  className="px-4 bg-gray-100 rounded-xl py-3 text-gray-500 active:scale-95">
+                  חזור לעריכה
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
 

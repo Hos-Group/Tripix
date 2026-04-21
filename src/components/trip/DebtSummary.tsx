@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, RefreshCw, Scale } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { CURRENCY_SYMBOL, Currency } from '@/types'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 interface DebtItem {
   fromName: string
@@ -28,6 +29,7 @@ export default function DebtSummary({ tripId, onRefresh }: DebtSummaryProps) {
   const [debts, setDebts] = useState<DebtItem[]>([])
   const [loading, setLoading] = useState(true)
   const [settling, setSettling] = useState<string | null>(null)
+  const [pendingSettle, setPendingSettle] = useState<{ debt: DebtItem; index: number } | null>(null)
 
   const fetchDebts = useCallback(async () => {
     setLoading(true)
@@ -48,13 +50,15 @@ export default function DebtSummary({ tripId, onRefresh }: DebtSummaryProps) {
 
   useEffect(() => { fetchDebts() }, [fetchDebts])
 
-  const handleMarkPaid = async (debt: DebtItem, index: number) => {
-    const key = `${debt.fromName}-${debt.toName}-${index}`
-    const confirmed = window.confirm(
-      `לסמן שהחוב של ${debt.fromName} לטובת ${debt.toName} (${getCurrencySymbol(debt.currency)}${debt.amount.toFixed(2)}) שולם?`
-    )
-    if (!confirmed) return
+  const requestMarkPaid = (debt: DebtItem, index: number) => {
+    setPendingSettle({ debt, index })
+  }
 
+  const handleMarkPaid = async () => {
+    if (!pendingSettle) return
+    const { debt, index } = pendingSettle
+    const key = `${debt.fromName}-${debt.toName}-${index}`
+    setPendingSettle(null)
     setSettling(key)
 
     // Find the split where fromName is a participant and toName is the payer
@@ -105,11 +109,18 @@ export default function DebtSummary({ tripId, onRefresh }: DebtSummaryProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <div
-          className="w-7 h-7 rounded-full animate-spin"
-          style={{ border: '2px solid rgba(108,71,255,0.15)', borderTopColor: '#6C47FF' }}
-        />
+      <div role="status" aria-live="polite" aria-label="טוען חובות" className="space-y-3 py-2">
+        {[0, 1].map(i => (
+          <div key={i} className="bg-white rounded-2xl px-4 py-4 shadow-sm border border-gray-50 flex items-center gap-3">
+            <div className="w-8 h-8 skeleton rounded-full" />
+            <div className="flex-1 space-y-2">
+              <div className="h-3 w-1/2 skeleton rounded-md" />
+              <div className="h-2.5 w-1/3 skeleton rounded-md" />
+            </div>
+            <div className="h-6 w-16 skeleton rounded-md" />
+          </div>
+        ))}
+        <span className="sr-only">טוען…</span>
       </div>
     )
   }
@@ -207,19 +218,21 @@ export default function DebtSummary({ tripId, onRefresh }: DebtSummaryProps) {
 
                 {/* Mark paid button */}
                 <button
-                  onClick={() => handleMarkPaid(debt, i)}
+                  type="button"
+                  onClick={() => requestMarkPaid(debt, i)}
                   disabled={isSettling}
-                  className="flex-shrink-0 p-2 rounded-xl active:scale-90 transition-all"
+                  aria-label={`סמן שהחוב של ${debt.fromName} לטובת ${debt.toName} שולם`}
+                  className="flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-xl active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-emerald-400"
                   style={{ background: '#10B98115' }}
-                  title="סמן כמשולם"
                 >
                   {isSettling ? (
                     <div
                       className="w-4 h-4 rounded-full animate-spin"
                       style={{ border: '2px solid #10B98130', borderTopColor: '#10B981' }}
+                      aria-hidden="true"
                     />
                   ) : (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" aria-hidden="true" />
                   )}
                 </button>
               </motion.div>
@@ -233,6 +246,21 @@ export default function DebtSummary({ tripId, onRefresh }: DebtSummaryProps) {
           {debts.length} חוב/ות פתוח/ות — לחץ על ✓ לסימון כמשולם
         </p>
       )}
+
+      <ConfirmDialog
+        open={!!pendingSettle}
+        title="לסמן את החוב כמשולם?"
+        description={
+          pendingSettle
+            ? `${pendingSettle.debt.fromName} שילם/ה ל${pendingSettle.debt.toName} ${getCurrencySymbol(pendingSettle.debt.currency)}${pendingSettle.debt.amount.toFixed(2)}. סימון יעדכן את הסיכום.`
+            : undefined
+        }
+        confirmLabel="סמן כמשולם"
+        cancelLabel="ביטול"
+        variant="primary"
+        onConfirm={handleMarkPaid}
+        onCancel={() => setPendingSettle(null)}
+      />
     </div>
   )
 }

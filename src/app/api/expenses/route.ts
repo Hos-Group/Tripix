@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { buildExpenseFingerprint, findDuplicateExpense } from '@/lib/dedup'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -30,14 +31,51 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
+  const { force, ...expense } = body as Record<string, unknown> & { force?: boolean }
+
+  if (!expense.trip_id || expense.amount == null || !expense.expense_date || !expense.title) {
+    return NextResponse.json({ error: 'missing required fields' }, { status: 400 })
+  }
+
+  // Two-layer dedup:
+  //   1. Soft pre-check via fingerprint → return existing row with 409 when the
+  //      client can offer a "save anyway" path (force=true bypasses).
+  //   2. DB unique index on `content_hash` is the hard backstop against races.
+  const fingerprint = buildExpenseFingerprint(
+    String(expense.trip_id),
+    Number(expense.amount),
+    String(expense.expense_date),
+    String(expense.title),
+  )
+
+  if (!force) {
+    const duplicate = await findDuplicateExpense(fingerprint)
+    if (duplicate) {
+      return NextResponse.json(
+        { error: 'duplicate', reason: 'content', duplicate },
+        { status: 409 },
+      )
+    }
+  }
+
+  const payload = force
+    ? expense
+    : { ...expense, content_hash: fingerprint }
 
   const { data, error } = await supabase
     .from('expenses')
-    .insert(body)
+    .insert(payload)
     .select()
     .single()
 
   if (error) {
+    if (error.code === '23505') {
+      const duplicate = await findDuplicateExpense(fingerprint)
+      return NextResponse.json(
+        { error: 'duplicate', reason: 'content', duplicate },
+        { status: 409 },
+      )
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

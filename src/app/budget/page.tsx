@@ -6,13 +6,15 @@ import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { formatMoney, getTripDays } from '@/lib/utils'
+import { formatMoney } from '@/lib/utils'
 import { Expense, CATEGORY_META, Category } from '@/types'
 import { CategoryIconBadge } from '@/lib/iconConfig'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useTrip } from '@/contexts/TripContext'
 
 export default function BudgetPage() {
   const { t, dir } = useLanguage()
+  const { currentTrip } = useTrip()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [budget, setBudget] = useState<number>(0)
   const [editingBudget, setEditingBudget] = useState(false)
@@ -20,10 +22,11 @@ export default function BudgetPage() {
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
+    if (!currentTrip) { setLoading(false); return }
     try {
       const [{ data: expData }, { data: tripData }] = await Promise.all([
-        supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-        supabase.from('trips').select('budget_ils').limit(1).single(),
+        supabase.from('expenses').select('*').eq('trip_id', currentTrip.id).order('expense_date', { ascending: false }),
+        supabase.from('trips').select('budget_ils').eq('id', currentTrip.id).single(),
       ])
       setExpenses(expData || [])
       setBudget(tripData?.budget_ils || 0)
@@ -32,14 +35,15 @@ export default function BudgetPage() {
       console.error('Failed to load budget data')
     }
     setLoading(false)
-  }, [])
+  }, [currentTrip])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   const saveBudget = async () => {
+    if (!currentTrip) return
     const val = parseFloat(budgetInput)
     if (isNaN(val) || val <= 0) { toast.error('נא להזין סכום תקין'); return }
-    await supabase.from('trips').update({ budget_ils: val }).not('id', 'is', null)
+    await supabase.from('trips').update({ budget_ils: val }).eq('id', currentTrip.id)
     setBudget(val)
     setEditingBudget(false)
     toast.success('תקציב עודכן')
@@ -48,9 +52,10 @@ export default function BudgetPage() {
   const totalSpent = expenses.reduce((sum, e) => sum + (e.amount_ils || 0), 0)
   const remaining = budget - totalSpent
   const percentage = budget > 0 ? Math.min((totalSpent / budget) * 100, 100) : 0
-  const tripDays = getTripDays()
-  const daysElapsed = Math.max(1, tripDays.filter(d => d <= new Date()).length)
-  const daysTotal = tripDays.length
+  const tripStart   = currentTrip ? new Date(currentTrip.start_date) : new Date()
+  const tripEnd     = currentTrip ? new Date(currentTrip.end_date)   : new Date()
+  const daysTotal   = Math.max(1, Math.ceil((tripEnd.getTime() - tripStart.getTime()) / 86400000) + 1)
+  const daysElapsed = Math.max(1, Math.ceil((Math.min(Date.now(), tripEnd.getTime()) - tripStart.getTime()) / 86400000) + 1)
   const avgDaily = totalSpent / daysElapsed
   const projectedTotal = avgDaily * daysTotal
 
@@ -67,8 +72,14 @@ export default function BudgetPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div role="status" aria-live="polite" aria-label="טוען תקציב" className="space-y-3 pt-4">
+        <div className="h-32 w-full skeleton rounded-2xl" />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-20 skeleton rounded-2xl" />
+          <div className="h-20 skeleton rounded-2xl" />
+        </div>
+        <div className="h-40 w-full skeleton rounded-2xl" />
+        <span className="sr-only">טוען…</span>
       </div>
     )
   }
@@ -77,8 +88,12 @@ export default function BudgetPage() {
     <div className="space-y-4 pb-6" dir={dir}>
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/dashboard" className="active:scale-95 transition-transform">
-          <ChevronLeft className="w-5 h-5 text-gray-500" />
+        <Link
+          href="/dashboard"
+          aria-label="חזרה לדשבורד"
+          className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
         </Link>
         <div>
           <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{t('budget_title')}</h1>

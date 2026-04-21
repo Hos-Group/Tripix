@@ -29,7 +29,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') return localStorage.getItem('tripix_current_trip')
     return null
   })
-  const [loading, setLoading] = useState(true)
+  // Skip loading state if localStorage already has a trip ID — data arrives shortly
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return !localStorage.getItem('tripix_current_trip')
+  })
 
   // refreshTrips does NOT depend on currentTripId — avoids infinite loop
   const refreshTrips = useCallback(async () => {

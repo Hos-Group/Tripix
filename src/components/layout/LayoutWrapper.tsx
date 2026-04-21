@@ -17,7 +17,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   return (
     <>
       <GlobalHeader />
-      <main className="min-h-screen max-w-lg mx-auto px-4 pt-16 pb-24">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="min-h-screen max-w-lg mx-auto px-4 pt-16 pb-24 focus:outline-none"
+      >
         {children}
       </main>
       <BottomNav />

@@ -6,6 +6,7 @@ import { UserPlus, X, Crown, Edit3, Eye, Clock, CheckCircle, Trash2, ChevronDown
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { TripMember, MemberRole } from '@/types'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
 interface MembersPanelProps {
   tripId: string
@@ -54,6 +55,8 @@ export default function MembersPanel({ tripId }: MembersPanelProps) {
   const [inviteName, setInviteName] = useState('')
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('viewer')
   const [inviting, setInviting] = useState(false)
+  const [removingMember, setRemovingMember] = useState<TripMember | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const fetchMembers = useCallback(async () => {
     setLoading(true)
@@ -111,9 +114,12 @@ export default function MembersPanel({ tripId }: MembersPanelProps) {
     setInviting(false)
   }
 
-  const handleRemove = async (member: TripMember) => {
-    const confirmed = window.confirm(`להסיר את ${member.display_name} מהטיול?`)
-    if (!confirmed) return
+  const requestRemove = (member: TripMember) => setRemovingMember(member)
+
+  const handleConfirmRemove = async () => {
+    if (!removingMember) return
+    const member = removingMember
+    setRemoving(true)
     try {
       const token = await getAuthToken()
       const res = await fetch(`/api/trips/${tripId}/members/${member.id}`, {
@@ -123,6 +129,7 @@ export default function MembersPanel({ tripId }: MembersPanelProps) {
       if (res.ok) {
         toast.success('החבר הוסר')
         setMembers(prev => prev.filter(m => m.id !== member.id))
+        setRemovingMember(null)
       } else {
         const json = await res.json()
         toast.error(json.error || 'שגיאה בהסרה')
@@ -130,6 +137,7 @@ export default function MembersPanel({ tripId }: MembersPanelProps) {
     } catch {
       toast.error('שגיאה בחיבור לשרת')
     }
+    setRemoving(false)
   }
 
   const handleChangeRole = async (member: TripMember, newRole: 'editor' | 'viewer') => {
@@ -301,10 +309,12 @@ export default function MembersPanel({ tripId }: MembersPanelProps) {
                 {/* Remove (not for owner) */}
                 {member.role !== 'owner' && (
                   <button
-                    onClick={() => handleRemove(member)}
-                    className="p-1.5 rounded-xl text-gray-300 active:text-red-400 active:bg-red-50 transition-all active:scale-90"
+                    type="button"
+                    onClick={() => requestRemove(member)}
+                    aria-label={`הסר את ${member.display_name} מהטיול`}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-red-500 active:bg-red-50 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-red-400"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
               </motion.div>
@@ -316,6 +326,22 @@ export default function MembersPanel({ tripId }: MembersPanelProps) {
       <p className="text-[10px] text-gray-400 text-center">
         {members.length} חבר/ים בטיול
       </p>
+
+      <ConfirmDialog
+        open={!!removingMember}
+        title="להסיר את החבר מהטיול?"
+        description={
+          removingMember
+            ? `${removingMember.display_name} לא יוכל/ה לראות או לערוך את הטיול יותר. ניתן להזמין מחדש.`
+            : undefined
+        }
+        confirmLabel="הסר מהטיול"
+        cancelLabel="ביטול"
+        variant="danger"
+        loading={removing}
+        onConfirm={handleConfirmRemove}
+        onCancel={() => !removing && setRemovingMember(null)}
+      />
     </div>
   )
 }

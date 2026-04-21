@@ -151,8 +151,18 @@ export default function TripsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div role="status" aria-live="polite" aria-label="טוען טיולים" className="space-y-3 pt-4">
+        <div className="h-8 w-32 skeleton rounded-xl mx-auto mb-4" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-2xl shadow-card overflow-hidden">
+            <div className="h-32 skeleton rounded-none" />
+            <div className="p-4 space-y-2">
+              <div className="h-4 w-2/3 skeleton rounded-md" />
+              <div className="h-3 w-1/2 skeleton rounded-md" />
+            </div>
+          </div>
+        ))}
+        <span className="sr-only">טוען…</span>
       </div>
     )
   }
@@ -164,15 +174,21 @@ export default function TripsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="active:scale-95 transition-transform">
-              <ChevronLeft className="w-5 h-5 text-gray-500" />
+            <Link
+              href="/dashboard"
+              aria-label="חזרה לדשבורד"
+              className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
             </Link>
             <h1 className="text-xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{t('trips_title')}</h1>
           </div>
-          <Link href="/trips/new"
-            className="text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1"
+          <Link
+            href="/trips/new"
+            aria-label="צור טיול חדש"
+            className="text-white rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-medium active:scale-95 transition-transform flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
-            <Plus className="w-4 h-4" /> {t('trips_new')}
+            <Plus className="w-4 h-4" aria-hidden="true" /> {t('trips_new')}
           </Link>
         </div>
 

@@ -455,6 +455,15 @@ export function getCountryFlag(key: string): string {
   return COUNTRY_FLAGS[key] || '🌍'
 }
 
+/**
+ * Extract the primary city from a destination string like "Bangkok, Thailand" or "בנגקוק, תאילנד".
+ * Handles both ASCII comma and Arabic comma ، as delimiters.
+ */
+export function getDestinationCity(destination: string): string {
+  if (!destination) return ''
+  return destination.split(/[,،]/)[0].trim()
+}
+
 export function getDestinationConfig(destination: string): DestinationConfig | null {
   const exact = DESTINATIONS[destination]
   if (exact) return exact

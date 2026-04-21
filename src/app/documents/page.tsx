@@ -13,8 +13,25 @@ import DocumentViewer from '@/components/DocumentViewer'
 import { loadTravelers, getTravelerName, type Traveler } from '@/lib/travelers'
 import { useTrip } from '@/contexts/TripContext'
 import { useLanguage } from '@/contexts/LanguageContext'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { ListSkeleton } from '@/components/ui/Skeleton'
 
 const DOC_TYPES: DocType[] = ['passport', 'flight', 'hotel', 'ferry', 'activity', 'insurance', 'visa', 'other']
+
+// ── Email web URL — Gmail or Outlook deep link ─────────────────────────────
+function getEmailWebUrl(messageId: string | null | undefined): string | null {
+  if (!messageId) return null
+  if (messageId.startsWith('ms_')) {
+    // Outlook Web — best-effort: deep link to the message by its internet ID
+    return `https://outlook.live.com/mail/0/deeplink/read/${encodeURIComponent(messageId.slice(3))}`
+  }
+  return `https://mail.google.com/mail/u/0/#inbox/${messageId}`
+}
+
+function openEmailInWeb(messageId: string | null | undefined) {
+  const url = getEmailWebUrl(messageId)
+  if (url) window.open(url, '_blank', 'noopener')
+}
 
 // ── Document grouping by booking_ref ───────────────────────────────────────
 interface DocGroup {
@@ -153,7 +170,9 @@ export default function DocumentsPage() {
   const [selectMode,      setSelectMode]      = useState(false)
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set())
   const [bulkDeleting,    setBulkDeleting]    = useState(false)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false)
+  const [deletingDoc,     setDeletingDoc]     = useState<Document | null>(null)
+  const [deletingSingle,  setDeletingSingle]  = useState(false)
 
   // ── Folder expand state (booking_ref groups) ─────────────────────────────
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -385,24 +404,34 @@ export default function DocumentsPage() {
     }
   }, [])
 
-  // ── Single delete ────────────────────────────────────────────────────────
-  const handleDelete = async (id: string) => {
-    if (pendingDeleteId !== id) {
-      setPendingDeleteId(id)
-      setTimeout(() => setPendingDeleteId(prev => prev === id ? null : prev), 3000)
-      return
-    }
-    setPendingDeleteId(null)
+  // ── Single delete (now uses ConfirmDialog) ──────────────────────────────
+  const handleDelete = (id: string) => {
+    const doc = documents.find(d => d.id === id)
+    if (!doc) return
+    setDeletingDoc(doc)
+  }
+
+  const handleConfirmSingleDelete = async () => {
+    if (!deletingDoc) return
+    setDeletingSingle(true)
+    const id = deletingDoc.id
     const ok = await deleteDocumentsByIds([id])
+    setDeletingSingle(false)
     if (ok) {
       toast.success('המסמך נמחק')
       setDocuments(prev => prev.filter(d => d.id !== id))
     }
+    setDeletingDoc(null)
   }
 
   // ── Bulk delete ──────────────────────────────────────────────────────────
-  const handleBulkDelete = async () => {
+  const requestBulkDelete = () => {
     if (!selectedIds.size) return
+    setShowBulkConfirm(true)
+  }
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.size) { setShowBulkConfirm(false); return }
     setBulkDeleting(true)
     const ids = Array.from(selectedIds)
     const ok = await deleteDocumentsByIds(ids)
@@ -413,6 +442,7 @@ export default function DocumentsPage() {
       setSelectMode(false)
     }
     setBulkDeleting(false)
+    setShowBulkConfirm(false)
   }
 
   // ── Export selected ───────────────────────────────────────────────────────
@@ -688,14 +718,14 @@ export default function DocumentsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">{t('doc_title')}</h1>
           <Link href="/scan"
-            className="bg-primary text-white rounded-xl px-4 py-2 text-sm font-medium active:scale-95 transition-transform flex items-center gap-1">
-            <Plus className="w-4 h-4" /> העלאה
+            aria-label="העלה מסמך חדש"
+            className="bg-primary text-white rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-medium active:scale-95 transition-transform flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+            <Plus className="w-4 h-4" aria-hidden="true" /> העלאה
           </Link>
         </div>
+        <span className="sr-only" role="status" aria-live="polite">טוען מסמכים…</span>
         {gmailCard}
-        <div className="flex items-center justify-center h-40">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
+        <ListSkeleton rows={6} />
       </div>
     )
   }
@@ -707,11 +737,16 @@ export default function DocumentsPage() {
     const isSel = selectedIds.has(doc.id)
 
     if (mode === 'grid') {
+      const clickable = selectMode || doc.file_url || doc.gmail_message_id
       return (
         <motion.div key={doc.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          onClick={(e) => selectMode ? toggleSelect(doc.id, e) : (doc.file_url && setViewerUrl(doc.file_url))}
+          onClick={(e) => {
+            if (selectMode) return toggleSelect(doc.id, e)
+            if (doc.file_url) return setViewerUrl(doc.file_url)
+            if (doc.gmail_message_id) return openEmailInWeb(doc.gmail_message_id)
+          }}
           className={`bg-white rounded-2xl p-3 shadow-sm active:scale-[0.97] transition-transform relative ${
-            doc.file_url || selectMode ? 'cursor-pointer' : ''
+            clickable ? 'cursor-pointer' : ''
           } ${isSel ? 'ring-2 ring-primary bg-primary/5' : ''}`}>
           {selectMode && (
             <div className="absolute top-2 right-2">
@@ -724,17 +759,25 @@ export default function DocumentsPage() {
           {doc.booking_ref && (
             <p className="text-[10px] text-primary mt-1 truncate">#{doc.booking_ref}</p>
           )}
-          <div className="flex justify-between items-center mt-2">
-            {doc.file_type === 'gmail' && <Mail className="w-3 h-3 text-orange-400" />}
-            {doc.file_url && <ExternalLink className="w-3 h-3 text-primary" />}
+          <div className="flex justify-between items-center mt-2 gap-1">
+            <div className="flex items-center gap-1">
+              {doc.file_url && <ExternalLink className="w-3 h-3 text-primary" />}
+              {doc.gmail_message_id && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEmailInWeb(doc.gmail_message_id) }}
+                  title="פתח מייל מקורי"
+                  className="p-0.5 rounded hover:bg-orange-50 active:scale-90 transition-all">
+                  <Mail className="w-3 h-3 text-orange-400" />
+                </button>
+              )}
+            </div>
             {!selectMode && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                className={`flex items-center gap-0.5 px-1.5 py-1 rounded-md text-[10px] font-medium active:scale-95 transition-all ${
-                  pendingDeleteId === doc.id ? 'bg-red-500 text-white' : 'text-gray-300 hover:text-red-400'
-                }`}>
-                <Trash2 className="w-3 h-3" />
-                {pendingDeleteId === doc.id && <span>מחק?</span>}
+                aria-label={`מחק את ${doc.name}`}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400">
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -743,11 +786,16 @@ export default function DocumentsPage() {
     }
 
     if (mode === 'cards') {
+      const clickable = selectMode || doc.file_url || doc.gmail_message_id
       return (
         <motion.div key={doc.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          onClick={(e) => selectMode ? toggleSelect(doc.id, e) : (doc.file_url && setViewerUrl(doc.file_url))}
+          onClick={(e) => {
+            if (selectMode) return toggleSelect(doc.id, e)
+            if (doc.file_url) return setViewerUrl(doc.file_url)
+            if (doc.gmail_message_id) return openEmailInWeb(doc.gmail_message_id)
+          }}
           className={`bg-gradient-to-bl from-white to-gray-50 rounded-2xl p-5 shadow-sm border active:scale-[0.98] transition-transform relative ${
-            doc.file_url || selectMode ? 'cursor-pointer' : ''
+            clickable ? 'cursor-pointer' : ''
           } ${isSel ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-gray-100'}`}>
           {selectMode && (
             <div className="absolute top-3 left-3">
@@ -764,12 +812,11 @@ export default function DocumentsPage() {
             </div>
             {!selectMode && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium active:scale-95 transition-all ${
-                  pendingDeleteId === doc.id ? 'bg-red-500 text-white' : 'p-2 text-gray-300 hover:text-red-400'
-                }`}>
-                <Trash2 className="w-4 h-4" />
-                {pendingDeleteId === doc.id && <span>מחק?</span>}
+                aria-label={`מחק את ${doc.name}`}
+                className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400">
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -785,15 +832,19 @@ export default function DocumentsPage() {
             {doc.valid_from && (
               <span className="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full">{formatDateShort(doc.valid_from)}</span>
             )}
-            {doc.file_type === 'gmail' && (
-              <span className="bg-orange-50 text-orange-500 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Mail className="w-2.5 h-2.5" /> Gmail
-              </span>
-            )}
             {doc.file_url && (
-              <span className="bg-primary/5 text-primary text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                <ExternalLink className="w-2.5 h-2.5" /> צפייה
-              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setViewerUrl(doc.file_url!) }}
+                className="bg-primary/5 text-primary text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform hover:bg-primary/10">
+                <ExternalLink className="w-2.5 h-2.5" /> צפה במסמך
+              </button>
+            )}
+            {doc.gmail_message_id && (
+              <button
+                onClick={(e) => { e.stopPropagation(); openEmailInWeb(doc.gmail_message_id) }}
+                className="bg-orange-50 text-orange-600 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform hover:bg-orange-100">
+                <Mail className="w-2.5 h-2.5" /> פתח מייל
+              </button>
             )}
           </div>
         </motion.div>
@@ -801,13 +852,18 @@ export default function DocumentsPage() {
     }
 
     // List view (default)
+    const clickable = selectMode || doc.file_url || doc.gmail_message_id
     return (
       <motion.div key={doc.id}
         initial={{ opacity: 0, y: isNew ? -8 : 0 }}
         animate={{ opacity: 1, y: 0 }}
-        onClick={(e) => selectMode ? toggleSelect(doc.id, e) : (doc.file_url && setViewerUrl(doc.file_url))}
+        onClick={(e) => {
+          if (selectMode) return toggleSelect(doc.id, e)
+          if (doc.file_url) return setViewerUrl(doc.file_url)
+          if (doc.gmail_message_id) return openEmailInWeb(doc.gmail_message_id)
+        }}
         className={`rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all relative ${
-          doc.file_url || selectMode ? 'cursor-pointer' : ''
+          clickable ? 'cursor-pointer' : ''
         } ${
           isSel
             ? 'bg-primary/5 border-2 border-primary ring-2 ring-primary/10'
@@ -841,26 +897,30 @@ export default function DocumentsPage() {
               {doc.valid_from && <span>מ-{formatDateShort(doc.valid_from)}</span>}
               {doc.valid_until && <span>עד {formatDateShort(doc.valid_until)}</span>}
             </div>
-            {doc.file_type === 'gmail' && (
-              <p className="text-[10px] text-orange-500 mt-1.5 flex items-center gap-1">
-                <Mail className="w-3 h-3" />
-                {doc.file_url ? 'Gmail — לחץ לצפייה במייל' : 'ייובא מ-Gmail'}
-              </p>
-            )}
-            {doc.file_url && doc.file_type !== 'gmail' && (
-              <p className="text-[10px] text-primary mt-1.5 flex items-center gap-1">
-                <ExternalLink className="w-3 h-3" /> לחץ לצפייה במסמך
-              </p>
-            )}
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {doc.file_url && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setViewerUrl(doc.file_url!) }}
+                  className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[10px] font-semibold px-2 py-1 rounded-full active:scale-95 transition-transform hover:bg-primary/20">
+                  <ExternalLink className="w-3 h-3" /> צפה במסמך
+                </button>
+              )}
+              {doc.gmail_message_id && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEmailInWeb(doc.gmail_message_id) }}
+                  className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded-full active:scale-95 transition-transform hover:bg-orange-100">
+                  <Mail className="w-3 h-3" /> פתח מייל
+                </button>
+              )}
+            </div>
           </div>
           {!selectMode && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium active:scale-95 transition-all flex-shrink-0 ${
-                pendingDeleteId === doc.id ? 'bg-red-500 text-white' : 'text-gray-300 hover:text-red-400'
-              }`}>
-              <Trash2 className="w-4 h-4" />
-              {pendingDeleteId === doc.id && <span>מחק?</span>}
+              aria-label={`מחק את ${doc.name}`}
+              className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400 flex-shrink-0">
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -896,8 +956,9 @@ export default function DocumentsPage() {
         <div
           className="p-4 cursor-pointer active:bg-gray-50 transition-colors"
           onClick={() => {
-            if (selectMode) toggleGroupSelect(group)
-            else if (primary.file_url) setViewerUrl(primary.file_url)
+            if (selectMode) return toggleGroupSelect(group)
+            if (primary.file_url) return setViewerUrl(primary.file_url)
+            if (primary.gmail_message_id) return openEmailInWeb(primary.gmail_message_id)
           }}
         >
           <div className="flex items-start gap-3">
@@ -932,21 +993,31 @@ export default function DocumentsPage() {
                 {primary.valid_from && <span>מ-{formatDateShort(primary.valid_from)}</span>}
                 {primary.valid_until && <span>עד {formatDateShort(primary.valid_until)}</span>}
               </div>
-              {primary.file_type === 'gmail' && (
-                <p className="text-[10px] text-orange-500 mt-1 flex items-center gap-1">
-                  <Mail className="w-3 h-3" /> Gmail
-                </p>
-              )}
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {primary.file_url && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setViewerUrl(primary.file_url!) }}
+                    className="inline-flex items-center gap-1 bg-primary/10 text-primary text-[10px] font-semibold px-2 py-1 rounded-full active:scale-95 transition-transform hover:bg-primary/20">
+                    <ExternalLink className="w-3 h-3" /> צפה במסמך
+                  </button>
+                )}
+                {primary.gmail_message_id && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openEmailInWeb(primary.gmail_message_id) }}
+                    className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded-full active:scale-95 transition-transform hover:bg-orange-100">
+                    <Mail className="w-3 h-3" /> פתח מייל
+                  </button>
+                )}
+              </div>
             </div>
 
             {!selectMode && (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleDelete(primary.id) }}
-                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium active:scale-95 transition-all flex-shrink-0 ${
-                  pendingDeleteId === primary.id ? 'bg-red-500 text-white' : 'text-gray-300 hover:text-red-400'
-                }`}>
-                <Trash2 className="w-4 h-4" />
-                {pendingDeleteId === primary.id && <span>מחק?</span>}
+                aria-label={`מחק את ${primary.name}`}
+                className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400 flex-shrink-0">
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -1018,22 +1089,29 @@ export default function DocumentsPage() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {doc.file_type === 'gmail' && <Mail className="w-3 h-3 text-orange-400" />}
                         {doc.file_url && (
                           <button
                             onClick={() => setViewerUrl(doc.file_url!)}
-                            className="text-primary active:scale-95 p-1">
+                            title="צפה במסמך"
+                            className="text-primary active:scale-95 p-1 rounded hover:bg-primary/10">
                             <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {doc.gmail_message_id && (
+                          <button
+                            onClick={() => openEmailInWeb(doc.gmail_message_id)}
+                            title="פתח מייל מקורי"
+                            className="text-orange-500 active:scale-95 p-1 rounded hover:bg-orange-50">
+                            <Mail className="w-3.5 h-3.5" />
                           </button>
                         )}
                         {!selectMode && (
                           <button
+                            type="button"
                             onClick={() => handleDelete(doc.id)}
-                            className={`flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] font-medium active:scale-95 transition-all ${
-                              pendingDeleteId === doc.id ? 'bg-red-500 text-white' : 'text-gray-300 hover:text-red-400'
-                            }`}>
-                            <Trash2 className="w-3 h-3" />
-                            {pendingDeleteId === doc.id && <span>מחק?</span>}
+                            aria-label={`מחק את ${doc.name}`}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400">
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -1138,7 +1216,7 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="space-y-4 pb-32" dir={dir} onClick={() => pendingDeleteId && setPendingDeleteId(null)}>
+    <div className="space-y-4 pb-32" dir={dir}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
@@ -1207,7 +1285,7 @@ export default function DocumentsPage() {
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {[{ id: 'all', name: 'כולם' }, ...travelers].map(t => (
-            <button key={t.id} onClick={() => setFilterTraveler(filterTraveler === t.id ? null : t.id as TravelerId)}
+            <button key={t.id} onClick={() => setFilterTraveler(filterTraveler === t.id ? null : t.id)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-2xl text-xs font-medium active:scale-95 transition-all ${filterTraveler === t.id ? 'text-white' : 'bg-white shadow-sm text-gray-500'}`}
               style={filterTraveler === t.id ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}>
               {t.name}
@@ -1284,9 +1362,13 @@ export default function DocumentsPage() {
               <button onClick={handleExport} className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-xl px-4 py-2.5 text-sm font-semibold active:scale-95">
                 <Download className="w-4 h-4" /> ייצוא
               </button>
-              <button onClick={handleBulkDelete} disabled={bulkDeleting}
-                className="flex items-center gap-1.5 bg-red-500 text-white rounded-xl px-4 py-2.5 text-sm font-semibold active:scale-95 disabled:opacity-50">
-                <Trash2 className="w-4 h-4" /> {bulkDeleting ? 'מוחק...' : 'מחק'}
+              <button
+                type="button"
+                onClick={requestBulkDelete}
+                disabled={bulkDeleting}
+                aria-label={`מחק ${selectedIds.size} מסמכים שנבחרו`}
+                className="flex items-center gap-1.5 bg-red-500 text-white rounded-xl px-4 py-3 min-h-[44px] text-sm font-semibold active:scale-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400">
+                <Trash2 className="w-4 h-4" aria-hidden="true" /> {bulkDeleting ? 'מוחק…' : 'מחק'}
               </button>
             </div>
           </motion.div>
@@ -1294,6 +1376,34 @@ export default function DocumentsPage() {
       </AnimatePresence>
 
       <DocumentViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
+
+      <ConfirmDialog
+        open={showBulkConfirm}
+        title={`למחוק ${selectedIds.size} מסמכים?`}
+        description="פעולה זו אינה הפיכה. הקבצים יוסרו מהחשבון שלך."
+        confirmLabel={`מחק ${selectedIds.size} מסמכים`}
+        cancelLabel="ביטול"
+        variant="danger"
+        loading={bulkDeleting}
+        onConfirm={handleBulkDelete}
+        onCancel={() => !bulkDeleting && setShowBulkConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={!!deletingDoc}
+        title="למחוק את המסמך?"
+        description={
+          deletingDoc
+            ? `"${deletingDoc.name}" יוסר לצמיתות. לא ניתן לשחזר.`
+            : undefined
+        }
+        confirmLabel="מחק לצמיתות"
+        cancelLabel="ביטול"
+        variant="danger"
+        loading={deletingSingle}
+        onConfirm={handleConfirmSingleDelete}
+        onCancel={() => !deletingSingle && setDeletingDoc(null)}
+      />
     </div>
   )
 }

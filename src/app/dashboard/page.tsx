@@ -6,12 +6,13 @@ import {
   Plane, TrendingUp, CalendarDays, Wallet, Plus,
   ScanLine, FolderOpen, MoreHorizontal, ArrowLeftRight,
   ChevronLeft, ChevronRight, Smartphone, ShieldCheck,
-  Building2, Car, Calendar, Clock, Cloud,
+  Building2, Car, Calendar, Clock,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, getDaysRemaining, getTripDays } from '@/lib/utils'
+import { getDestinationCity } from '@/lib/destinations'
 import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document as TripDoc } from '@/types'
 import { DocEventIconBadge } from '@/lib/iconConfig'
 import { useTrip } from '@/contexts/TripContext'
@@ -19,6 +20,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import GmailScanButton from '@/components/GmailScanButton'
 import CurrencySelector from '@/components/CurrencySelector'
+import WeatherWidget from '@/components/WeatherWidget'
+import { DashboardSkeleton } from '@/components/ui/Skeleton'
 
 // ── Upcoming event extracted from documents ────────────────────────────────────
 interface UpcomingEvent {
@@ -116,7 +119,6 @@ export default function DashboardPage() {
   const [loading, setLoading]           = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('ILS')
   const [showChart, setShowChart]       = useState(false)
-  const [miniWeather, setMiniWeather]   = useState<{ temp: number; emoji: string; city: string; desc: string } | null>(null)
 
   const fetchExpenses = useCallback(async () => {
     if (!currentTrip) { setExpenses([]); setDocuments([]); setLoading(false); return }
@@ -135,29 +137,6 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
 
-  // Fetch mini weather widget for the trip's main city
-  useEffect(() => {
-    if (!currentTrip?.destination) return
-    const city = currentTrip.destination.split(/[,، ]/)[0].trim() || 'Bangkok'
-    const WMO_EMOJI: Record<string, string> = {
-      '0': '☀️', '1': '🌤', '2': '⛅', '3': '☁️',
-      '45': '🌫', '48': '🌫',
-      '51': '🌦', '53': '🌦', '55': '🌧',
-      '61': '🌧', '63': '🌧', '65': '🌧',
-      '71': '❄️', '73': '❄️', '75': '❄️',
-      '80': '⛈', '81': '⛈', '82': '⛈',
-      '95': '⛈', '96': '⛈', '99': '⛈',
-    }
-    fetch(`/api/weather?city=${encodeURIComponent(city)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data?.current) return
-        const code = String(data.current.weatherCode ?? 0)
-        const emoji = WMO_EMOJI[code] ?? '🌡️'
-        setMiniWeather({ temp: Math.round(data.current.temperature), emoji, city: data.city, desc: data.current.weatherCode <= 2 ? 'שמיים בהירים' : data.current.weatherCode <= 3 ? 'מעונן חלקית' : data.current.weatherCode <= 48 ? 'ערפל' : data.current.weatherCode <= 67 ? 'גשם' : data.current.weatherCode <= 77 ? 'שלג' : 'סופה' })
-      })
-      .catch(() => {})
-  }, [currentTrip?.destination])
 
   const totalIls = expenses.reduce((sum, e) => sum + (e.amount_ils || 0), 0)
 
@@ -196,11 +175,10 @@ export default function DashboardPage() {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading || tripsLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
-        <div className="w-10 h-10 rounded-full animate-spin"
-          style={{ border: '3px solid rgba(108,71,255,0.15)', borderTopColor: '#6C47FF' }} />
-        <p className="text-sm text-gray-400 font-medium">טוען...</p>
-      </div>
+      <>
+        <span className="sr-only" role="status" aria-live="polite">טוען את הדשבורד…</span>
+        <DashboardSkeleton />
+      </>
     )
   }
 
@@ -401,16 +379,11 @@ export default function DashboardPage() {
             </motion.div>
           ))}
           {/* Weather mini-widget */}
-          {miniWeather && (
-            <Link href="/weather"
-              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl flex-shrink-0 active:scale-95 transition-all"
-              style={{ background: '#EFF6FF' }}>
-              <span className="text-xl leading-none">{miniWeather.emoji}</span>
-              <div>
-                <p className="text-[10px] text-gray-400 font-medium">{miniWeather.city}</p>
-                <p className="text-sm font-bold text-gray-800 leading-tight">{miniWeather.temp}°C</p>
-              </div>
-            </Link>
+          {currentTrip?.destination && (
+            <WeatherWidget
+              city={getDestinationCity(currentTrip.destination)}
+              className="flex-shrink-0"
+            />
           )}
         </div>
       </div>

@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { ParsedBooking } from '@/lib/emailParser'
+import { buildDedupKey, findDuplicate, isDedupViolation, dedupReasonLabel } from '@/lib/documentDedup'
 
 function adminClient() {
   return createClient(
@@ -99,27 +100,64 @@ export async function POST(req: NextRequest) {
 
   const gmidKey = ingest.gmail_message_id ? `GMID:${ingest.gmail_message_id}` : `INGEST:${ingestId}`
 
+  // Dedup — check before insert
+  const ceDocType    = docTypeMap[parsedBooking.booking_type] || 'other'
+  const ceBookingRef = parsedBooking.confirmation_number !== 'N/A'
+    ? parsedBooking.confirmation_number : null
+  const ceValidFrom  = parsedBooking.check_in || parsedBooking.departure_date || null
+  const ceDedupKey   = buildDedupKey({
+    doc_type:      ceDocType,
+    booking_ref:   ceBookingRef,
+    traveler_id:   null,
+    valid_from:    ceValidFrom,
+    name:          baseTitle,
+    flight_number: parsedBooking.flight_number || null,
+  })
+
+  const ceExisting = await findDuplicate(supabase, tripId, {
+    dedup_key:        ceDedupKey,
+    gmail_message_id: ingest.gmail_message_id as string | null,
+  })
+  if (ceExisting) {
+    // Already exists — mark ingest processed, return existing doc
+    await supabase
+      .from('email_ingests')
+      .update({ status: 'processed' })
+      .eq('id', ingestId)
+    return NextResponse.json({
+      ok:      true,
+      action:  'skipped',
+      reason:  dedupReasonLabel(ceExisting.reason),
+      doc:     { id: ceExisting.id, name: ceExisting.name, doc_type: ceDocType },
+    })
+  }
+
   // Create Document record (metadata-only, no file)
   const { data: docRecord, error: docError } = await supabase
     .from('documents')
     .insert({
-      trip_id:        tripId,
-      name:           baseTitle,
-      doc_type:       docTypeMap[parsedBooking.booking_type] || 'other',
-      file_type:      'gmail',
-      file_url:       null,
-      booking_ref:    parsedBooking.confirmation_number !== 'N/A'
-                        ? parsedBooking.confirmation_number : null,
-      valid_from:     parsedBooking.check_in || parsedBooking.departure_date || null,
-      valid_until:    parsedBooking.check_out || parsedBooking.return_date   || null,
-      flight_number:  parsedBooking.flight_number || null,
-      notes:          `${gmidKey}\nאושר ידנית מ-Gmail\nשולח: ${ingest.from_address}\n${parsedBooking.summary || ''}`,
-      extracted_data: parsedBooking as unknown as Record<string, unknown>,
+      trip_id:          tripId,
+      name:             baseTitle,
+      doc_type:         ceDocType,
+      file_type:        'gmail',
+      file_url:         null,
+      booking_ref:      ceBookingRef,
+      valid_from:       ceValidFrom,
+      valid_until:      parsedBooking.check_out || parsedBooking.return_date || null,
+      flight_number:    parsedBooking.flight_number || null,
+      notes:            `${gmidKey}\nאושר ידנית מ-Gmail\nשולח: ${ingest.from_address}\n${parsedBooking.summary || ''}`,
+      extracted_data:   parsedBooking as unknown as Record<string, unknown>,
+      gmail_message_id: (ingest.gmail_message_id as string | null) || null,
+      dedup_key:        ceDedupKey,
     })
     .select('id, name, doc_type')
     .single()
 
   if (docError || !docRecord) {
+    if (isDedupViolation(docError)) {
+      await supabase.from('email_ingests').update({ status: 'processed' }).eq('id', ingestId)
+      return NextResponse.json({ ok: true, action: 'skipped', reason: 'כבר קיים' })
+    }
     const errMsg = docError?.message || 'שגיאה ביצירת מסמך'
     console.error('[confirm-email] Document insert error:', errMsg)
     return NextResponse.json({ error: errMsg }, { status: 500 })

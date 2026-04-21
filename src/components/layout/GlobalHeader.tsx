@@ -8,10 +8,19 @@ import { Lang } from '@/lib/i18n'
 // Pages where the global header should NOT appear
 const HIDDEN_PATHS = ['/auth/login', '/auth/signup', '/onboarding']
 
+const LANG_META: Record<Lang, { flag: string; name: string; next: Lang }> = {
+  he: { flag: '🇮🇱', name: 'עברית',  next: 'en' },
+  en: { flag: '🇺🇸', name: 'English', next: 'es' },
+  es: { flag: '🇪🇸', name: 'Español', next: 'he' },
+}
+
 export default function GlobalHeader() {
   const pathname = usePathname()
   const { lang, setLang } = useLanguage()
   if (HIDDEN_PATHS.includes(pathname)) return null
+
+  const meta = LANG_META[lang]
+  const nextMeta = LANG_META[meta.next]
 
   return (
     <div
@@ -20,16 +29,12 @@ export default function GlobalHeader() {
     >
       {/* Language quick-switch */}
       <button
-        onClick={() => {
-          const cycle: Lang[] = ['he', 'en', 'es']
-          const current = cycle.indexOf(lang)
-          setLang(cycle[(current + 1) % cycle.length])
-        }}
-        className="w-8 h-8 rounded-xl bg-white/80 flex items-center justify-center text-sm font-bold border border-gray-200 active:scale-90 transition-all"
-        title="Change language"
-        style={{ fontSize: '12px' }}
+        type="button"
+        onClick={() => setLang(meta.next)}
+        aria-label={`שפה נוכחית: ${meta.name}. החלף ל${nextMeta.name}`}
+        className="w-11 h-11 rounded-2xl bg-white/85 flex items-center justify-center text-base font-bold border border-gray-200/80 active:scale-90 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.06)]"
       >
-        {lang === 'he' ? '🇮🇱' : lang === 'en' ? '🇺🇸' : '🇪🇸'}
+        <span aria-hidden="true">{meta.flag}</span>
       </button>
       <HamburgerMenu />
     </div>

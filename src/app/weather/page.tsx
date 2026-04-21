@@ -146,7 +146,9 @@ export default function WeatherPage() {
   const [searching,   setSearching]   = useState(false)
   const [error,       setError]       = useState<string | null>(null)
 
-  const defaultCity = currentTrip?.destination?.split(' ')[0] || 'Bangkok'
+  const defaultCity = currentTrip?.destination
+    ? currentTrip.destination.split(/[,،]/)[0].trim()
+    : 'Bangkok'
 
   const fetchWeather = useCallback(async (target?: string) => {
     const q = target || city || defaultCity
@@ -183,14 +185,23 @@ export default function WeatherPage() {
       <div className="sticky top-0 z-20 pt-safe bg-black/10 backdrop-blur-md border-b border-white/10"
            style={{ paddingTop: 'max(env(safe-area-inset-top,0px),12px)' }}>
         <div className="flex items-center gap-3 px-4 pb-3">
-          <Link href="/dashboard"
-            className="p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all">
-            <ChevronLeft className="w-5 h-5" />
+          <Link
+            href="/dashboard"
+            aria-label="חזרה לדשבורד"
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+          >
+            <ChevronLeft className="w-5 h-5 rtl:rotate-180" aria-hidden="true" />
           </Link>
           <h1 className="text-base font-semibold flex-1 text-center">מזג אוויר</h1>
-          <button onClick={() => fetchWeather()} disabled={loading}
-            className="p-2 rounded-xl hover:bg-white/10 active:scale-95 transition-all">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin opacity-50' : ''}`} />
+          <button
+            type="button"
+            onClick={() => fetchWeather()}
+            disabled={loading}
+            aria-label={loading ? 'מרענן…' : 'רענן מזג אוויר'}
+            aria-busy={loading || undefined}
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin opacity-50' : ''}`} aria-hidden="true" />
           </button>
         </div>
 

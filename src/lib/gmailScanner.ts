@@ -40,6 +40,12 @@ import {
   TripContext,
 } from './emailParser'
 import { matchTripToBooking, TripRecord } from './tripMatcher'
+import {
+  idempotencyKey,
+  buildExpenseFingerprint,
+  buildDocumentFingerprint,
+} from './dedup'
+import { computeFileHashFromBase64, computeFileHashFromBuffer, buildDedupKey, isDedupViolation } from './documentDedup'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Trip relevance filter
@@ -803,22 +809,37 @@ async function processMessages(
       }
 
       // ── 2. documents record — visible in Documents page ─────────────────
+      const pmDocType      = DOC_TYPE_MAP[parsedBooking.booking_type] || 'other'
+      const pmBookingRef   = parsedBooking.confirmation_number || null
+      const pmValidFrom    = parsedBooking.check_in || parsedBooking.departure_date || null
+      const pmIdemKey      = idempotencyKey('gmail', msg.id)
+      const pmContentHash  = buildDocumentFingerprint({
+        trip_id:     matchedTripId,
+        name:        bookingTitle,
+        doc_type:    pmDocType,
+        booking_ref: pmBookingRef,
+        valid_from:  pmValidFrom,
+        traveler_id: 'all',
+      })
+
       const { data: docRecord, error: docError } = await supabase
         .from('documents')
         .insert({
           trip_id:          matchedTripId,
           user_id:          userId,
           name:             bookingTitle,
-          doc_type:         DOC_TYPE_MAP[parsedBooking.booking_type] || 'other',
+          doc_type:         pmDocType,
           file_url:         null,
           file_type:        'gmail',
           extracted_data:   parsedBooking,
-          booking_ref:      parsedBooking.confirmation_number || null,
+          booking_ref:      pmBookingRef,
           flight_number:    parsedBooking.flight_number || null,
-          valid_from:       parsedBooking.check_in || parsedBooking.departure_date || null,
+          valid_from:       pmValidFrom,
           valid_until:      parsedBooking.check_out || parsedBooking.return_date || null,
           notes:            `${gmidKey}\nמ: ${msg.from}\nתאריך: ${msg.date}`,
-          gmail_message_id: msg.id,  // migration 013 — DB-level dedup
+          gmail_message_id: msg.id,           // legacy (migration 013)
+          idempotency_key:  pmIdemKey,        // migration 017
+          content_hash:     pmContentHash,    // migration 017
         })
         .select('id')
         .single()
@@ -833,28 +854,41 @@ async function processMessages(
       }
 
       // ── 3. expenses record — visible in Expenses page ───────────────────
+      const expenseAmount = parsedBooking.amount || 0
+      const expenseDate   =
+        parsedBooking.check_in ||
+        parsedBooking.departure_date ||
+        new Date().toISOString().split('T')[0]
+      const expenseHash = buildExpenseFingerprint(
+        matchedTripId, expenseAmount, expenseDate, bookingTitle,
+      )
       const { data: expense, error: expenseError } = await supabase
         .from('expenses')
         .insert({
-          trip_id:      matchedTripId,
-          title:        bookingTitle,
-          amount:       parsedBooking.amount || 0,
-          currency:     parsedBooking.currency || 'ILS',
-          amount_ils:   parsedBooking.amount || 0,
-          category:     CATEGORY_MAP[parsedBooking.booking_type] || 'other',
-          expense_date:
-            parsedBooking.check_in ||
-            parsedBooking.departure_date ||
-            new Date().toISOString().split('T')[0],
-          notes:        `${gmidKey}\nמספר אישור: ${parsedBooking.confirmation_number || '—'}\nמ: ${msg.from}`,
-          source:       'scan',
-          is_paid:      true,
+          trip_id:         matchedTripId,
+          title:           bookingTitle,
+          amount:          expenseAmount,
+          currency:        parsedBooking.currency || 'ILS',
+          amount_ils:      expenseAmount,
+          category:        CATEGORY_MAP[parsedBooking.booking_type] || 'other',
+          expense_date:    expenseDate,
+          notes:           `${gmidKey}\nמספר אישור: ${parsedBooking.confirmation_number || '—'}\nמ: ${msg.from}`,
+          source:          'scan',
+          is_paid:         true,
+          content_hash:    expenseHash,   // logical fingerprint (unique)
+          idempotency_key: pmIdemKey,     // "gmail:<id>" — hard backstop per trip
         })
         .select('id')
         .single()
 
       if (expenseError) {
-        console.error('[processMessages] Expense insert error:', expenseError.message)
+        // 23505 = unique violation on content_hash → same expense already exists.
+        // Safe to ignore (the doc record already links the user back to it).
+        if (expenseError.code !== '23505') {
+          console.error('[processMessages] Expense insert error:', expenseError.message)
+        } else {
+          console.log(`[processMessages] dup expense skipped (DB unique): GMID=${msg.id}`)
+        }
       }
 
       // ── Link expense + document to ingest record ────────────────────────
@@ -1753,14 +1787,17 @@ export async function scanTripGmail(
 
           // ── Upload the file once (PDF or HTML snapshot) ───────────────────
           // The same file is reused across all per-passenger documents
-          let sharedFileUrl: string | null = null
-          let sharedFileType = 'gmail'
+          let sharedFileUrl:     string | null = null
+          let sharedFileType                    = 'gmail'
+          let sharedContentHash: string | null = null
 
           if (pdfBase64) {
             try {
               const pdfName  = pdfFilename || `booking-${safeId}.pdf`
               const filePath = `${tripId}/${pdfName}`
               const pdfBuf   = Buffer.from(pdfBase64, 'base64')
+              try { sharedContentHash = await computeFileHashFromBase64(pdfBase64) }
+              catch (hEx) { console.warn('[gmailScanner/trip] PDF hash failed:', hEx) }
               const { error: pdfErr } = await supabase.storage
                 .from('documents')
                 .upload(filePath, pdfBuf, { contentType: 'application/pdf', upsert: true })
@@ -1780,6 +1817,8 @@ export async function scanTripGmail(
               const filePath = `${tripId}/email-${safeId}.html`
               const htmlFile = buildEmailHtml(rawHtml, baseTitle || msg.subject)
               const blob     = Buffer.from(htmlFile, 'utf-8')
+              try { sharedContentHash = await computeFileHashFromBuffer(blob) }
+              catch (hEx) { console.warn('[gmailScanner/trip] HTML hash failed:', hEx) }
               const { error: uploadErr } = await supabase.storage
                 .from('documents')
                 .upload(filePath, blob, { contentType: 'text/html; charset=utf-8', upsert: true })
@@ -1839,23 +1878,40 @@ export async function scanTripGmail(
               ? `\nמושב: ${parsedBooking.seat_number}${parsedBooking.gate ? ` | שער: ${parsedBooking.gate}` : ''}`
               : ''
 
+            const docDocType    = docTypeMap[parsedBooking.booking_type] || 'other'
+            const docBookingRef = parsedBooking.confirmation_number !== 'N/A'
+              ? parsedBooking.confirmation_number : null
+            const docValidFrom  = parsedBooking.check_in || parsedBooking.departure_date || null
+            // Scope idempotency by passenger so flights with multiple passengers
+            // create one row per passenger — all share the Gmail message.
+            const docIdemKey     = idempotencyKey('gmail', passenger ? `${msg.id}:${passenger}` : msg.id)
+            const docContentHash = buildDocumentFingerprint({
+              trip_id:     tripId,
+              name:        bookingTitle,
+              doc_type:    docDocType,
+              booking_ref: docBookingRef,
+              valid_from:  docValidFrom,
+              traveler_id: 'all',
+            })
+
             const { data: docRecord, error: docError } = await supabase
               .from('documents')
               .insert({
                 trip_id:          tripId,
                 user_id:          userId,
                 name:             bookingTitle,
-                doc_type:         docTypeMap[parsedBooking.booking_type] || 'other',
+                doc_type:         docDocType,
                 file_type:        sharedFileType,
                 file_url:         sharedFileUrl,
-                booking_ref:      parsedBooking.confirmation_number !== 'N/A'
-                                    ? parsedBooking.confirmation_number : null,
-                valid_from:       parsedBooking.check_in || parsedBooking.departure_date || null,
+                booking_ref:      docBookingRef,
+                valid_from:       docValidFrom,
                 valid_until:      parsedBooking.check_out || parsedBooking.return_date || null,
                 flight_number:    parsedBooking.flight_number || null,
                 notes:            `GMID:${msg.id}\nייובא מ-Gmail\nשולח: ${msg.from}${passengerNote}${boardingNote}\n${parsedBooking.summary || ''}`,
                 extracted_data:   parsedBooking as unknown as Record<string, unknown>,
-                gmail_message_id: msg.id,  // migration 013 — DB-level dedup
+                gmail_message_id: msg.id,            // legacy (migration 013)
+                idempotency_key:  docIdemKey,        // migration 017 — unified key
+                content_hash:     docContentHash,    // logical fingerprint
               })
               .select('id')
               .single()

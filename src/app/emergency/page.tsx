@@ -5,6 +5,7 @@ import { Phone, MapPin, Shield, Heart, AlertTriangle, ChevronLeft, Globe, Buildi
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useTrip } from '@/contexts/TripContext'
+import { getDestinationConfig, getDestinationList } from '@/lib/destinations'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -866,15 +867,62 @@ function getContactStyle(color: string): { icon: ElementType; bg: string } {
   return { icon: Phone, bg: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }
 }
 
+function buildFromDestinationConfig(destination: string): CountryData | null {
+  // Try exact match first
+  const cfg = getDestinationConfig(destination)
+  if (cfg) {
+    return {
+      nameHe: cfg.countryHe,
+      flag: getDestinationList().find(d => d.id === destination || d.nameHe === cfg.countryHe)?.flag ?? '🌍',
+      primaryNumber: cfg.emergencyPolice,
+      primaryLabel: 'משטרה',
+      numbers: [
+        { label: 'משטרה',    number: cfg.emergencyPolice,   icon: '🚔', color: 'bg-blue-500' },
+        { label: 'אמבולנס', number: cfg.emergencyAmbulance, icon: '🚑', color: 'bg-red-500' },
+        { label: 'כיבוי אש', number: cfg.emergencyFire,    icon: '🔥', color: 'bg-orange-500' },
+        ...(cfg.touristPolice ? [{ label: 'משטרת תיירות', number: cfg.touristPolice, icon: 'ℹ️', color: 'bg-green-500' }] : []),
+      ],
+      embassy: {
+        type: 'שגרירות' as const,
+        name: `שגרירות ישראל ב${cfg.countryHe}`,
+        city: cfg.countryHe,
+        address: 'ראה אתר משרד החוץ: mfa.gov.il',
+        phone: cfg.embassyPhone ?? '+972-2-530-3111',
+        emergency: '+972-2-530-3111',
+        hours: 'א–ה 09:00–12:30',
+      },
+    }
+  }
+  return null
+}
+
 function detectCountry(destination: string): CountryData {
   if (!destination) return GENERIC_DATA
   const lower = destination.toLowerCase().trim()
-  if (DESTINATION_MAP[lower]) return EMERGENCY_DATA[DESTINATION_MAP[lower]] ?? GENERIC_DATA
+
+  // 1. Exact key match in DESTINATION_MAP
+  if (DESTINATION_MAP[lower]) {
+    return EMERGENCY_DATA[DESTINATION_MAP[lower]] ?? GENERIC_DATA
+  }
+
+  // 2. Partial key match in DESTINATION_MAP
   for (const [key, code] of Object.entries(DESTINATION_MAP)) {
     if (lower.includes(key) || key.includes(lower)) {
       return EMERGENCY_DATA[code] ?? GENERIC_DATA
     }
   }
+
+  // 3. Fallback: try destinations.ts config for any country
+  // destination could be "Japan" or "יפן" — try the original string and the parts
+  const parts = destination.split(/[,،\s]+/).filter(Boolean)
+  for (const part of parts) {
+    const fromConfig = buildFromDestinationConfig(part)
+    if (fromConfig) return fromConfig
+  }
+  // Try the full destination string (e.g., "Thailand" key)
+  const fromConfigFull = buildFromDestinationConfig(destination)
+  if (fromConfigFull) return fromConfigFull
+
   return GENERIC_DATA
 }
 
@@ -893,53 +941,68 @@ export default function EmergencyPage() {
     <div className="space-y-4 pb-8">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/dashboard" className="active:scale-95 transition-transform">
-          <ChevronLeft className="w-5 h-5 text-gray-500" />
+        <Link
+          href="/dashboard"
+          aria-label="חזרה לדשבורד"
+          className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
         </Link>
         <div>
           <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>מצב חירום</h1>
           {currentTrip && (
-            <p className="text-xs text-gray-400">{countryData.flag} {currentTrip.name} · {currentTrip.destination}</p>
+            <p className="text-xs text-gray-500"><span aria-hidden="true">{countryData.flag}</span> {currentTrip.name} · {currentTrip.destination}</p>
           )}
         </div>
       </div>
 
       {/* SOS Button */}
-      <motion.div
+      <motion.section
+        aria-labelledby="sos-heading"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="rounded-3xl p-6 text-center text-white shadow-xl"
         style={{ background: 'linear-gradient(135deg, #EF4444 0%, #B91C1C 100%)' }}>
-        <p className="text-5xl mb-2">{countryData.flag}</p>
-        <p className="font-black text-xl mb-1">חירום ב{countryData.nameHe}?</p>
-        <p className="text-sm opacity-80 mb-5">לחץ להתקשרות מיידית</p>
-        <button onClick={() => handleCall(countryData.primaryNumber)}
-          className="bg-white text-red-600 rounded-2xl px-8 py-4 font-black text-3xl active:scale-95 transition-transform shadow-lg tracking-widest flex items-center gap-3 mx-auto">
-          <Phone className="w-7 h-7" />
-          {countryData.primaryNumber}
-        </button>
-        <p className="text-xs opacity-70 mt-3 font-medium">{countryData.primaryLabel}</p>
-      </motion.div>
+        <p className="text-5xl mb-2" aria-hidden="true">{countryData.flag}</p>
+        <h2 id="sos-heading" className="font-black text-xl mb-1">חירום ב{countryData.nameHe}?</h2>
+        <p className="text-sm text-white/90 mb-5">לחץ להתקשרות מיידית</p>
+        <a
+          href={`tel:${countryData.primaryNumber.replace(/[^+\d]/g, '')}`}
+          aria-label={`התקשר ל${countryData.primaryLabel} ב${countryData.nameHe} — ${countryData.primaryNumber}`}
+          className="bg-white text-red-600 rounded-2xl px-8 py-4 min-h-[64px] font-black text-3xl active:scale-95 transition-transform shadow-lg tracking-widest inline-flex items-center gap-3 mx-auto focus-visible:ring-4 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-red-500"
+        >
+          <Phone className="w-7 h-7" aria-hidden="true" />
+          <span dir="ltr">{countryData.primaryNumber}</span>
+        </a>
+        <p className="text-xs text-white/85 mt-3 font-medium">{countryData.primaryLabel}</p>
+      </motion.section>
 
       {/* Emergency Numbers Grid */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">מספרי חירום ב{countryData.nameHe}</h3>
-        <div className="grid grid-cols-2 gap-2">
+      <section aria-labelledby="emergency-numbers-heading" className="space-y-2">
+        <h2 id="emergency-numbers-heading" className="text-xs font-bold text-gray-500 uppercase tracking-wider px-1">
+          מספרי חירום ב{countryData.nameHe}
+        </h2>
+        <ul className="grid grid-cols-2 gap-2" role="list">
           {countryData.numbers.map((contact) => {
             const { icon: ContactIcon, bg } = getContactStyle(contact.color)
             return (
-              <button key={contact.number + contact.label} onClick={() => handleCall(contact.number)}
-                className="bg-white rounded-2xl p-4 shadow-sm text-center active:scale-[0.97] transition-all border border-gray-100">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center mx-auto mb-2" style={{ background: bg }}>
-                  <ContactIcon className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-[11px] font-medium text-gray-500 mb-0.5">{contact.label}</p>
-                <p className="text-2xl font-black text-gray-900 tracking-wide" dir="ltr">{contact.number}</p>
-              </button>
+              <li key={contact.number + contact.label}>
+                <a
+                  href={`tel:${contact.number.replace(/[^+\d]/g, '')}`}
+                  aria-label={`התקשר ל${contact.label} — ${contact.number}`}
+                  className="bg-white rounded-2xl p-4 min-h-[120px] shadow-sm text-center active:scale-[0.97] transition-all border border-gray-100 flex flex-col items-center justify-center focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center mx-auto mb-2" style={{ background: bg }} aria-hidden="true">
+                    <ContactIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <p className="text-[11px] font-medium text-gray-600 mb-0.5">{contact.label}</p>
+                  <p className="text-2xl font-black text-gray-900 tracking-wide" dir="ltr">{contact.number}</p>
+                </a>
+              </li>
             )
           })}
-        </div>
-      </div>
+        </ul>
+      </section>
 
       {/* Embassy / Consulate — prominent card */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
@@ -977,18 +1040,22 @@ export default function EmergencyPage() {
 
         {/* Call Buttons */}
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => handleCall(countryData.embassy.phone)}
-            className="text-white rounded-2xl py-3 text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5"
+          <a
+            href={`tel:${countryData.embassy.phone.replace(/[^+\d]/g, '')}`}
+            aria-label={`התקשר למרכזיית השגרירות — ${countryData.embassy.phone}`}
+            className="text-white rounded-2xl py-3 min-h-[48px] text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
             style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
-            <Phone className="w-3.5 h-3.5" />
+            <Phone className="w-3.5 h-3.5" aria-hidden="true" />
             <span>מרכזייה</span>
-          </button>
-          <button onClick={() => handleCall(countryData.embassy.emergency)}
-            className="text-white rounded-2xl py-3 text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5"
+          </a>
+          <a
+            href={`tel:${countryData.embassy.emergency.replace(/[^+\d]/g, '')}`}
+            aria-label={`התקשר למוקד חירום 24/7 של השגרירות — ${countryData.embassy.emergency}`}
+            className="text-white rounded-2xl py-3 min-h-[48px] text-xs font-bold active:scale-95 flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400"
             style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)' }}>
-            <AlertTriangle className="w-3.5 h-3.5" />
+            <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
             <span>חירום 24/7</span>
-          </button>
+          </a>
         </div>
 
         {/* Phone numbers shown */}
@@ -1007,12 +1074,14 @@ export default function EmergencyPage() {
           <p className="text-sm font-bold text-gray-800">מוקד חירום — משרד החוץ הישראלי</p>
         </div>
         <p className="text-[10px] text-gray-400">זמין 24/7 לכל אזרח ישראלי בחו&quot;ל</p>
-        <button onClick={() => handleCall('+97225303111')}
-          className="w-full text-white rounded-2xl py-3 text-sm font-bold active:scale-95 flex items-center justify-center gap-2"
+        <a
+          href="tel:+97225303111"
+          aria-label="התקשר למוקד חירום של משרד החוץ הישראלי בישראל"
+          className="w-full text-white rounded-2xl py-3 min-h-[48px] text-sm font-bold active:scale-95 flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
           style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
-          <Phone className="w-4 h-4" />
-          +972-2-530-3111
-        </button>
+          <Phone className="w-4 h-4" aria-hidden="true" />
+          <span dir="ltr">+972-2-530-3111</span>
+        </a>
         <p className="text-[9px] text-gray-400 text-center">
           ניתן גם לשלוח WhatsApp לאותו מספר
         </p>
@@ -1020,23 +1089,30 @@ export default function EmergencyPage() {
 
       {/* Hospitals */}
       {countryData.hospitals && countryData.hospitals.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">בתי חולים</h3>
-          {countryData.hospitals.map((hospital) => (
-            <button key={hospital.phone} onClick={() => handleCall(hospital.phone)}
-              className="w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.97] transition-all border border-gray-100">
-              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)' }}>
-                <Heart className="w-5 h-5 text-white" />
-              </div>
-              <div className="flex-1 text-right">
-                <p className="text-xs font-bold text-gray-800">{hospital.label}</p>
-                <p className="text-[10px] text-gray-500">{hospital.value}</p>
-                <p className="text-[10px] text-primary font-mono mt-0.5">{hospital.phone}</p>
-              </div>
-              <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-            </button>
-          ))}
-        </div>
+        <section aria-labelledby="hospitals-heading" className="space-y-2">
+          <h2 id="hospitals-heading" className="text-xs font-bold text-gray-500 uppercase tracking-wider px-1">בתי חולים</h2>
+          <ul className="space-y-2" role="list">
+            {countryData.hospitals.map((hospital) => (
+              <li key={hospital.phone}>
+                <a
+                  href={`tel:${hospital.phone.replace(/[^+\d]/g, '')}`}
+                  aria-label={`התקשר ל${hospital.value} ב${hospital.label} — ${hospital.phone}`}
+                  className="w-full bg-white rounded-2xl p-4 min-h-[80px] shadow-sm flex items-center gap-3 active:scale-[0.97] transition-all border border-gray-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
+                >
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)' }} aria-hidden="true">
+                    <Heart className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <p className="text-xs font-bold text-gray-800">{hospital.label}</p>
+                    <p className="text-[10px] text-gray-600">{hospital.value}</p>
+                    <p className="text-[10px] text-primary font-mono mt-0.5" dir="ltr">{hospital.phone}</p>
+                  </div>
+                  <Phone className="w-4 h-4 text-primary flex-shrink-0" aria-hidden="true" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* Unknown country notice */}

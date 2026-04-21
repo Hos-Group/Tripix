@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronDown, ChevronUp, Luggage, RotateCcw, Plus, T
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useTrip } from '@/contexts/TripContext'
+import { getDestinationConfig, getDestinationCity } from '@/lib/destinations'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -521,7 +522,7 @@ export default function PackingPage() {
       setWeatherInfo({ avgMax: 25, avgMin: 18, rainProb: 20, isHot: false, isCold: false, isRainy: false, description: 'מזג אוויר לא זמין', emoji: '⛅', loaded: true, failed: true })
       return
     }
-    const city = currentTrip.destination.split(',')[0].trim()
+    const city = getDestinationCity(currentTrip.destination)
     try {
       const res = await fetch(`/api/weather?city=${encodeURIComponent(city)}`)
       if (!res.ok) throw new Error('failed')
@@ -633,11 +634,33 @@ export default function PackingPage() {
     return detectHasKids(currentTrip.travelers || [], currentTrip.name || '')
   }, [currentTrip])
 
+  // Resolve plug-adapter text for the destination
+  const plugAdapterText = useMemo(() => {
+    if (!currentTrip?.destination) return null
+    // Try city part first, then full string (city → country lookup)
+    const city = getDestinationCity(currentTrip.destination)
+    for (const part of city ? [city, currentTrip.destination] : [currentTrip.destination]) {
+      const cfg = getDestinationConfig(part)
+      if (cfg?.plugType) {
+        if (cfg.plugType === 'C/H') return null  // Israel — no adapter needed
+        return `מתאם חשמל סוג ${cfg.plugType} (${cfg.countryHe})`
+      }
+    }
+    return null
+  }, [currentTrip?.destination])
+
   const categories = useMemo(() => {
-    const base = PACKING_LISTS[tripType] || PACKING_LISTS.general
+    const base = (PACKING_LISTS[tripType] || PACKING_LISTS.general).map(cat => {
+      if (cat.id !== 'electronics' || !plugAdapterText) return cat
+      // Replace the generic adapter item with a destination-specific one
+      const items = cat.items.map(item =>
+        item.startsWith('מתאם חשמל') ? plugAdapterText : item
+      )
+      return { ...cat, items }
+    })
     if (hasKids) return [...base, KIDS_CATEGORY]
     return base
-  }, [tripType, hasKids])
+  }, [tripType, hasKids, plugAdapterText])
 
   // Build full item list: base + custom items
   const allItems = useMemo(() => {
@@ -706,12 +729,21 @@ export default function PackingPage() {
           {/* Header */}
           <div className="flex items-center gap-3">
             {wizardStep === 1 ? (
-              <button onClick={() => setWizardStep(0)} className="active:scale-95 transition-transform p-1">
-                <ChevronLeft className="w-5 h-5 text-gray-500" />
+              <button
+                type="button"
+                onClick={() => setWizardStep(0)}
+                aria-label="חזרה לשלב הקודם"
+                className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
               </button>
             ) : (
-              <Link href="/dashboard" className="active:scale-95 transition-transform p-1">
-                <ChevronLeft className="w-5 h-5 text-gray-500" />
+              <Link
+                href="/dashboard"
+                aria-label="חזרה לדשבורד"
+                className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
               </Link>
             )}
             <h1 className="text-xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>רשימת אריזה</h1>
@@ -824,8 +856,12 @@ export default function PackingPage() {
     <div className="space-y-4 pb-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/dashboard" className="active:scale-95 transition-transform">
-          <ChevronLeft className="w-5 h-5 text-gray-500" />
+        <Link
+          href="/dashboard"
+          aria-label="חזרה לדשבורד"
+          className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
         </Link>
         <h1 className="text-2xl font-black" style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>רשימת אריזה</h1>
       </div>

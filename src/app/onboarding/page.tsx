@@ -72,40 +72,45 @@ export default function OnboardingPage() {
       </div>
 
       {/* Features list */}
-      <div className="px-4 mt-6 space-y-3">
-        <p className="text-center text-sm text-gray-500 font-semibold mb-4">מה תוכל לעשות עם Tripix?</p>
+      <section aria-labelledby="features-heading" className="px-4 mt-6 space-y-3">
+        <h2 id="features-heading" className="text-center text-sm text-gray-600 font-semibold mb-4">
+          מה תוכל לעשות עם Tripix?
+        </h2>
 
-        {FEATURES.map((f, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, x: -24 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.15 + i * 0.09 }}
-            className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4"
-          >
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${f.color}`}>
-              <f.icon className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="font-bold text-sm text-gray-800">{f.title}</p>
-              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{f.desc}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+        <ul className="space-y-3" role="list">
+          {FEATURES.map((f, i) => (
+            <motion.li
+              key={i}
+              initial={{ opacity: 0, x: -24 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 + i * 0.09 }}
+              className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-4"
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${f.color}`} aria-hidden="true">
+                <f.icon className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-gray-800">{f.title}</h3>
+                <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{f.desc}</p>
+              </div>
+            </motion.li>
+          ))}
+        </ul>
+      </section>
 
       {/* CTA */}
       <div className="px-4 mt-8">
         <motion.button
+          type="button"
           onClick={handleStart}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.65 }}
-          className="w-full bg-primary text-white rounded-2xl py-4 font-bold text-lg active:scale-95 transition-transform shadow-lg"
+          className="w-full bg-primary text-white rounded-2xl py-4 min-h-[56px] font-bold text-base active:scale-95 transition-transform shadow-lg focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
         >
-          🚀 בואו נצור טיול ראשון!
+          בואו נצור טיול ראשון
         </motion.button>
-        <p className="text-center text-xs text-gray-400 mt-3">
+        <p className="text-center text-xs text-gray-500 mt-3">
           תוכל תמיד לחזור ולשנות הכל אחר כך
         </p>
       </div>

@@ -29,8 +29,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
   themeColor: '#6C47FF',
 }
@@ -45,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="bg-surface-secondary text-gray-900 antialiased">
+        <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
         <Providers>
           <LayoutWrapper>
             {children}
@@ -54,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             position="top-center"
             toastOptions={{
               duration: 3000,
+              ariaProps: { role: 'status', 'aria-live': 'polite' },
               style: {
                 direction: 'rtl',
                 borderRadius: '14px',

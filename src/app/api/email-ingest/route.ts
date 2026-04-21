@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseBookingEmail, htmlToText } from '@/lib/emailParser'
 import { matchTripToBooking, TripRecord } from '@/lib/tripMatcher'
+import { buildDedupKey, findDuplicate, isDedupViolation } from '@/lib/documentDedup'
 import crypto from 'crypto'
 
 // ── Supabase admin client (bypasses RLS) ──────────────────────────────────────
@@ -311,27 +312,56 @@ export async function POST(req: NextRequest) {
       email.subject.slice(0, 60)
 
     // ── 1. Document record — shows up in Documents page ─────────────────
-    const { data: docRecord, error: docError } = await supabase
-      .from('documents')
-      .insert({
-        trip_id:        matchedTripId,
-        user_id:        userId,
-        name:           bookingTitle,
-        doc_type:       DOC_TYPE_MAP[parsed.booking_type] || 'other',
-        file_url:       null,
-        file_type:      'email',
-        extracted_data: parsed,
-        booking_ref:    parsed.confirmation_number || null,
-        flight_number:  parsed.flight_number || null,
-        valid_from:     parsed.check_in || parsed.departure_date || null,
-        valid_until:    parsed.check_out || parsed.return_date || null,
-        notes:          `מ: ${email.from}\nנושא: ${email.subject}`,
-      })
-      .select('id')
-      .single()
+    const eiDocType    = DOC_TYPE_MAP[parsed.booking_type] || 'other'
+    const eiBookingRef = parsed.confirmation_number || null
+    const eiValidFrom  = parsed.check_in || parsed.departure_date || null
+    const eiDedupKey   = buildDedupKey({
+      doc_type:      eiDocType,
+      booking_ref:   eiBookingRef,
+      traveler_id:   null,
+      valid_from:    eiValidFrom,
+      name:          bookingTitle,
+      flight_number: parsed.flight_number || null,
+    })
 
-    if (docError) {
-      console.error('[email-ingest] Document insert error:', docError.message)
+    const existingDup = await findDuplicate(supabase, matchedTripId, {
+      dedup_key: eiDedupKey,
+    })
+
+    let docRecord: { id: string } | null = null
+    if (existingDup) {
+      console.log(`[email-ingest] skip dup (${existingDup.reason}): "${bookingTitle}"`)
+      docRecord = { id: existingDup.id }
+    } else {
+      const { data, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          trip_id:        matchedTripId,
+          user_id:        userId,
+          name:           bookingTitle,
+          doc_type:       eiDocType,
+          file_url:       null,
+          file_type:      'email',
+          extracted_data: parsed,
+          booking_ref:    eiBookingRef,
+          flight_number:  parsed.flight_number || null,
+          valid_from:     eiValidFrom,
+          valid_until:    parsed.check_out || parsed.return_date || null,
+          notes:          `מ: ${email.from}\nנושא: ${email.subject}`,
+          dedup_key:      eiDedupKey,
+        })
+        .select('id')
+        .single()
+
+      if (docError) {
+        if (isDedupViolation(docError)) {
+          console.log(`[email-ingest] dup insert rejected: "${bookingTitle}"`)
+        } else {
+          console.error('[email-ingest] Document insert error:', docError.message)
+        }
+      } else {
+        docRecord = data
+      }
     }
 
     // ── 2. Expense record — shows up in Expenses page ───────────────────

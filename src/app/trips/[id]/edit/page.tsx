@@ -109,8 +109,12 @@ export default function EditTripPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <div role="status" aria-live="polite" aria-label="טוען עריכת טיול" className="space-y-4 pt-6 px-4">
+        <div className="h-8 w-40 skeleton rounded-xl" />
+        <div className="h-12 w-full skeleton rounded-2xl" />
+        <div className="h-12 w-full skeleton rounded-2xl" />
+        <div className="h-12 w-full skeleton rounded-2xl" />
+        <span className="sr-only">טוען…</span>
       </div>
     )
   }

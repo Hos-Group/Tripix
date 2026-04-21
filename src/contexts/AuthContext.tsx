@@ -36,11 +36,31 @@ const AuthContext = createContext<AuthContextType>({
 
 const PUBLIC_PATHS = ['/auth/login', '/auth/signup', '/']
 
+/**
+ * Check if Supabase has a non-expired session token in localStorage.
+ * Avoids blocking the full page on reload for returning users.
+ */
+function hasStoredSession(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const ref = url.replace(/^https?:\/\//, '').split('.')[0]
+    const raw = localStorage.getItem(`sb-${ref}-auth-token`)
+    if (!raw) return false
+    const data = JSON.parse(raw) as { expires_at?: number }
+    // expires_at is in seconds — accept if not yet expired (or no expiry field)
+    return !data.expires_at || data.expires_at > Date.now() / 1000
+  } catch {
+    return false
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Skip loading screen if a cached session exists — validate async in the background
+  const [loading, setLoading] = useState(() => !hasStoredSession())
   const router = useRouter()
   const pathname = usePathname()
 
@@ -58,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       })
       .catch((err) => {
-        // Network failure — don't hang forever on the loading screen
         console.warn('[AuthContext] getSession failed (network?):', err?.message)
         setLoading(false)
       })
@@ -71,8 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    // Safety timeout: if auth hasn't resolved in 5s, unblock the UI
-    const timeout = setTimeout(() => setLoading(false), 5000)
+    // Reduced safety timeout — 2s is enough; 5s was too long
+    const timeout = setTimeout(() => setLoading(false), 2000)
 
     return () => {
       subscription.unsubscribe()
@@ -99,10 +118,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div
+        role="status"
+        aria-live="polite"
+        aria-label="טוען את Tripix"
+        className="min-h-screen flex items-center justify-center bg-gray-50"
+      >
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-primary mb-2">Tripix</h1>
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <h1
+            className="text-3xl font-black mb-3"
+            style={{
+              background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
+            Tripix
+          </h1>
+          <div
+            className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin mx-auto"
+            aria-hidden="true"
+          />
+          <span className="sr-only">טוען…</span>
         </div>
       </div>
     )

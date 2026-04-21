@@ -5,7 +5,7 @@ export type Category =
 
 export type Currency = 'ILS' | 'USD' | 'THB' | 'EUR' | 'GBP' | 'JPY' | 'AED' | 'SGD' | 'TRY' | 'CHF' | 'AUD' | 'CAD'
 export type DocType = 'passport' | 'flight' | 'hotel' | 'ferry' | 'activity' | 'insurance' | 'visa' | 'other'
-export type TravelerId = 'omer' | 'wife' | 'baby' | 'all'
+export type TravelerId = string
 export type ExpenseSource = 'manual' | 'scan' | 'document' | 'voice'
 
 export interface Trip {
@@ -34,6 +34,7 @@ export interface Expense {
   source: ExpenseSource
   travelers: string[]
   is_paid: boolean
+  content_hash: string | null
   created_at: string
   updated_at: string
 }
@@ -52,6 +53,10 @@ export interface Document {
   valid_until: string | null
   flight_number: string | null
   notes: string | null
+  gmail_message_id: string | null
+  content_hash: string | null
+  dedup_key: string | null
+  idempotency_key: string | null
   created_at: string
 }
 
@@ -115,12 +120,15 @@ export const DOC_TYPE_META: Record<DocType, DocTypeMeta> = {
   other:     { label: 'אחר',           icon: '📄' },
 }
 
-export const TRAVELER_META: Record<TravelerId, string> = {
+/** Legacy display names kept for backward-compat; dynamic trips use trip.travelers[].name */
+export const TRAVELER_META: Record<string, string> = {
   omer: 'אומר',
   wife: 'אשתי',
   baby: 'תינוקת',
   all: 'כולם',
 }
+
+// Note: getTravelerName helper lives in src/lib/travelers.ts
 
 // ── Collaborative Trips ──────────────────────────────────────
 export type TripType = 'personal' | 'bachelor' | 'bachelorette' | 'ski' | 'family' | 'friends' | 'couples' | 'work' | 'other'

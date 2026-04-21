@@ -23,6 +23,11 @@ import {
   ParsedBooking,
 } from './emailParser'
 import { matchTripToBooking, TripRecord } from './tripMatcher'
+import {
+  idempotencyKey,
+  buildDocumentFingerprint,
+  buildExpenseFingerprint,
+} from './dedup'
 
 // ── Token refresh ─────────────────────────────────────────────────────────────
 
@@ -361,25 +366,40 @@ export async function scanUserMicrosoft(
             ferry: 'ferry', train: 'other', other: 'other',
           }
 
-          // ── Insert document ──────────────────────────────────────────────
+          // ── Insert document with unified dedup ───────────────────────────
+          const msDocType      = DOC_TYPE_MAP[parsed.booking_type] || 'other'
+          const msBookingRef   = parsed.confirmation_number || null
+          const msValidFrom    = parsed.check_in || parsed.departure_date || null
+          const msIdemKey      = idempotencyKey('ms', msg.id)
+          const msContentHash  = buildDocumentFingerprint({
+            trip_id:     matchedTripId,
+            name:        bookingTitle,
+            doc_type:    msDocType,
+            booking_ref: msBookingRef,
+            valid_from:  msValidFrom,
+            traveler_id: 'all',
+          })
+
           const { error: docErr } = await supabase.from('documents').insert({
-            trip_id:         matchedTripId,
-            user_id:         userId,
-            name:            bookingTitle,
-            doc_type:        DOC_TYPE_MAP[parsed.booking_type] || 'other',
-            file_url:        null,
-            file_type:       'email',
-            extracted_data:  parsed,
-            booking_ref:     parsed.confirmation_number || null,
-            flight_number:   parsed.flight_number || null,
-            valid_from:      parsed.check_in || parsed.departure_date || null,
-            valid_until:     parsed.check_out || parsed.return_date || null,
-            notes:           `מ: ${fromAddress}\nנושא: ${subject}`,
-            gmail_message_id: `ms_${msg.id}`,   // prefix to distinguish from Gmail IDs
+            trip_id:          matchedTripId,
+            user_id:          userId,
+            name:             bookingTitle,
+            doc_type:         msDocType,
+            file_url:         null,
+            file_type:        'email',
+            extracted_data:   parsed,
+            booking_ref:      msBookingRef,
+            flight_number:    parsed.flight_number || null,
+            valid_from:       msValidFrom,
+            valid_until:      parsed.check_out || parsed.return_date || null,
+            notes:            `מ: ${fromAddress}\nנושא: ${subject}`,
+            gmail_message_id: `ms_${msg.id}`,   // legacy dedup from migration 013
+            idempotency_key:  msIdemKey,        // migration 016
+            content_hash:     msContentHash,    // migration 016
           })
 
           if (docErr) {
-            if (docErr.code === '23505') continue // duplicate — race condition
+            if (docErr.code === '23505') continue // duplicate — expected
             console.error('[microsoftScanner] doc insert error:', docErr.message)
             continue
           }
@@ -390,19 +410,29 @@ export async function scanUserMicrosoft(
             activity: 'activity', tour: 'activity', insurance: 'insurance',
             ferry: 'ferry', train: 'train', other: 'other',
           }
-          await supabase.from('expenses').insert({
-            trip_id:      matchedTripId,
-            user_id:      userId,
-            title:        bookingTitle,
-            amount:       parsed.amount || 0,
-            currency:     parsed.currency || 'ILS',
-            amount_ils:   parsed.amount || 0,
-            category:     CATEGORY_MAP[parsed.booking_type] || 'other',
-            expense_date: parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0],
-            notes:        `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${fromAddress}`,
-            source:       'scan',
-            is_paid:      true,
+          const msExpenseAmount = parsed.amount || 0
+          const msExpenseDate   = parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0]
+          const msExpenseHash   = buildExpenseFingerprint(
+            matchedTripId, msExpenseAmount, msExpenseDate, bookingTitle,
+          )
+          const { error: expErr } = await supabase.from('expenses').insert({
+            trip_id:         matchedTripId,
+            user_id:         userId,
+            title:           bookingTitle,
+            amount:          msExpenseAmount,
+            currency:        parsed.currency || 'ILS',
+            amount_ils:      msExpenseAmount,
+            category:        CATEGORY_MAP[parsed.booking_type] || 'other',
+            expense_date:    msExpenseDate,
+            notes:           `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${fromAddress}`,
+            source:          'scan',
+            is_paid:         true,
+            content_hash:    msExpenseHash,
+            idempotency_key: msIdemKey,   // migration 017 — hard backstop
           })
+          if (expErr && expErr.code !== '23505') {
+            console.error('[microsoftScanner] expense insert error:', expErr.message)
+          }
 
           stats.created++
           console.log(

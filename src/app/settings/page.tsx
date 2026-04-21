@@ -163,9 +163,17 @@ function CurrencySettingsPage({
         </div>
 
         {ratesLoading ? (
-          <div className="bg-white rounded-2xl p-6 shadow-sm text-center">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs text-gray-400 mt-2">טוען שערים...</p>
+          <div role="status" aria-live="polite" className="bg-white rounded-2xl p-4 shadow-sm space-y-3" aria-label="טוען שערי מטבע">
+            {[0,1,2].map(i => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="w-8 h-8 skeleton rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-1/2 skeleton rounded-md" />
+                  <div className="h-2.5 w-1/3 skeleton rounded-md" />
+                </div>
+              </div>
+            ))}
+            <span className="sr-only">טוען שערים…</span>
           </div>
         ) : rates.length > 0 ? (
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">

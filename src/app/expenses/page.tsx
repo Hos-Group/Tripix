@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Search, Trash2, X, ChevronDown, Wallet, Split } from 'lucide-react'
+import { Plus, Search, Trash2, X, ChevronDown, Wallet, Split, Pencil } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -13,6 +13,9 @@ import { useTrip } from '@/contexts/TripContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import SplitExpense from '@/components/trip/SplitExpense'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import EmptyState from '@/components/ui/EmptyState'
+import { ListSkeleton } from '@/components/ui/Skeleton'
 
 const CATEGORIES: Category[] = [
   'food', 'hotel', 'flight', 'taxi', 'activity', 'shopping',
@@ -32,6 +35,11 @@ export default function ExpensesPage() {
   const [filterCat, setFilterCat] = useState<Category | null>(null)
   const [saving, setSaving] = useState(false)
   const [splitExpense, setSplitExpense] = useState<Expense | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [duplicatePrompt, setDuplicatePrompt] = useState<{ title: string; date: string } | null>(null)
+  const [duplicateResolver, setDuplicateResolver] = useState<((ok: boolean) => void) | null>(null)
 
   // Form state
   const [title, setTitle]           = useState('')
@@ -61,6 +69,23 @@ export default function ExpensesPage() {
 
   const tripDays = getTripDays()
 
+  const resetForm = () => {
+    setTitle(''); setAmount(''); setNotes(''); setCategory('food'); setCurrency('THB'); setExpenseDate('')
+    setEditingId(null)
+  }
+
+  const startEdit = (exp: Expense) => {
+    setEditingId(exp.id)
+    setTitle(exp.title)
+    setCategory(exp.category)
+    setExpenseDate(exp.expense_date)
+    setAmount(String(exp.amount))
+    setCurrency(exp.currency)
+    setNotes(exp.notes || '')
+    setShowForm(true)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleSubmit = async () => {
     if (!title.trim() || !amount || !expenseDate) {
       toast.error(t('exp_fill_required'))
@@ -70,35 +95,95 @@ export default function ExpensesPage() {
     if (!currentTrip) { toast.error(t('exp_select_trip')); setSaving(false); return }
 
     const amountIls = await convertToILS(parseFloat(amount), currency, expenseDate)
-    const { error } = await supabase.from('expenses').insert({
-      trip_id: currentTrip.id,
-      user_id: user?.id,
-      title: title.trim(),
-      category,
-      amount: parseFloat(amount),
-      currency,
-      amount_ils: amountIls,
-      expense_date: expenseDate,
-      notes: notes.trim() || null,
-      source: 'manual',
-    })
 
-    if (error) {
-      toast.error(t('exp_error_save'))
+    if (editingId) {
+      const { error } = await supabase.from('expenses').update({
+        title: title.trim(),
+        category,
+        amount: parseFloat(amount),
+        currency,
+        amount_ils: amountIls,
+        expense_date: expenseDate,
+        notes: notes.trim() || null,
+      }).eq('id', editingId)
+
+      if (error) {
+        toast.error(t('exp_error_save'))
+      } else {
+        toast.success(t('exp_saved'))
+        resetForm(); setShowForm(false)
+        fetchExpenses()
+      }
     } else {
-      toast.success(t('exp_saved'))
-      setTitle(''); setAmount(''); setNotes(''); setShowForm(false)
-      fetchExpenses()
+      // Route through the API so dedup (409) and content_hash computation are
+      // centralized. Re-submit with force=true when the user confirms.
+      const submitExpense = async (force = false) => {
+        const res = await fetch('/api/expenses', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            trip_id:      currentTrip.id,
+            user_id:      user?.id,
+            title:        title.trim(),
+            category,
+            amount:       parseFloat(amount),
+            currency,
+            amount_ils:   amountIls,
+            expense_date: expenseDate,
+            notes:        notes.trim() || null,
+            source:       'manual',
+            force,
+          }),
+        })
+        return res
+      }
+
+      let res = await submitExpense(false)
+      if (res.status === 409) {
+        const { duplicate } = await res.json() as { duplicate?: { title: string; expense_date: string } }
+        setDuplicatePrompt({
+          title: duplicate?.title || title.trim(),
+          date: duplicate?.expense_date || expenseDate,
+        })
+        const keep = await new Promise<boolean>((resolve) => {
+          setDuplicateResolver(() => resolve)
+        })
+        setDuplicatePrompt(null)
+        setDuplicateResolver(null)
+        if (keep) {
+          res = await submitExpense(true)
+        } else {
+          setSaving(false)
+          return
+        }
+      }
+
+      if (!res.ok) {
+        toast.error(t('exp_error_save'))
+      } else {
+        toast.success(t('exp_saved'))
+        resetForm(); setShowForm(false)
+        fetchExpenses()
+      }
     }
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(t('exp_confirm_delete'))
-    if (!confirmed) return
+  const requestDelete = (exp: Expense) => setDeletingExpense(exp)
+
+  const handleConfirmDelete = async () => {
+    if (!deletingExpense) return
+    setDeleting(true)
+    const id = deletingExpense.id
     const { error } = await supabase.from('expenses').delete().eq('id', id)
-    if (error) { toast.error(t('exp_error_delete')) }
-    else { toast.success(t('exp_deleted')); setExpenses(prev => prev.filter(e => e.id !== id)) }
+    setDeleting(false)
+    if (error) {
+      toast.error(t('exp_error_delete'))
+      return
+    }
+    toast.success(t('exp_deleted'))
+    setExpenses(prev => prev.filter(e => e.id !== id))
+    setDeletingExpense(null)
   }
 
   const filtered = expenses.filter(e => {
@@ -119,10 +204,17 @@ export default function ExpensesPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
-        <div className="w-10 h-10 rounded-full animate-spin"
-          style={{ border: '3px solid rgba(108,71,255,0.15)', borderTopColor: '#6C47FF' }} />
-        <p className="text-sm text-gray-400 font-medium">טוען...</p>
+      <div className="page-enter space-y-4 pt-2" dir={dir}>
+        <div className="flex items-center justify-between pt-1">
+          <h1 className="text-2xl font-black tracking-tight gradient-text">הוצאות</h1>
+          <span className="sr-only">טוען הוצאות…</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="h-[60px] rounded-2xl skeleton" />
+          <div className="h-[60px] rounded-2xl skeleton" />
+        </div>
+        <div className="h-[48px] rounded-2xl skeleton" />
+        <ListSkeleton rows={6} />
       </div>
     )
   }
@@ -133,10 +225,15 @@ export default function ExpensesPage() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between pt-1">
         <h1 className="text-2xl font-black tracking-tight gradient-text">הוצאות</h1>
-        <button onClick={() => setShowForm(v => !v)}
-          className="w-9 h-9 rounded-2xl flex items-center justify-center active:scale-90 transition-all text-white"
-          style={{ background: showForm ? '#EF4444' : 'linear-gradient(135deg,#6C47FF,#9B7BFF)' }}>
-          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+        <button
+          type="button"
+          onClick={() => { if (showForm) resetForm(); setShowForm(v => !v) }}
+          aria-label={showForm ? 'סגור טופס הוצאה' : 'הוסף הוצאה חדשה'}
+          aria-expanded={showForm}
+          aria-controls="expense-form"
+          className="w-11 h-11 rounded-2xl flex items-center justify-center active:scale-90 transition-all text-white focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          style={{ background: showForm ? 'linear-gradient(135deg,#EF4444,#F87171)' : 'linear-gradient(135deg,#6C47FF,#9B7BFF)' }}>
+          {showForm ? <X className="w-5 h-5" aria-hidden="true" /> : <Plus className="w-5 h-5" aria-hidden="true" />}
         </button>
       </div>
 
@@ -165,124 +262,230 @@ export default function ExpensesPage() {
       {/* ── Add Expense Form (slide-down sheet) ── */}
       <AnimatePresence>
         {showForm && (
-          <motion.div
+          <motion.form
+            id="expense-form"
             initial={{ opacity: 0, y: -16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.25 }}
+            onSubmit={(e) => { e.preventDefault(); handleSubmit() }}
+            aria-labelledby="expense-form-heading"
             className="bg-white rounded-3xl p-5 shadow-card-hover border border-gray-50 space-y-3"
           >
-            <p className="text-sm font-bold text-gray-800 mb-1">הוצאה חדשה</p>
+            <h2 id="expense-form-heading" className="text-sm font-bold text-gray-800 mb-1">
+              {editingId ? 'עריכת הוצאה' : 'הוצאה חדשה'}
+            </h2>
 
             {/* Title */}
-            <input type="text" placeholder={t('exp_name')} value={title}
-              onChange={e => setTitle(e.target.value)}
-              className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all"
-            />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="exp-title" className="text-xs font-semibold text-gray-700">
+                שם ההוצאה <span aria-hidden="true" className="text-red-500">*</span>
+              </label>
+              <input
+                id="exp-title"
+                type="text"
+                placeholder={t('exp_name')}
+                value={title}
+                required
+                onChange={e => setTitle(e.target.value)}
+                className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white transition-all min-h-[48px]"
+              />
+            </div>
 
             {/* Category */}
-            <div className="relative">
-              <select value={category} onChange={e => setCategory(e.target.value as Category)}
-                className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none appearance-none">
-                {CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="exp-category" className="text-xs font-semibold text-gray-700">קטגוריה</label>
+              <div className="relative">
+                <select
+                  id="exp-category"
+                  value={category}
+                  onChange={e => setCategory(e.target.value as Category)}
+                  className="w-full bg-surface-secondary rounded-2xl px-4 py-3 pl-10 text-sm font-medium outline-none appearance-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white min-h-[48px]"
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}</option>
+                  ))}
+                </select>
+                <ChevronDown aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
             </div>
 
             {/* Date */}
-            <div className="relative">
-              <select value={expenseDate} onChange={e => setExpenseDate(e.target.value)}
-                className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none appearance-none">
-                <option value="">בחר תאריך</option>
-                {tripDays.map(day => {
-                  const val = format(day, 'yyyy-MM-dd')
-                  return <option key={val} value={val}>{formatDateShort(day)} — יום {tripDays.indexOf(day) + 1}</option>
-                })}
-              </select>
-              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="exp-date" className="text-xs font-semibold text-gray-700">
+                תאריך <span aria-hidden="true" className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <select
+                  id="exp-date"
+                  value={expenseDate}
+                  required
+                  onChange={e => setExpenseDate(e.target.value)}
+                  className="w-full bg-surface-secondary rounded-2xl px-4 py-3 pl-10 text-sm font-medium outline-none appearance-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white min-h-[48px]"
+                >
+                  <option value="">בחר תאריך</option>
+                  {tripDays.map(day => {
+                    const val = format(day, 'yyyy-MM-dd')
+                    return <option key={val} value={val}>{formatDateShort(day)} — יום {tripDays.indexOf(day) + 1}</option>
+                  })}
+                </select>
+                <ChevronDown aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              </div>
             </div>
 
             {/* Amount + Currency */}
-            <div className="flex gap-2">
-              <input type="number" placeholder={t('exp_amount')} value={amount}
-                onChange={e => setAmount(e.target.value)}
-                className="flex-1 bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all"
-              />
-              <div className="relative w-24">
-                <select value={currency} onChange={e => setCurrency(e.target.value as Currency)}
-                  className="w-full bg-surface-secondary rounded-2xl px-3 py-3 text-sm font-medium outline-none appearance-none">
-                  {CURRENCIES.map(c => (
-                    <option key={c} value={c}>{CURRENCY_SYMBOL[c]} {c}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="exp-amount" className="text-xs font-semibold text-gray-700">
+                  סכום <span aria-hidden="true" className="text-red-500">*</span>
+                </label>
+                <input
+                  id="exp-amount"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder={t('exp_amount')}
+                  value={amount}
+                  required
+                  onChange={e => setAmount(e.target.value)}
+                  className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white transition-all min-h-[48px]"
+                />
+              </div>
+              <div className="flex flex-col gap-1 w-28">
+                <label htmlFor="exp-currency" className="text-xs font-semibold text-gray-700">מטבע</label>
+                <div className="relative">
+                  <select
+                    id="exp-currency"
+                    value={currency}
+                    onChange={e => setCurrency(e.target.value as Currency)}
+                    className="w-full bg-surface-secondary rounded-2xl px-3 py-3 pl-8 text-sm font-medium outline-none appearance-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white min-h-[48px]"
+                  >
+                    {CURRENCIES.map(c => (
+                      <option key={c} value={c}>{CURRENCY_SYMBOL[c]} {c}</option>
+                    ))}
+                  </select>
+                  <ChevronDown aria-hidden="true" className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                </div>
               </div>
             </div>
 
             {/* Notes */}
-            <input type="text" placeholder={t('exp_notes')} value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 ring-primary/20 transition-all"
-            />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="exp-notes" className="text-xs font-semibold text-gray-700">
+                הערות <span className="text-gray-400 font-normal">(אופציונלי)</span>
+              </label>
+              <input
+                id="exp-notes"
+                type="text"
+                placeholder={t('exp_notes')}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="w-full bg-surface-secondary rounded-2xl px-4 py-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white transition-all min-h-[48px]"
+              />
+            </div>
 
             {/* Save button */}
-            <button onClick={handleSubmit} disabled={saving}
-              className="w-full text-white rounded-2xl py-3.5 font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
-              style={{ background: saving ? '#9CA3AF' : 'linear-gradient(135deg,#10B981,#34D399)' }}>
-              {saving ? 'שומר...' : '✓ שמור הוצאה'}
+            <button
+              type="submit"
+              disabled={saving}
+              aria-busy={saving || undefined}
+              className="w-full text-white rounded-2xl py-4 min-h-[52px] font-bold text-sm active:scale-95 transition-all disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400"
+              style={{ background: saving ? '#9CA3AF' : 'linear-gradient(135deg,#10B981,#34D399)' }}
+            >
+              {saving ? 'שומר…' : editingId ? '✓ עדכן הוצאה' : '✓ שמור הוצאה'}
             </button>
-          </motion.div>
+          </motion.form>
         )}
       </AnimatePresence>
 
       {/* ── Search ── */}
       <div className="relative">
-        <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input type="text" placeholder={t('exp_search')} value={search}
+        <label htmlFor="exp-search" className="sr-only">חפש הוצאה</label>
+        <Search aria-hidden="true" className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          id="exp-search"
+          type="search"
+          placeholder={t('exp_search')}
+          value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full bg-white rounded-2xl pr-10 pl-4 py-3 text-sm font-medium shadow-card outline-none focus:ring-2 ring-primary/20 transition-all"
+          className="w-full bg-white rounded-2xl pr-10 pl-10 py-3 text-sm font-medium shadow-card outline-none focus-visible:ring-2 focus-visible:ring-primary/30 transition-all min-h-[48px]"
         />
         {search && (
-          <button onClick={() => setSearch('')} className="absolute left-3 top-1/2 -translate-y-1/2">
-            <X className="w-4 h-4 text-gray-400" />
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label="נקה חיפוש"
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full active:bg-gray-100 focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <X className="w-4 h-4 text-gray-400" aria-hidden="true" />
           </button>
         )}
       </div>
 
       {/* ── Category filter pills ── */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        <button onClick={() => setFilterCat(null)}
-          className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all"
+      <div role="group" aria-label="סינון לפי קטגוריה" className="flex gap-2 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => setFilterCat(null)}
+          aria-pressed={!filterCat}
+          className="flex-shrink-0 px-4 py-2 min-h-[36px] rounded-full text-xs font-bold active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           style={!filterCat
             ? { background: 'linear-gradient(135deg,#6C47FF,#9B7BFF)', color: 'white' }
-            : { background: 'white', color: '#6B7280' }}>
+            : { background: 'white', color: '#4B5563' }}>
           הכל
         </button>
         {CATEGORIES.map(cat => (
-          <button key={cat} onClick={() => setFilterCat(filterCat === cat ? null : cat)}
-            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-all"
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setFilterCat(filterCat === cat ? null : cat)}
+            aria-pressed={filterCat === cat}
+            aria-label={`סנן לפי ${CATEGORY_META[cat].label}`}
+            className="flex-shrink-0 px-3.5 py-2 min-h-[36px] rounded-full text-xs font-bold active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             style={filterCat === cat
               ? { background: 'linear-gradient(135deg,#6C47FF,#9B7BFF)', color: 'white' }
-              : { background: 'white', color: '#6B7280' }}>
-            {CATEGORY_META[cat].icon} {CATEGORY_META[cat].label}
+              : { background: 'white', color: '#4B5563' }}>
+            <span aria-hidden="true">{CATEGORY_META[cat].icon}</span> {CATEGORY_META[cat].label}
           </button>
         ))}
       </div>
 
       {/* ── Expense list grouped by date ── */}
       {Object.keys(grouped).length === 0 ? (
-        <div className="bg-white rounded-3xl p-10 text-center shadow-card">
-          <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
-            <Wallet className="w-7 h-7 text-gray-300" />
-          </div>
-          <p className="text-sm font-bold text-gray-600 mb-1">
-            {search || filterCat ? 'לא נמצאו תוצאות' : 'אין הוצאות עדיין'}
-          </p>
-          <p className="text-xs text-gray-400">
-            {search || filterCat ? 'נסה לשנות את הסינון' : 'הוסף הוצאה ראשונה'}
-          </p>
+        <div className="bg-white rounded-3xl shadow-card">
+          {search || filterCat ? (
+            <EmptyState
+              icon={Search}
+              title="לא נמצאו תוצאות"
+              description="נסה לשנות את מילת החיפוש או להסיר את הסינון"
+              action={(
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setFilterCat(null) }}
+                  className="w-full py-3 min-h-[48px] rounded-2xl bg-primary/10 text-primary font-bold text-sm active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  נקה סינון
+                </button>
+              )}
+            />
+          ) : (
+            <EmptyState
+              icon={Wallet}
+              title="אין הוצאות עדיין"
+              description="התחל לעקוב אחר ההוצאות בנסיעה — הוסף באופן ידני או סרוק קבלה"
+              action={(
+                <button
+                  type="button"
+                  onClick={() => setShowForm(true)}
+                  className="w-full py-3.5 min-h-[52px] rounded-2xl text-white font-bold text-sm active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
+                  style={{ background: 'linear-gradient(135deg,#6C47FF,#9B7BFF)' }}
+                >
+                  <span className="inline-flex items-center gap-2 justify-center"><Plus className="w-4 h-4" aria-hidden="true" /> הוסף הוצאה ראשונה</span>
+                </button>
+              )}
+            />
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -340,19 +543,30 @@ export default function ExpensesPage() {
                           </div>
 
                           {/* Actions */}
-                          <div className="flex items-center gap-1">
-                            {/* Split */}
+                          <div className="flex items-center gap-1" role="group" aria-label={`פעולות עבור ${exp.title}`}>
                             <button
-                              onClick={() => setSplitExpense(exp)}
-                              className="p-1.5 rounded-xl text-gray-300 active:text-primary active:bg-primary/10 transition-all active:scale-90"
-                              title="פצל הוצאה"
+                              type="button"
+                              onClick={() => startEdit(exp)}
+                              aria-label={`ערוך את ${exp.title}`}
+                              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-primary active:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
                             >
-                              <Split className="w-4 h-4" />
+                              <Pencil className="w-4 h-4" aria-hidden="true" />
                             </button>
-                            {/* Delete */}
-                            <button onClick={() => handleDelete(exp.id)}
-                              className="p-1.5 rounded-xl text-gray-300 active:text-red-400 active:bg-red-50 transition-all active:scale-90">
-                              <Trash2 className="w-4 h-4" />
+                            <button
+                              type="button"
+                              onClick={() => setSplitExpense(exp)}
+                              aria-label={`פצל את ${exp.title} בין נוסעים`}
+                              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-primary active:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                              <Split className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => requestDelete(exp)}
+                              aria-label={`מחק את ${exp.title}`}
+                              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-red-500 active:bg-red-50 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                           </div>
                         </motion.div>
@@ -364,6 +578,39 @@ export default function ExpensesPage() {
             })}
         </div>
       )}
+      {/* ── Delete confirmation ── */}
+      <ConfirmDialog
+        open={!!deletingExpense}
+        title="למחוק את ההוצאה?"
+        description={
+          deletingExpense
+            ? `"${deletingExpense.title}" בסך ${formatMoney(deletingExpense.amount_ils || 0)} יימחק לצמיתות. לא ניתן לשחזר.`
+            : undefined
+        }
+        confirmLabel="מחק לצמיתות"
+        cancelLabel="ביטול"
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => !deleting && setDeletingExpense(null)}
+      />
+
+      {/* ── Duplicate expense confirmation ── */}
+      <ConfirmDialog
+        open={!!duplicatePrompt}
+        title="נמצאה הוצאה דומה"
+        description={
+          duplicatePrompt
+            ? `כבר קיימת הוצאה "${duplicatePrompt.title}" בתאריך ${duplicatePrompt.date}. להוסיף בכל זאת?`
+            : undefined
+        }
+        confirmLabel="הוסף בכל זאת"
+        cancelLabel="ביטול"
+        variant="primary"
+        onConfirm={() => duplicateResolver?.(true)}
+        onCancel={() => duplicateResolver?.(false)}
+      />
+
       {/* ── Split Expense Modal ── */}
       <AnimatePresence>
         {splitExpense && currentTrip && (
