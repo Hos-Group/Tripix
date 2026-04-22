@@ -229,3 +229,138 @@ export async function insertWithDedup<T extends { id: string }>(opts: {
 
   return { data: data as T, duplicate: false, reason: null, existing: null }
 }
+
+// ─── Document → Expense auto-creation ────────────────────────────────────────
+
+/**
+ * Map from parsed booking_type / doc_type to the `expenses.category` enum.
+ * Single source of truth used by all scanners + the manual-upload API route.
+ */
+const EXPENSE_CATEGORY_MAP: Record<string, string> = {
+  hotel:       'hotel',
+  flight:      'flight',
+  car_rental:  'car_rental',
+  activity:    'activity',
+  tour:        'activity',
+  insurance:   'insurance',
+  ferry:       'ferry',
+  train:       'train',
+  visa:        'visa',
+  passport:    'other',
+  other:       'other',
+}
+
+export interface ExtractedAmountData {
+  amount?:         number | string | null
+  currency?:       string | null
+  check_in?:       string | null
+  departure_date?: string | null
+  valid_from?:     string | null
+  confirmation_number?: string | null
+  booking_type?:   string | null
+}
+
+export interface DocumentExpenseInput {
+  trip_id:        string
+  user_id?:       string | null
+  document_id?:   string | null
+  doc_type:       string                    // e.g. 'flight', 'hotel'
+  name:           string                    // becomes expense title
+  extracted_data: ExtractedAmountData | null | undefined
+  amount_ils:     number                    // pre-converted to ILS by caller
+  fallback_date?: string | null             // used when extracted_data has no date
+  source?:        'manual' | 'scan' | 'document' | 'voice'
+  idempotency_key?: string | null           // propagated from the document for hard dedup
+  notes?:         string | null
+}
+
+/**
+ * Decide whether a parsed document should create a linked expense.
+ *
+ * Rule:  ONLY create an expense when the document has a clearly paid amount
+ *        > 0. Passports / visas / insurance without an amount stay on the
+ *        Documents page and do not inflate the expense totals.
+ *
+ * Returns the numeric amount on success, or `null` if no expense should be
+ * created. Callers that receive `null` must skip the expense insert.
+ */
+export function shouldCreateExpenseFromDocument(
+  extracted: ExtractedAmountData | null | undefined,
+): number | null {
+  if (!extracted) return null
+  const raw = extracted.amount
+  if (raw === null || raw === undefined || raw === '') return null
+  const num = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(num) || num <= 0) return null
+  return num
+}
+
+/**
+ * Insert an expense linked to a document, with both dedup layers applied.
+ *
+ * No-op (returns null) when the extracted amount is missing/zero/negative —
+ * this is intentional: documents without a paid amount (passport, blank
+ * insurance PDF, etc.) must NOT surface on the Expenses page.
+ *
+ * The `idempotency_key` is propagated from the parent document so a re-run
+ * of the same upload / email can't create a duplicate expense either.
+ */
+export async function insertExpenseFromDocument(
+  input: DocumentExpenseInput,
+  db: SupabaseClient = defaultSupabase,
+): Promise<{ inserted: boolean; reason?: 'no_amount' | 'duplicate' | 'error'; id?: string }> {
+  const amount = shouldCreateExpenseFromDocument(input.extracted_data)
+  if (amount === null) {
+    return { inserted: false, reason: 'no_amount' }
+  }
+
+  const expenseDate =
+    input.extracted_data?.check_in       ||
+    input.extracted_data?.departure_date ||
+    input.extracted_data?.valid_from     ||
+    input.fallback_date                   ||
+    new Date().toISOString().split('T')[0]
+
+  const category = EXPENSE_CATEGORY_MAP[input.doc_type]
+             || EXPENSE_CATEGORY_MAP[input.extracted_data?.booking_type || '']
+             || 'other'
+
+  const currency = (input.extracted_data?.currency || 'ILS').toUpperCase()
+
+  const fingerprint = buildExpenseFingerprint(input.trip_id, amount, expenseDate, input.name)
+
+  const payload: Record<string, unknown> = {
+    trip_id:        input.trip_id,
+    user_id:        input.user_id,
+    title:          input.name,
+    amount,
+    currency,
+    amount_ils:     input.amount_ils,
+    category,
+    expense_date:   expenseDate,
+    source:         input.source || 'document',
+    is_paid:        true,
+    content_hash:   fingerprint,
+    document_id:    input.document_id || null,
+    notes: [
+      input.extracted_data?.confirmation_number
+        ? `מספר אישור: ${input.extracted_data.confirmation_number}`
+        : null,
+      input.notes || null,
+    ].filter(Boolean).join('\n') || null,
+  }
+  if (input.idempotency_key) payload.idempotency_key = input.idempotency_key
+
+  const { data, error } = await db
+    .from('expenses')
+    .insert(payload)
+    .select('id')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') return { inserted: false, reason: 'duplicate' }
+    console.error('[insertExpenseFromDocument] insert error:', error.message)
+    return { inserted: false, reason: 'error' }
+  }
+  return { inserted: true, id: (data as { id: string }).id }
+}

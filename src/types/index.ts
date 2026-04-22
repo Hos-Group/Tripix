@@ -35,6 +35,7 @@ export interface Expense {
   travelers: string[]
   is_paid: boolean
   content_hash: string | null
+  document_id: string | null
   created_at: string
   updated_at: string
 }

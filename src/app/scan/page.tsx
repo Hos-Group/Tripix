@@ -573,7 +573,6 @@ export default function ScanPage() {
             const legAmt    = isFirst && amt && parseFloat(amt) > 0 ? parseFloat(amt) : 0
             const legAmtIls = legAmt > 0 ? await convertToILS(legAmt, cur, legDate) : 0
             const legNotes  = [
-              docId              ? `doc:${docId}`           : null,
               leg.flightNumber   ? leg.flightNumber          : null,
               leg.airline        ? leg.airline               : null,
               leg.isConnection   ? 'קונקשיין'               : null,
@@ -590,6 +589,7 @@ export default function ScanPage() {
               amount_ils:   legAmtIls,
               expense_date: legDate,
               source:       'document',
+              document_id:  docId || null,
               notes:        legNotes,
             })
           }
@@ -610,7 +610,8 @@ export default function ScanPage() {
             amount_ils:   amountIls,
             expense_date: finalDate,
             source:       'document',
-            notes:        docId ? `doc:${docId}` : null,
+            document_id:  docId || null,
+            notes:        null,
           })
         }
       }

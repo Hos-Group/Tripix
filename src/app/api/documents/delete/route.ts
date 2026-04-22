@@ -113,14 +113,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Clean up related expenses (best-effort) ───────────────────────────────
+  // ── Clean up related expenses via document_id FK ─────────────────────────
+  // Migration 018 adds ON DELETE CASCADE, so the DB handles this automatically
+  // once the migration runs. This explicit call is a belt-and-suspenders safety
+  // net for rows created before the migration backfill.
   try {
-    const names = docs.filter(d => authorizedIds.includes(d.id) && d.name).map(d => d.name as string)
-    if (names.length) {
-      await supabase.from('expenses').delete()
-        .eq('source', 'document')
-        .in('title', names)
-    }
+    const { error: expErr } = await supabase
+      .from('expenses')
+      .delete()
+      .in('document_id', authorizedIds)
+    if (expErr) console.warn('[documents/delete] Expense cleanup error:', expErr.message)
   } catch (e) {
     console.warn('[documents/delete] Expense cleanup error:', e)
   }

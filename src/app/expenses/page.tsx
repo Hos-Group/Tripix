@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Search, Trash2, X, ChevronDown, Wallet, Split, Pencil } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, getTripDays, formatDateShort } from '@/lib/utils'
@@ -16,6 +16,7 @@ import SplitExpense from '@/components/trip/SplitExpense'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import EmptyState from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { itemVariants, sheetVariants, spring, staggerContainer } from '@/lib/motion'
 
 const CATEGORIES: Category[] = [
   'food', 'hotel', 'flight', 'taxi', 'activity', 'shopping',
@@ -28,6 +29,7 @@ export default function ExpensesPage() {
   const { currentTrip } = useTrip()
   const { user } = useAuth()
   const { t, dir } = useLanguage()
+  const reduce = useReducedMotion()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -174,13 +176,33 @@ export default function ExpensesPage() {
   const handleConfirmDelete = async () => {
     if (!deletingExpense) return
     setDeleting(true)
-    const id = deletingExpense.id
+    const { id, document_id } = deletingExpense
+
+    // Delete the expense first
     const { error } = await supabase.from('expenses').delete().eq('id', id)
     setDeleting(false)
     if (error) {
       toast.error(t('exp_error_delete'))
       return
     }
+
+    // If the expense was auto-created from a document, delete that document too
+    if (document_id) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+        if (token) {
+          await fetch('/api/documents/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ ids: [document_id] }),
+          })
+        }
+      } catch (e) {
+        console.warn('[expenses] Document cascade-delete failed:', e)
+      }
+    }
+
     toast.success(t('exp_deleted'))
     setExpenses(prev => prev.filter(e => e.id !== id))
     setDeletingExpense(null)
@@ -220,7 +242,7 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="page-enter space-y-4" dir={dir}>
+    <div className="space-y-4" dir={dir}>
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between pt-1">
@@ -264,13 +286,12 @@ export default function ExpensesPage() {
         {showForm && (
           <motion.form
             id="expense-form"
-            initial={{ opacity: 0, y: -16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
+            initial={{ opacity: 0, y: -20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: spring.ui }}
+            exit={{ opacity: 0, y: -16, scale: 0.98, transition: { duration: 0.22, ease: [0.4, 0, 1, 1] } }}
             onSubmit={(e) => { e.preventDefault(); handleSubmit() }}
             aria-labelledby="expense-form-heading"
-            className="bg-white rounded-3xl p-5 shadow-card-hover border border-gray-50 space-y-3"
+            className="bg-white rounded-3xl p-5 shadow-elev-3 border border-gray-50 space-y-3"
           >
             <h2 id="expense-form-heading" className="text-sm font-bold text-gray-800 mb-1">
               {editingId ? 'עריכת הוצאה' : 'הוצאה חדשה'}
@@ -510,14 +531,23 @@ export default function ExpensesPage() {
                   </div>
 
                   {/* Day expenses card */}
-                  <div className="bg-white rounded-2xl shadow-card overflow-hidden border border-gray-50/80">
-                    {dayExpenses.map((exp, i) => {
+                  <motion.div
+                    layout
+                    variants={staggerContainer}
+                    initial={reduce ? false : 'initial'}
+                    animate="animate"
+                    className="bg-white rounded-2xl shadow-card overflow-hidden border border-gray-50/80"
+                  >
+                  <AnimatePresence initial={false} mode="popLayout">
+                  {dayExpenses.map((exp, i) => {
                       const meta = CATEGORY_META[exp.category]
                       return (
-                        <motion.div key={exp.id}
-                          initial={{ opacity: 0, x: -6 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.03 }}
+                        <motion.div
+                          key={exp.id}
+                          layout="position"
+                          variants={itemVariants}
+                          exit={{ opacity: 0, x: 24, transition: { duration: 0.18 } }}
+                          transition={spring.ui}
                           className={`flex items-center gap-3.5 px-4 py-3.5 active:bg-gray-50 transition-colors
                             ${i < dayExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}>
                           {/* Icon */}
@@ -572,7 +602,8 @@ export default function ExpensesPage() {
                         </motion.div>
                       )
                     })}
-                  </div>
+                  </AnimatePresence>
+                  </motion.div>
                 </div>
               )
             })}
