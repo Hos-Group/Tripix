@@ -112,7 +112,11 @@ function buildDays(
       }
 
       // ── Car rental events (detected via extracted_data fields) ─────────
-      const hasCarRentalData = ext?.pickup_date || ext?.dropoff_date || ext?.rental_company || ext?.car_type
+      // מצמצמים לדוקומנטים שאינם טיסה/מלון כדי למנוע false-positives
+      const isFlightOrHotel = doc.doc_type === 'flight' || doc.doc_type === 'hotel'
+      const hasCarRentalData = !isFlightOrHotel && (
+        ext?.pickup_date || ext?.dropoff_date || ext?.rental_company || ext?.car_type
+      )
       if (hasCarRentalData) {
         const company     = ext?.company         || ext?.rental_company  || ''
         const carType     = ext?.car_type        || ext?.vehicle         || ''
@@ -234,13 +238,23 @@ function buildDays(
     // Sort by time
     docEvents.sort(sortByTime)
 
+    // Dedup: אותה טיסה/מלון עשויה להגיע משני מסמכים (מייל + PDF).
+    // מזהים אירוע ייחודי לפי type + time + title + subtitle — לא לפי docId.
+    const seen = new Set<string>()
+    const dedupedEvents = docEvents.filter((ev) => {
+      const key = `${ev.type}|${ev.time || ''}|${ev.title}|${ev.subtitle || ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
     return {
       date:      dateStr,
       dayNumber,
       isToday:   isToday(day),
       isPast:    day < today && !isToday(day),
       isFuture:  day > today,
-      docEvents,
+      docEvents: dedupedEvents,
     }
   })
 }

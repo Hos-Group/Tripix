@@ -19,7 +19,14 @@ html {
 
 body {
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #F7F8FA;
+  /* Soft, slightly warm gray with a hint of violet — Revolut-like calm canvas.
+     Cards float on top with white surfaces, so this background needs to be
+     subdued enough that the elevation reads. */
+  background-color: #F4F4F8;
+  background-image:
+    radial-gradient(ellipse at top right, rgba(155,123,255,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom left, rgba(108,71,255,0.04) 0%, transparent 60%);
+  background-attachment: fixed;
   padding-top: var(--safe-area-top);
   padding-bottom: calc(var(--safe-area-bottom) + 80px);
   -webkit-tap-highlight-color: transparent;

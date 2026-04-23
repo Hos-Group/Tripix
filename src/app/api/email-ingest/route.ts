@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseBookingEmail, htmlToText } from '@/lib/emailParser'
+import { parseBookingEmail, htmlToText, shouldCreateExpense } from '@/lib/emailParser'
 import { matchTripToBooking, TripRecord } from '@/lib/tripMatcher'
 import { buildDedupKey, findDuplicate, isDedupViolation } from '@/lib/documentDedup'
 import crypto from 'crypto'
@@ -365,27 +365,36 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 2. Expense record — shows up in Expenses page ───────────────────
-    const { data: expense, error: expenseError } = await supabase
-      .from('expenses')
-      .insert({
-        trip_id:         matchedTripId,
-        user_id:         userId,
-        title:           bookingTitle,
-        amount:          parsed.amount || 0,
-        currency:        parsed.currency || 'ILS',
-        amount_ils:      parsed.amount || 0,
-        category:        CATEGORY_MAP[parsed.booking_type] || 'other',
-        expense_date:    parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0],
-        notes:           `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${email.from}`,
-        source:          'scan',
-        is_paid:         true,
-        email_ingest_id: ingestRecord!.id,
-      })
-      .select('id')
-      .single()
+    // Only invoices / receipts become expenses. Booking confirmations stay on
+    // Documents only — the real charge arrives separately as an invoice.
+    let expense: { id: string } | null = null
+    if (shouldCreateExpense(parsed)) {
+      const { data, error: expenseError } = await supabase
+        .from('expenses')
+        .insert({
+          trip_id:         matchedTripId,
+          user_id:         userId,
+          title:           bookingTitle,
+          amount:          parsed.amount || 0,
+          currency:        parsed.currency || 'ILS',
+          amount_ils:      parsed.amount || 0,
+          category:        CATEGORY_MAP[parsed.booking_type] || 'other',
+          expense_date:    parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0],
+          notes:           `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${email.from}`,
+          source:          'scan',
+          is_paid:         true,
+          email_ingest_id: ingestRecord!.id,
+        })
+        .select('id')
+        .single()
 
-    if (expenseError) {
-      console.error('[email-ingest] Expense insert error:', expenseError.message)
+      if (expenseError) {
+        console.error('[email-ingest] Expense insert error:', expenseError.message)
+      } else {
+        expense = data
+      }
+    } else {
+      console.log(`[email-ingest] ✓ doc saved without expense (subtype="${parsed.document_subtype}"): "${bookingTitle}"`)
     }
 
     // ── 3. Link everything in email_ingests ──────────────────────────────

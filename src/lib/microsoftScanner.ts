@@ -20,6 +20,7 @@ import {
   quickPreFilter,
   isKnownBookingSender,
   htmlToText,
+  shouldCreateExpense,
   ParsedBooking,
 } from './emailParser'
 import { matchTripToBooking, TripRecord } from './tripMatcher'
@@ -28,6 +29,7 @@ import {
   buildDocumentFingerprint,
   buildExpenseFingerprint,
   findVendorExpense,
+  findSameBookingExpense,
 } from './dedup'
 
 // ── Token refresh ─────────────────────────────────────────────────────────────
@@ -412,7 +414,10 @@ export async function scanUserMicrosoft(
             ferry: 'ferry', train: 'train', other: 'other',
           }
           const msExpenseAmount = Number(parsed.amount) || 0
-          if (msExpenseAmount > 0) {
+          // Only invoices / receipts create expenses — booking confirmations
+          // stay on the Documents page only (Omer, 2026-04-23).
+          const msIsChargeable  = shouldCreateExpense(parsed)
+          if (msExpenseAmount > 0 && msIsChargeable) {
             const msExpenseDate = parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0]
             const msExpenseCurrency = parsed.currency || 'ILS'
 
@@ -421,8 +426,23 @@ export async function scanUserMicrosoft(
             const vendorMatch = await findVendorExpense(
               matchedTripId, bookingTitle, msExpenseAmount, msExpenseCurrency,
             )
+            // Same-booking cross-amount — net vs gross on the same invoice.
+            const bookingMatch = !vendorMatch
+              ? await findSameBookingExpense(matchedTripId, bookingTitle, msExpenseCurrency, msExpenseDate, msExpenseAmount)
+              : null
             if (vendorMatch) {
               console.log(`[microsoftScanner] dup expense skipped (vendor match): "${bookingTitle}"`)
+            } else if (bookingMatch) {
+              if (msExpenseAmount > Number(bookingMatch.amount)) {
+                await supabase.from('expenses').update({
+                  amount:       msExpenseAmount,
+                  amount_ils:   msExpenseAmount,
+                  content_hash: buildExpenseFingerprint(matchedTripId, msExpenseAmount, msExpenseDate, bookingTitle),
+                }).eq('id', bookingMatch.id)
+                console.log(`[microsoftScanner] upgraded existing booking to larger amount: ${bookingMatch.id.slice(0, 8)}`)
+              } else {
+                console.log(`[microsoftScanner] same-booking lesser amount skipped: "${bookingTitle}"`)
+              }
             } else {
               const msExpenseHash = buildExpenseFingerprint(
                 matchedTripId, msExpenseAmount, msExpenseDate, bookingTitle,
@@ -446,6 +466,8 @@ export async function scanUserMicrosoft(
                 console.error('[microsoftScanner] expense insert error:', expErr.message)
               }
             }
+          } else if (msExpenseAmount > 0 && !msIsChargeable) {
+            console.log(`[microsoftScanner] ✓ doc saved without expense (subtype="${parsed.document_subtype}"): "${bookingTitle}"`)
           } else {
             console.log(`[microsoftScanner] ✓ doc saved without expense (amount=0): "${bookingTitle}"`)
           }

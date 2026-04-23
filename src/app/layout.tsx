@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/react'
 import Providers from '@/components/Providers'
 import LayoutWrapper from '@/components/layout/LayoutWrapper'
 import SkipLink from '@/components/ui/SkipLink'
+import NoZoom from '@/components/NoZoom'
 import './globals.css'
 
 const inter = Inter({
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-surface-secondary text-gray-900 antialiased">
         <Providers>
+          <NoZoom />
           <SkipLink />
           <LayoutWrapper>
             {children}

@@ -6,7 +6,11 @@ import BottomNav from './BottomNav'
 import TourGuideWrapper from '@/components/TourGuideWrapper'
 import { pageVariants } from '@/lib/motion'
 
-const MARKETING_ROUTES = ['/']
+// Pages that should NOT show the app chrome (header / nav).
+// Note: '/' itself is now a server-side redirect to /dashboard, so it never
+// renders here. We keep '/landing' in case the user wants the marketing page
+// reachable directly.
+const MARKETING_ROUTES = ['/landing']
 
 /**
  * Group pathnames into "transition cohorts" — navigating WITHIN a cohort

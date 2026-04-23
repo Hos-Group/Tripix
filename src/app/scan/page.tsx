@@ -102,10 +102,11 @@ export default function ScanPage() {
   const [file, setFile] = useState<File | null>(null)
   const [noAiMode, setNoAiMode] = useState(false)
   const [detectedDocType, setDetectedDocType] = useState<DocType>('other')
-  const [showScanner, setShowScanner] = useState(false)
-  const [scannerContext, setScannerContext] = useState<'receipt' | 'document'>('document')
-  const cameraRef = useRef<HTMLInputElement>(null)
+  const [showScanner, setShowScanner] = useState(true)   // open immediately on page load
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Open scanner immediately when page loads
+  useEffect(() => { setShowScanner(true) }, [])
 
   const [editTitle, setEditTitle] = useState('')
   const [editCategory, setEditCategory] = useState<Category>('food')
@@ -680,7 +681,8 @@ export default function ScanPage() {
 
   const handleScannerResult = (scannedFile: File) => {
     setShowScanner(false)
-    handleFileSelect(scannedFile, scannerContext)
+    // Always use 'document' context — AI classifies receipt/flight/hotel/passport automatically
+    handleFileSelect(scannedFile, 'document')
   }
 
   return (

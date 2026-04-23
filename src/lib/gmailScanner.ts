@@ -36,6 +36,7 @@ import {
   quickPreFilter,
   isKnownBookingSender,
   htmlToText,
+  shouldCreateExpense,
   ParsedBooking,
   TripContext,
 } from './emailParser'
@@ -45,6 +46,7 @@ import {
   buildExpenseFingerprint,
   buildDocumentFingerprint,
   findVendorExpense,
+  findSameBookingExpense,
 } from './dedup'
 import { computeFileHashFromBase64, computeFileHashFromBuffer, buildDedupKey, isDedupViolation } from './documentDedup'
 
@@ -861,7 +863,11 @@ async function processMessages(
       // must not surface ₪0 rows.
       const expenseAmount = Number(parsedBooking.amount) || 0
       let expense: { id: string } | null = null
-      if (expenseAmount > 0) {
+      // Rule (Omer, 2026-04-23): only invoices / receipts create expenses.
+      // Booking confirmations, vouchers, boarding passes stay on the Documents
+      // page — the real charge arrives later as an invoice.
+      const isChargeable = shouldCreateExpense(parsedBooking)
+      if (expenseAmount > 0 && isChargeable) {
         const expenseDate =
           parsedBooking.check_in ||
           parsedBooking.departure_date ||
@@ -876,7 +882,39 @@ async function processMessages(
         if (vendorMatch) {
           console.log(`[processMessages] dup expense skipped (vendor match): "${bookingTitle}" → existing ${vendorMatch.id.slice(0, 8)}`)
           expense = { id: vendorMatch.id }
+          // If the incoming amount is larger than the canonical one, upgrade
+          // the stored amount (gross > net). Same-booking guard — prevents
+          // stashing both the net and gross totals for the same invoice.
+          if (expenseAmount > Number(vendorMatch.amount)) {
+            await supabase.from('expenses')
+              .update({
+                amount:       expenseAmount,
+                amount_ils:   expenseAmount,
+                content_hash: buildExpenseFingerprint(matchedTripId, expenseAmount, expenseDate, bookingTitle),
+              })
+              .eq('id', vendorMatch.id)
+          }
         } else {
+          // Cross-amount same-booking check: same trip+title+currency+date
+          // but a different amount = parser caught net vs gross totals.
+          const bookingMatch = await findSameBookingExpense(
+            matchedTripId, bookingTitle, expenseCurrency, expenseDate, expenseAmount,
+          )
+          if (bookingMatch) {
+            if (expenseAmount > Number(bookingMatch.amount)) {
+              await supabase.from('expenses')
+                .update({
+                  amount:       expenseAmount,
+                  amount_ils:   expenseAmount,
+                  content_hash: buildExpenseFingerprint(matchedTripId, expenseAmount, expenseDate, bookingTitle),
+                })
+                .eq('id', bookingMatch.id)
+              console.log(`[processMessages] upgraded existing booking to larger amount: ${bookingMatch.id.slice(0, 8)}`)
+            } else {
+              console.log(`[processMessages] same-booking lesser amount skipped: "${bookingTitle}"`)
+            }
+            expense = { id: bookingMatch.id }
+          } else {
           const expenseHash = buildExpenseFingerprint(
             matchedTripId, expenseAmount, expenseDate, bookingTitle,
           )
@@ -907,7 +945,10 @@ async function processMessages(
           } else {
             expense = inserted
           }
+          }
         }
+      } else if (!isChargeable && expenseAmount > 0) {
+        console.log(`[processMessages] ✓ doc saved without expense (subtype="${parsedBooking.document_subtype}"): "${bookingTitle}"`)
       } else {
         console.log(`[processMessages] ✓ doc saved without expense (amount=0): "${bookingTitle}"`)
       }
@@ -1964,7 +2005,10 @@ export async function scanTripGmail(
           }  // end for passengers
 
           // ── Create ONE Expense record (regardless of number of passengers) ─
-          if (firstDocCreated) {
+          // Only invoices / receipts become expenses. Booking confirmations,
+          // vouchers, boarding passes stay on Documents only — the real
+          // charge arrives separately as an invoice.
+          if (firstDocCreated && shouldCreateExpense(parsedBooking)) {
             const expenseTitle = isFlight && passengers.length > 1
               ? `${baseTitle} (${passengers.length} נוסעים)`
               : (isFlight && passengers[0] ? `${baseTitle} – ${passengers[0]}` : baseTitle)
@@ -1984,6 +2028,8 @@ export async function scanTripGmail(
                 is_paid:      true,
               })
             if (expenseError) console.error('[gmailScanner/trip] Expense insert error:', expenseError)
+          } else if (firstDocCreated) {
+            console.log(`[gmailScanner/trip] ✓ doc saved without expense (subtype="${parsedBooking.document_subtype}"): "${baseTitle}"`)
           }
 
           // ── Save to email_ingests for audit trail + dedup key ─────────────

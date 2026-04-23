@@ -23,6 +23,10 @@ import CurrencySelector from '@/components/CurrencySelector'
 import WeatherWidget from '@/components/WeatherWidget'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
 import { heroStagger, itemVariants, staggerContainer, spring } from '@/lib/motion'
+import GreetingHeader from '@/components/ui/GreetingHeader'
+import TravelCard from '@/components/ui/TravelCard'
+import BudgetGauge from '@/components/ui/BudgetGauge'
+import { Insight, InsightGrid } from '@/components/ui/InsightCard'
 
 // ── Upcoming event extracted from documents ────────────────────────────────────
 interface UpcomingEvent {
@@ -118,19 +122,22 @@ export default function DashboardPage() {
   const reduce = useReducedMotion()
   const [expenses, setExpenses]         = useState<Expense[]>([])
   const [documents, setDocuments]       = useState<TripDoc[]>([])
+  const [tripBudget, setTripBudget]     = useState<number>(0)
   const [loading, setLoading]           = useState(true)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('ILS')
   const [showChart, setShowChart]       = useState(false)
 
   const fetchExpenses = useCallback(async () => {
-    if (!currentTrip) { setExpenses([]); setDocuments([]); setLoading(false); return }
+    if (!currentTrip) { setExpenses([]); setDocuments([]); setTripBudget(0); setLoading(false); return }
     try {
-      const [expRes, docRes] = await Promise.all([
+      const [expRes, docRes, tripRes] = await Promise.all([
         supabase.from('expenses').select('*').eq('trip_id', currentTrip.id).order('expense_date', { ascending: false }),
         supabase.from('documents').select('*').eq('trip_id', currentTrip.id),
+        supabase.from('trips').select('budget_ils').eq('id', currentTrip.id).maybeSingle(),
       ])
       if (!expRes.error) setExpenses(expRes.data || [])
       if (!docRes.error) setDocuments(docRes.data || [])
+      if (!tripRes.error) setTripBudget(tripRes.data?.budget_ils || 0)
     } catch (err) {
       console.error('Supabase not configured:', err)
     }
@@ -236,98 +243,84 @@ export default function DashboardPage() {
     )
   }
 
-  // ── Main Revolut-style dashboard ───────────────────────────────────────────
+  // ── Convert ILS values to display currency once, used across all cards ────
+  const toDisplay = (ils: number) => Math.round(ils * RATE_FROM_ILS[displayCurrency])
+  const symbol = CURRENCY_SYMBOL[displayCurrency]
+
+  // ── Main Revolut-inspired dashboard ────────────────────────────────────────
   return (
-    <div className="-mx-4" dir={dir}>
-      {/* ══════════════════════════════════════════════════════
-          HERO SECTION — full-width gradient + animated aurora
-          ════════════════════════════════════════════════════ */}
-      <motion.section
-        variants={heroStagger}
+    <div className="space-y-5 pt-1" dir={dir}>
+      {/* ── Greeting header (avatar + bell) ────────────────────────────────── */}
+      <GreetingHeader name={displayName} notifications={upcomingEvents.length} />
+
+      {/* ── Hero "Travel Card" ─────────────────────────────────────────────── */}
+      <TravelCard
+        tripName={currentTrip?.name}
+        destination={currentTrip?.destination}
+        amount={toDisplay(totalIls).toLocaleString('he-IL')}
+        currencySymbol={symbol}
+        cardholder={displayName?.toUpperCase()}
+        footer={
+          currentTrip
+            ? `${totalTripDays} ${t('dash_days')} · ${daysRemaining} ${t('dash_left')}`
+            : undefined
+        }
+      />
+
+      {/* ── Currency switcher + trips switcher row ─────────────────────────── */}
+      <motion.div
+        variants={itemVariants}
         initial={reduce ? false : 'initial'}
         animate="animate"
-        aria-labelledby="hero-balance-label"
-        className="relative px-5 pt-4 pb-8 overflow-hidden"
-        style={{
-          background: 'linear-gradient(160deg, #EEE9FF 0%, #DDD4FF 35%, #C5B3FF 70%, #A98EFF 100%)',
-          minHeight: 260,
-          boxShadow: 'inset 0 -1px 0 rgba(108,71,255,0.08)',
-        }}
+        className="flex items-center justify-between gap-2"
       >
-        {/* Animated aurora blobs */}
-        <motion.div
-          aria-hidden="true"
-          className="absolute top-0 right-0 w-72 h-72 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.40) 0%, transparent 70%)', transform: 'translate(40%, -40%)' }}
-          animate={reduce ? undefined : { scale: [1, 1.12, 1], x: ['40%', '32%', '40%'] }}
-          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          aria-hidden="true"
-          className="absolute bottom-0 left-0 w-56 h-56 rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(108,71,255,0.18) 0%, transparent 70%)', transform: 'translate(-30%, 40%)' }}
-          animate={reduce ? undefined : { scale: [1, 1.18, 1], y: ['40%', '46%', '40%'] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-        />
-
-        {/* Top row: greeting + currency */}
-        <motion.div variants={itemVariants} className="relative flex items-center justify-between mb-6">
-          <div>
-            <p className="text-primary-dark/70 text-xs font-medium">
-              {displayName ? `${t('dash_hello')}, ${displayName}` : t('dash_welcome')}
-            </p>
-            <p className="text-primary-dark font-bold text-sm truncate max-w-[180px]">
-              {currentTrip?.name || t('dash_no_trip')}
-            </p>
-          </div>
-          <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
-        </motion.div>
-
-        {/* Giant balance */}
-        <motion.div variants={itemVariants} className="relative text-center mb-2">
-          <p id="hero-balance-label" className="text-xs font-semibold uppercase tracking-widest text-primary-dark/60 mb-1">
-            {t('dash_total_expenses')}
-          </p>
-          <motion.div
-            initial={reduce ? undefined : { opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ ...spring.pop, delay: 0.18 }}
-          >
-            {/* Big balance — currency symbol + formatted number */}
-            <div className="flex items-end justify-center gap-1 leading-none">
-              <span className="text-2xl font-bold text-primary-dark/70 mb-2">
-                {CURRENCY_SYMBOL[displayCurrency]}
-              </span>
-              <span
-                className="text-[52px] font-black tracking-tight text-primary-dark tabular-nums"
-                aria-live="polite"
-              >
-                {Math.round(totalIls * RATE_FROM_ILS[displayCurrency]).toLocaleString('he-IL')}
-              </span>
-            </div>
-          </motion.div>
-          <p className="text-xs text-primary-dark/55 mt-1 font-medium">
-            {currentTrip?.destination} · {totalTripDays} {t('dash_days')} · {daysRemaining} {t('dash_left')}
-          </p>
-        </motion.div>
-
-        {/* Trip switcher pill */}
+        <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
         {trips.length > 1 && (
-          <motion.div variants={itemVariants} className="relative flex justify-center mt-3">
-            <Link
-              href="/trips"
-              aria-label={`עבור לרשימת כל הטיולים — סה״כ ${trips.length}`}
-              className="flex items-center gap-2 px-4 py-2 min-h-[36px] rounded-full active:scale-95 transition-all hover:bg-white/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(10px)' }}>
-              <Plane className="w-3.5 h-3.5 text-primary-dark" aria-hidden="true" />
-              <span className="text-xs font-semibold text-primary-dark">{t('dash_all_trips')}</span>
-              <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center" aria-hidden="true">
-                <span className="text-[9px] font-bold text-white">{trips.length}</span>
-              </div>
-            </Link>
-          </motion.div>
+          <Link
+            href="/trips"
+            aria-label={t('dash_all_trips')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 min-h-[40px] rounded-full bg-white border border-gray-100 text-gray-700 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            style={{ boxShadow: '0 2px 10px rgba(15,12,40,0.05), inset 0 1px 0 rgba(255,255,255,0.6)' }}
+          >
+            <Plane className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
+            <span className="text-xs font-bold">{t('dash_all_trips')}</span>
+            <span
+              className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[10px] font-black text-white"
+              aria-hidden="true"
+            >
+              {trips.length}
+            </span>
+          </Link>
         )}
-      </motion.section>
+      </motion.div>
+
+      {/* ── Budget gauge ──────────────────────────────────────────────────── */}
+      <BudgetGauge
+        budget={toDisplay(tripBudget)}
+        spent={toDisplay(totalIls)}
+        currencySymbol={symbol}
+        href="/budget"
+      />
+
+      {/* ── Insight grid ──────────────────────────────────────────────────── */}
+      <InsightGrid
+        cols={2}
+        ariaLabel={t('dash_trip_stats')}
+        insights={[
+          {
+            label: t('dash_today'),
+            value: `${symbol}${toDisplay(todayTotal).toLocaleString('he-IL')}`,
+            icon: CalendarDays,
+            tone: 'amber',
+          },
+          {
+            label: t('dash_avg_daily'),
+            value: `${symbol}${toDisplay(avgDaily).toLocaleString('he-IL')}`,
+            icon: TrendingUp,
+            tone: 'emerald',
+          },
+        ]}
+      />
 
       {/* ══════════════════════════════════════════════════════
           QUICK ACTIONS — 5 service shortcuts (horizontal scroll)
@@ -337,7 +330,8 @@ export default function DashboardPage() {
         variants={staggerContainer}
         initial={reduce ? false : 'initial'}
         animate="animate"
-        className="bg-white px-5 pt-5 pb-4 border-b border-gray-50"
+        className="bg-white rounded-3xl px-4 pt-4 pb-3 border border-gray-50/80"
+        style={{ boxShadow: '0 2px 12px rgba(15,12,40,0.04), inset 0 1px 0 rgba(255,255,255,0.6)' }}
       >
         <ul role="list" className="flex gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {[
@@ -394,54 +388,55 @@ export default function DashboardPage() {
       {/* ══════════════════════════════════════════════════════
           GMAIL SCAN BUTTON
           ════════════════════════════════════════════════════ */}
-      <div className="bg-white px-5 py-3 border-b border-gray-50">
+      <div
+        className="bg-white rounded-3xl px-4 py-3 border border-gray-50/80"
+        style={{ boxShadow: '0 2px 12px rgba(15,12,40,0.04), inset 0 1px 0 rgba(255,255,255,0.6)' }}
+      >
         <GmailScanButton onScanComplete={(created) => { if (created > 0) fetchExpenses() }} />
       </div>
 
       {/* ══════════════════════════════════════════════════════
-          STATS STRIP — horizontal scroll
+          WEATHER + TRAVEL DAYS strip
           ════════════════════════════════════════════════════ */}
       <motion.section
         aria-label={t('dash_trip_stats')}
         variants={staggerContainer}
         initial={reduce ? false : 'initial'}
         animate="animate"
-        className="bg-white px-5 py-3 border-b border-gray-50"
+        className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1"
       >
-        <ul role="list" className="flex gap-3 overflow-x-auto pb-1">
-          {[
-            { label: t('dash_avg_daily'), value: convert(avgDaily),  icon: TrendingUp,   color: '#10B981', bg: '#ECFDF5' },
-            { label: t('dash_today'),     value: convert(todayTotal), icon: CalendarDays, color: '#F59E0B', bg: '#FFFBEB' },
-            { label: t('dash_travel_days'),  value: `${totalTripDays}`, icon: Plane,     color: '#3B82F6', bg: '#EFF6FF' },
-          ].map((s, i) => (
-            <motion.li
-              key={i}
-              variants={itemVariants}
-              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl flex-shrink-0"
-              style={{
-                background: s.bg,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
-              }}>
-              <s.icon className="w-4 h-4 flex-shrink-0" style={{ color: s.color }} aria-hidden="true" />
-              <div>
-                <p className="text-[10px] text-gray-500 font-medium">{s.label}</p>
-                <p className="text-sm font-bold text-gray-800 leading-tight tabular-nums">{s.value}</p>
-              </div>
-            </motion.li>
-          ))}
-          {/* Weather mini-widget */}
-          {currentTrip?.destination && (
-            <motion.li variants={itemVariants} className="flex-shrink-0 list-none">
-              <WeatherWidget city={getDestinationCity(currentTrip.destination)} />
-            </motion.li>
-          )}
-        </ul>
+        <motion.div
+          variants={itemVariants}
+          className="flex items-center gap-2.5 px-4 py-3 rounded-2xl flex-shrink-0 bg-white border border-gray-50/80"
+          style={{ boxShadow: '0 2px 10px rgba(15,12,40,0.04), inset 0 1px 0 rgba(255,255,255,0.6)' }}
+        >
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: '#EFF6FF' }}
+            aria-hidden="true"
+          >
+            <Plane className="w-4 h-4" style={{ color: '#3B82F6' }} />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">{t('dash_travel_days')}</p>
+            <p className="text-sm font-black text-gray-900 leading-tight tabular-nums">{totalTripDays}</p>
+          </div>
+        </motion.div>
+        {/* Weather mini-widget */}
+        {currentTrip?.destination && (
+          <motion.div variants={itemVariants} className="flex-shrink-0">
+            <WeatherWidget city={getDestinationCity(currentTrip.destination)} />
+          </motion.div>
+        )}
       </motion.section>
 
       {/* ══════════════════════════════════════════════════════
           UPCOMING SCHEDULE — from timeline documents
           ════════════════════════════════════════════════════ */}
-      <div className="bg-white">
+      <div
+        className="bg-white rounded-3xl border border-gray-50/80 overflow-hidden"
+        style={{ boxShadow: '0 2px 12px rgba(15,12,40,0.04), inset 0 1px 0 rgba(255,255,255,0.6)' }}
+      >
         {/* Section header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
           <div className="flex items-center gap-2">
@@ -520,8 +515,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Bottom padding */}
-      <div className="h-6 bg-surface-secondary" />
     </div>
   )
 }

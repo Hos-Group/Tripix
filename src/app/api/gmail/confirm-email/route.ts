@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { ParsedBooking } from '@/lib/emailParser'
+import { ParsedBooking, shouldCreateExpense } from '@/lib/emailParser'
 import { buildDedupKey, findDuplicate, isDedupViolation, dedupReasonLabel } from '@/lib/documentDedup'
 
 function adminClient() {
@@ -163,19 +163,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: errMsg }, { status: 500 })
   }
 
-  // Create Expense record (best-effort)
-  await supabase.from('expenses').insert({
-    trip_id:      tripId,
-    title:        baseTitle,
-    amount:       parsedBooking.amount || 0,
-    currency:     parsedBooking.currency || 'ILS',
-    amount_ils:   parsedBooking.amount || 0,
-    category:     categoryMap[parsedBooking.booking_type] || 'other',
-    expense_date: parsedBooking.check_in || parsedBooking.departure_date || new Date().toISOString().split('T')[0],
-    notes:        `מספר אישור: ${parsedBooking.confirmation_number}\nאושר ידנית מ-Gmail: ${ingest.from_address}`,
-    source:       'document',
-    is_paid:      true,
-  })
+  // Create Expense record (best-effort) — only when the email is an actual
+  // charge (invoice / receipt). Booking confirmations stay on Documents only.
+  if (shouldCreateExpense(parsedBooking)) {
+    await supabase.from('expenses').insert({
+      trip_id:      tripId,
+      title:        baseTitle,
+      amount:       parsedBooking.amount || 0,
+      currency:     parsedBooking.currency || 'ILS',
+      amount_ils:   parsedBooking.amount || 0,
+      category:     categoryMap[parsedBooking.booking_type] || 'other',
+      expense_date: parsedBooking.check_in || parsedBooking.departure_date || new Date().toISOString().split('T')[0],
+      notes:        `מספר אישור: ${parsedBooking.confirmation_number}\nאושר ידנית מ-Gmail: ${ingest.from_address}`,
+      source:       'document',
+      is_paid:      true,
+    })
+  } else {
+    console.log(`[confirm-email] ✓ doc saved without expense (subtype="${parsedBooking.document_subtype}"): "${baseTitle}"`)
+  }
 
   // Mark ingest as processed
   await supabase

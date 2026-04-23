@@ -97,6 +97,59 @@ export async function findDuplicateExpense(
 }
 
 /**
+ * Same-booking lookup: finds an existing expense in the same trip with the
+ * SAME exact title + currency + date AND an amount within a typical
+ * net/gross tax ratio of the incoming amount.
+ *
+ * Used to detect "two amounts for one booking" — the classic parser failure
+ * where a hotel invoice shows both net (pre-tax) and gross (post-tax) totals
+ * and the scanner creates two rows (e.g. Anantara Koh Yao Yai: €1200 net +
+ * €1330 gross on the same day). One booking = one payment.
+ *
+ * Ratio guard (ratio = max / min):
+ *   - ≤ 1.30  → same booking (typical VAT/service tax is 7–25%)
+ *   - > 1.30  → probably legitimately separate charges
+ *              (e.g. 3 per-passenger tickets at 965 / 3850 / 7450 THB on the
+ *              same flight — scanner couldn't attach passenger names)
+ *
+ * Important — uses the FULL title (no passenger suffix strip), so three
+ * per-passenger tickets with identical prefix + distinct passenger suffixes
+ * are never matched either (titles differ before the amount ratio even runs).
+ */
+export async function findSameBookingExpense(
+  tripId:         string,
+  title:          string,
+  currency:       string,
+  date:           string,
+  incomingAmount: number,
+): Promise<DuplicateExpense | null> {
+  const trimmedTitle = title.trim()
+  if (!trimmedTitle || !Number.isFinite(incomingAmount) || incomingAmount <= 0) return null
+  const { data } = await defaultSupabase
+    .from('expenses')
+    .select('id, title, amount, currency, expense_date, source')
+    .eq('trip_id',      tripId)
+    .eq('expense_date', date)
+    .eq('currency',     currency)
+    .eq('title',        trimmedTitle)
+  if (!data || data.length === 0) return null
+  // Within rows that already share (trip, title, currency, date), only
+  // treat as a same-booking match if the amount ratio is within the
+  // net/gross band.  Otherwise the other row(s) are legitimate peers.
+  const MAX_RATIO = 1.30
+  const candidates = data.filter(r => {
+    const a = Number(r.amount)
+    if (!Number.isFinite(a) || a <= 0) return false
+    const ratio = Math.max(a, incomingAmount) / Math.min(a, incomingAmount)
+    return ratio <= MAX_RATIO
+  })
+  if (candidates.length === 0) return null
+  // Largest-amount candidate wins (= keeps the gross total).
+  candidates.sort((x, y) => Number(y.amount) - Number(x.amount))
+  return candidates[0] as DuplicateExpense
+}
+
+/**
  * Cross-date vendor lookup: finds an existing expense in the same trip with
  * the same normalized title + amount + currency, regardless of the expense
  * date.
@@ -383,6 +436,31 @@ export async function insertExpenseFromDocument(
   const vendorMatch = await findVendorExpense(input.trip_id, input.name, amount, currency)
   if (vendorMatch) {
     return { inserted: false, reason: 'duplicate', id: vendorMatch.id }
+  }
+
+  // Same-booking cross-amount check: if an expense already exists for the
+  // exact same (trip, title, currency, date) with a DIFFERENT amount within
+  // the typical net/gross tax ratio, it's almost certainly the same booking
+  // parsed twice (net vs gross totals). Keep the larger amount.
+  const bookingMatch = await findSameBookingExpense(
+    input.trip_id, input.name, currency, expenseDate, amount,
+  )
+  if (bookingMatch) {
+    if (Number(bookingMatch.amount) >= amount) {
+      // Existing row is larger/equal → the incoming row is the lesser (net) amount.
+      return { inserted: false, reason: 'duplicate', id: bookingMatch.id }
+    }
+    // Incoming row is larger (gross) → upgrade the canonical row to this
+    // amount and skip inserting a new one.  Use the service-role client when
+    // the caller passed one; otherwise fall back to the default.
+    await db.from('expenses')
+      .update({
+        amount,
+        amount_ils:   input.amount_ils,
+        content_hash: buildExpenseFingerprint(input.trip_id, amount, expenseDate, input.name),
+      })
+      .eq('id', bookingMatch.id)
+    return { inserted: false, reason: 'duplicate', id: bookingMatch.id }
   }
 
   const fingerprint = buildExpenseFingerprint(input.trip_id, amount, expenseDate, input.name)

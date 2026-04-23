@@ -50,6 +50,40 @@ export interface ParsedBooking {
   invoice_to?: string           // company/entity the invoice is addressed to
 }
 
+// ─── Classification helpers ─────────────────────────────────────────────────
+// Used by every ingest flow (Gmail scan, Outlook scan, email webhook, manual
+// confirm) to decide whether a parsed document should generate an expense row.
+//
+// Rule (Omer, 2026-04-23):
+//   - Actual charge (invoice / receipt)   → create BOTH a document AND an expense
+//   - Booking confirmation / voucher /
+//     boarding pass / itinerary / policy  → create ONLY the document (no expense)
+//
+// Rationale: a booking confirmation signals intent or a hold, not a completed
+// payment. The real charge arrives later as an invoice from the hotel/airline
+// or the vendor's billing system. Counting the confirmation AND the invoice
+// would double-charge the trip's budget.
+
+export type DocumentSubtype = ParsedBooking['document_subtype']
+
+/** Subtypes that represent an actual payment event and become expenses. */
+export const EXPENSE_SUBTYPES: ReadonlySet<DocumentSubtype> = new Set<DocumentSubtype>([
+  'invoice',
+  'receipt',
+])
+
+/**
+ * Returns true if the parsed document should create an expense row.
+ * Defaults to FALSE for unknown / missing subtypes — we'd rather miss an
+ * expense than double-count a booking confirmation.
+ */
+export function shouldCreateExpense(parsed: ParsedBooking | null | undefined): boolean {
+  if (!parsed) return false
+  const subtype = parsed.document_subtype
+  if (!subtype) return false
+  return EXPENSE_SUBTYPES.has(subtype)
+}
+
 /** Optional trip context to feed Claude for context-aware parsing */
 export interface TripContext {
   destination:    string    // e.g. "Thailand", "ספרד"
@@ -220,6 +254,14 @@ const BASE_BOOKING_FIELDS = `{
 }`
 
 const BOOKING_TYPE_GUIDE = `
+══════════════════════════════════════════
+💰 שדה amount — כלל קשיח:
+- תמיד החזר את **הסכום הסופי ששולם בפועל** (gross, total, כולל מע"מ, שירות ומיסים).
+- אם המסמך מציג גם net/subtotal וגם total/gross — החזר את ה-**gross** בלבד.
+- לעולם אל תחזיר subtotal, "before tax", deposit, מחיר-לנוסע-בודד, או מחיר-Leg-בודד כשקיים total כולל.
+- אם אין סכום ברור כלל, החזר 0 (לא המצאה).
+- amount_ils לא נדרש מהפרומט — יחושב בצד השרת לפי שער יומי.
+
 ══════════════════════════════════════════
 📋 סיווג booking_type:
 - hotel = מלון, צימר, Airbnb, hostel, villa

@@ -121,15 +121,75 @@ function buildDocGroups(docs: Document[], preserveOrder = false): DocGroup[] {
   return result
 }
 
-function getSubDocLabel(doc: Document): string {
+// ── Document classification ────────────────────────────────────────────────
+// Every document carries a classification — what KIND of document it is,
+// independent of its category (hotel/flight/…).
+// Required types (Omer, 2026-04-23):
+//   חשבונית · קבלה · אישור הזמנה · בורדינג · כרטיס טיסה
+// Plus a few extras the parser already emits (voucher, itinerary, policy).
+type ClassificationTone = 'emerald' | 'blue' | 'violet' | 'amber' | 'gray'
+
+interface DocClassification {
+  label:  string
+  short:  string                // shorter form for tight spots
+  tone:   ClassificationTone
+}
+
+const CLASS_TONE: Record<ClassificationTone, { bg: string; text: string; ring: string }> = {
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200/60' },
+  blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    ring: 'ring-blue-200/60'    },
+  violet:  { bg: 'bg-violet-50',  text: 'text-violet-700',  ring: 'ring-violet-200/60'  },
+  amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   ring: 'ring-amber-200/60'   },
+  gray:    { bg: 'bg-gray-100',   text: 'text-gray-600',    ring: 'ring-gray-200/60'    },
+}
+
+function getDocClassification(doc: Document): DocClassification {
   const ext = doc.extracted_data as Record<string, unknown> | null
   const subtype = (ext?.document_subtype as string | undefined)?.toLowerCase()
-  if (subtype === 'invoice') return 'חשבונית'
-  if (subtype === 'receipt') return 'קבלה'
-  if (subtype === 'confirmation') return 'אישור הזמנה'
-  if (doc.doc_type === 'hotel') return 'אישור הזמנה'
-  if (doc.doc_type === 'flight') return 'כרטיס טיסה'
-  return DOC_TYPE_META[doc.doc_type]?.label || 'מסמך'
+
+  // Explicit subtype wins — these are AI-extracted
+  switch (subtype) {
+    case 'invoice':              return { label: 'חשבונית',      short: 'חשבונית',  tone: 'emerald' }
+    case 'receipt':              return { label: 'קבלה',         short: 'קבלה',     tone: 'emerald' }
+    case 'booking_confirmation':
+    case 'confirmation':         return { label: 'אישור הזמנה',  short: 'אישור',    tone: 'blue'    }
+    case 'boarding_pass':        return { label: 'בורדינג',      short: 'בורדינג',  tone: 'violet'  }
+    case 'e_ticket':             return { label: 'כרטיס טיסה',   short: 'כרטיס',    tone: 'blue'    }
+    case 'voucher':              return { label: 'שובר',         short: 'שובר',     tone: 'emerald' }
+    case 'itinerary':            return { label: 'מסלול',        short: 'מסלול',    tone: 'gray'    }
+    case 'policy':               return { label: 'פוליסה',       short: 'פוליסה',   tone: 'emerald' }
+    case 'check_in_reminder':    return { label: 'תזכורת צ׳ק-אין', short: 'תזכורת', tone: 'amber'   }
+  }
+
+  // Fallback — infer from the document's category.
+  switch (doc.doc_type) {
+    case 'hotel':     return { label: 'אישור הזמנה',  short: 'אישור',  tone: 'blue'   }
+    case 'flight':    return { label: 'כרטיס טיסה',   short: 'כרטיס',  tone: 'blue'   }
+    case 'ferry':     return { label: 'כרטיס מעבורת', short: 'כרטיס',  tone: 'blue'   }
+    case 'passport':  return { label: 'דרכון',        short: 'דרכון',  tone: 'violet' }
+    case 'visa':      return { label: 'ויזה',         short: 'ויזה',   tone: 'violet' }
+    case 'insurance': return { label: 'ביטוח',        short: 'ביטוח',  tone: 'emerald'}
+    case 'activity':  return { label: 'כרטיס פעילות', short: 'פעילות', tone: 'amber'  }
+    default:          return { label: 'מסמך',          short: 'מסמך',   tone: 'gray'   }
+  }
+}
+
+function ClassificationBadge({ doc, size = 'md' }: { doc: Document; size?: 'sm' | 'md' }) {
+  const c = getDocClassification(doc)
+  const tone = CLASS_TONE[c.tone]
+  const sizing = size === 'sm'
+    ? 'text-[9px] px-1.5 py-0.5'
+    : 'text-[10px] px-2 py-0.5'
+  return (
+    <span className={`inline-flex items-center gap-1 font-semibold rounded-full ring-1 ${tone.bg} ${tone.text} ${tone.ring} ${sizing}`}>
+      {c.label}
+    </span>
+  )
+}
+
+// Backwards-compat alias — kept so existing call sites keep working.
+function getSubDocLabel(doc: Document): string {
+  return getDocClassification(doc).label
 }
 
 // ── Type-level folder grouping ───────────────────────────────────────────────
@@ -192,8 +252,24 @@ function getEntityLabel(doc: Document): string {
   return (doc.name || '').trim() || DOC_TYPE_META[doc.doc_type]?.label || 'מסמך'
 }
 
+// Normalize hotel/entity names for matching — strips punctuation, common
+// hotel suffixes ("Hotel", "Resort"), and collapses whitespace. Means
+// "The Ritz-Carlton, Tel Aviv" and "Ritz Carlton Tel Aviv Hotel" collapse
+// to the same key.
+function normalizeEntityKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[\u0591-\u05C7]/g, '')         // strip Hebrew niqqud
+    .replace(/[.,\-–—_/\\|"'`()&*#]+/g, ' ') // drop punctuation
+    .replace(/\b(hotel|resort|suites?|spa|inn)\b/g, '')
+    .replace(/\bthe\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function getEntityKey(doc: Document): string {
-  return getEntityLabel(doc).toLowerCase().replace(/\s+/g, ' ').trim()
+  return normalizeEntityKey(getEntityLabel(doc))
 }
 
 interface EntityGroup {
@@ -202,17 +278,45 @@ interface EntityGroup {
   groups: DocGroup[]   // one or more bookings for this entity
 }
 
+// Build entity groups with two-pass matching:
+//   Pass 1 — exact entity-key match (normalized hotel name / flight route / …)
+//   Pass 2 — merge by shared booking_ref (an invoice for a hotel keeps the
+//            same booking_ref as the confirmation; this catches the case
+//            where hotel_name got extracted differently on the two docs).
 function buildEntityGroups(groups: DocGroup[]): EntityGroup[] {
   const byEntity = new Map<string, EntityGroup>()
   const order:    string[] = []
+
+  // Build a reverse index of booking_ref → entityKey for pass 2
+  const bookingRefToEntity = new Map<string, string>()
+
   for (const g of groups) {
     const primary = g.docs[0]
-    const key     = getEntityKey(primary)
+    let key       = getEntityKey(primary)
+
+    // Pass 2 — if ANY doc in this group shares a booking_ref with an already-
+    // seen entity, merge into that entity (handles "hotel confirmation +
+    // invoice with different hotel_name").
+    for (const d of g.docs) {
+      const ref = d.booking_ref?.trim().toLowerCase()
+      if (ref && bookingRefToEntity.has(ref)) {
+        key = bookingRefToEntity.get(ref)!
+        break
+      }
+    }
+
     if (!byEntity.has(key)) {
       byEntity.set(key, { key, label: getEntityLabel(primary), groups: [] })
       order.push(key)
     }
     byEntity.get(key)!.groups.push(g)
+
+    // Record all booking_refs under this entity so future groups with the
+    // same ref get merged here.
+    for (const d of g.docs) {
+      const ref = d.booking_ref?.trim().toLowerCase()
+      if (ref) bookingRefToEntity.set(ref, key)
+    }
   }
   return order.map(k => byEntity.get(k)!)
 }
@@ -1008,7 +1112,10 @@ export default function DocumentsPage() {
               {isSel ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4 text-gray-300" />}
             </div>
           )}
-          <div className="mb-3"><DocTypeIconBadge type={doc.doc_type} size="md" /></div>
+          <div className="mb-3 flex items-start justify-between gap-1">
+            <DocTypeIconBadge type={doc.doc_type} size="md" />
+            <ClassificationBadge doc={doc} size="sm" />
+          </div>
           <p className="text-xs font-bold truncate">{doc.name}</p>
           <p className="text-[10px] text-gray-400 truncate">{getTravelerName(travelers, doc.traveler_id)}</p>
           {doc.booking_ref && (
@@ -1058,10 +1165,13 @@ export default function DocumentsPage() {
             </div>
           )}
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               <DocTypeIconBadge type={doc.doc_type} size="md" />
-              <div>
-                <p className="text-sm font-bold">{doc.name}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-bold truncate">{doc.name}</p>
+                  <ClassificationBadge doc={doc} />
+                </div>
                 <p className="text-xs text-gray-400">{getTravelerName(travelers, doc.traveler_id)}</p>
               </div>
             </div>
@@ -1150,6 +1260,7 @@ export default function DocumentsPage() {
               {isNew && (
                 <span className="flex-shrink-0 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
               )}
+              <ClassificationBadge doc={doc} />
               {(() => {
                 const s = getDocStatus(doc)
                 return s ? <StatusBadge status={s} /> : null
@@ -1247,11 +1358,12 @@ export default function DocumentsPage() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-sm font-bold truncate">{primary.name}</p>
                 <span className="flex-shrink-0 bg-primary/10 text-primary text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                   <FolderOpen className="w-2.5 h-2.5" /> {group.docs.length}
                 </span>
+                <ClassificationBadge doc={primary} />
                 {isNew && (
                   <span className="flex-shrink-0 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
                 )}
@@ -1351,8 +1463,17 @@ export default function DocumentsPage() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-gray-700">{getSubDocLabel(doc)}</p>
-                        <p className="text-[10px] text-gray-400 truncate">{doc.name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <ClassificationBadge doc={doc} size="sm" />
+                          {(() => {
+                            const ext = doc.extracted_data as Record<string, unknown> | null
+                            const amt = Number((ext?.amount as number | string | undefined) ?? NaN)
+                            const cur = (ext?.currency as string | undefined) || ''
+                            if (!amt || amt <= 0) return null
+                            return <span className="text-[9px] text-gray-500 font-semibold">{cur} {amt.toLocaleString()}</span>
+                          })()}
+                        </div>
+                        <p className="text-[10px] text-gray-400 truncate mt-0.5">{doc.name}</p>
                         {doc.valid_from && (
                           <p className="text-[10px] text-gray-400">{formatDateShort(doc.valid_from)}{doc.valid_until ? ` → ${formatDateShort(doc.valid_until)}` : ''}</p>
                         )}

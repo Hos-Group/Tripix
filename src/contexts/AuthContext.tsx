@@ -35,7 +35,11 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 })
 
-const PUBLIC_PATHS = ['/auth/login', '/auth/signup', '/']
+// Routes accessible without auth.
+// Note: '/' is a server-side redirect to /dashboard (see src/app/page.tsx),
+// so unauthenticated users hit /dashboard → bounced here to /auth/login.
+// '/landing' is the legacy marketing page, kept reachable directly.
+const PUBLIC_PATHS = ['/auth/login', '/auth/signup', '/landing']
 
 /**
  * Check if Supabase has a non-expired session token in localStorage.

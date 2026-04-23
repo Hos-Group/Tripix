@@ -62,21 +62,31 @@ export default function HotelStaysStrip({ stays, onCharge, onViewReport }: Props
                 {stay.check_in} · {stay.nights} לילות
               </p>
 
-              <div className="mt-3 pt-3 border-t border-gray-50 flex items-end justify-between">
-                <div>
-                  <p className="text-[10px] text-gray-400 font-medium">חיובים בחדר</p>
-                  <p className="text-base font-black text-gray-900 leading-tight">
-                    {formatMoney(stay.incidentals_total_ils)}
-                  </p>
-                  <p className="text-[10px] text-gray-400">
-                    {stay.incidentals_count} חיובים
+              <div className="mt-3 pt-3 border-t border-gray-50">
+                {/* GRAND TOTAL — room + incidentals */}
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <p className="text-[10px] text-gray-400 font-medium">סה״כ הוצאות</p>
+                  <p className="text-lg font-black text-gray-900 leading-tight">
+                    {formatMoney(stay.pre_paid_total_ils + stay.incidentals_total_ils)}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 text-[11px] font-bold text-primary">
+                {/* Breakdown: room (pre-paid) + incidentals */}
+                <div className="space-y-0.5 text-[10px] text-gray-500">
+                  <div className="flex justify-between">
+                    <span>🏨 חדר</span>
+                    <span className="font-semibold text-gray-700">{formatMoney(stay.pre_paid_total_ils)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>💳 חיובים בחדר · {stay.incidentals_count}</span>
+                    <span className="font-semibold text-gray-700">{formatMoney(stay.incidentals_total_ils)}</span>
+                  </div>
+                </div>
+                {/* CTA */}
+                <div className="mt-2 pt-2 border-t border-gray-50 flex items-center justify-end gap-1 text-[11px] font-bold text-primary">
                   {isEnded ? (
                     <>
                       <FileText className="w-3.5 h-3.5" aria-hidden="true" />
-                      דוח
+                      דוח מלא
                     </>
                   ) : (
                     <>

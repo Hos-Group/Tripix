@@ -22,6 +22,8 @@ import HotelStaysStrip from '@/components/hotel/HotelStaysStrip'
 import QuickChargeSheet from '@/components/hotel/QuickChargeSheet'
 import StayReport from '@/components/hotel/StayReport'
 import { buildHotelStays, type HotelStay, type HotelDocumentRow, type ExpenseRow as HotelExpenseRow } from '@/components/hotel/hotelTab'
+import ExpenseDetailSheet from '@/components/expenses/ExpenseDetailSheet'
+import CategoryBreakdown from '@/components/expenses/CategoryBreakdown'
 import { tFormat } from '@/lib/i18n'
 
 const CATEGORIES: Category[] = [
@@ -51,6 +53,7 @@ export default function ExpensesPage() {
   const [hotelDocs, setHotelDocs]     = useState<HotelDocumentRow[]>([])
   const [chargingStay, setChargingStay] = useState<HotelStay | null>(null)
   const [reportStay, setReportStay]   = useState<HotelStay | null>(null)
+  const [detailExpense, setDetailExpense] = useState<Expense | null>(null)
 
   // ── Doc viewer (opens the document or email linked to an expense) ──────
   const [docViewerUrl,       setDocViewerUrl]       = useState<string | null>(null)
@@ -539,6 +542,11 @@ export default function ExpensesPage() {
         onViewReport={setReportStay}
       />
 
+      {/* ── Summary — totals per hotel / per category ── */}
+      {expenses.length > 0 && (
+        <CategoryBreakdown expenses={expenses} stays={hotelStays} />
+      )}
+
       {/* ── Search ── */}
       <div className="relative">
         <label htmlFor="exp-search" className="sr-only">{t('exp_search_label')}</label>
@@ -667,21 +675,19 @@ export default function ExpensesPage() {
                           variants={itemVariants}
                           exit={{ opacity: 0, x: 24, transition: { duration: 0.18 } }}
                           transition={spring.ui}
-                          className={`grid items-center gap-2 px-3.5 py-3 transition-colors
-                            ${expenseHasDoc(exp) ? 'cursor-pointer hover:bg-primary/5 active:bg-primary/10' : 'active:bg-gray-50'}
+                          className={`grid items-center gap-2 px-3.5 py-3 cursor-pointer hover:bg-primary/5 active:bg-primary/10 transition-colors
                             ${i < dayExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}
                           style={{ gridTemplateColumns: '36px minmax(0,1fr) auto' }}
                           onClick={(e) => {
-                            // Don't trigger when the user hits one of the action icons
+                            // Don't trigger when the user hits one of the inline action icons
                             if ((e.target as HTMLElement).closest('button')) return
-                            if (expenseHasDoc(exp)) openExpenseDoc(exp)
+                            setDetailExpense(exp)
                           }}
-                          role={expenseHasDoc(exp) ? 'button' : undefined}
-                          tabIndex={expenseHasDoc(exp) ? 0 : undefined}
+                          role="button"
+                          tabIndex={0}
                           onKeyDown={(e) => {
-                            if (!expenseHasDoc(exp)) return
                             if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault(); openExpenseDoc(exp)
+                              e.preventDefault(); setDetailExpense(exp)
                             }
                           }}
                         >
@@ -840,6 +846,15 @@ export default function ExpensesPage() {
       <StayReport
         stay={reportStay}
         onClose={() => setReportStay(null)}
+      />
+
+      {/* Tap-to-view detail sheet — summary + inline doc + actions */}
+      <ExpenseDetailSheet
+        expense={detailExpense}
+        onClose={() => setDetailExpense(null)}
+        onEdit={startEdit}
+        onSplit={(exp) => setSplitExpense(exp)}
+        onDelete={(exp) => setDeletingExpense(exp)}
       />
 
       {/* In-app viewer for the document / receipt / email linked to an expense */}
