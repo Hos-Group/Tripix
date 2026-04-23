@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Camera, Upload, FileText, Check, Loader2, ArrowRight, Edit3, AlertCircle, Shield, ExternalLink, ScanLine } from 'lucide-react'
+import { Upload, Check, Loader2, ArrowRight, Edit3, AlertCircle, Shield, ExternalLink, ScanLine } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DocumentScanner from '@/components/scan/DocumentScanner'
 import toast from 'react-hot-toast'
@@ -638,7 +638,6 @@ export default function ScanPage() {
     setSavedFileUrl(null)
     setShowViewer(false)
     setDupExpenseWarning(null)
-    if (cameraRef.current) cameraRef.current.value = ''
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -704,16 +703,13 @@ export default function ScanPage() {
           <motion.div key="choose" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
             <p className="text-sm text-gray-600 text-center">בחרו מה לסרוק — Tripix ינתח הכל אוטומטית</p>
 
-            {/* Primary: Document Scanner */}
+            {/* Reopen scanner */}
             <button
               type="button"
-              onClick={() => { setScannerContext('document'); setShowScanner(true) }}
-              aria-label="סרוק מסמך — תיקון פרספקטיבה אוטומטי"
+              onClick={() => setShowScanner(true)}
+              aria-label="סרוק מסמך"
               className="w-full relative overflow-hidden rounded-3xl p-7 active:scale-95 transition-all text-white focus-visible:ring-4 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
               style={{ background: 'linear-gradient(140deg, #6C47FF 0%, #9B7BFF 60%, #B9A0FF 100%)', boxShadow: '0 12px 32px rgba(108,71,255,0.35)' }}>
-              <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="w-32 h-32 rounded-full animate-ping" style={{ background: 'rgba(255,255,255,0.06)' }} />
-              </span>
               <div className="relative flex flex-col items-center gap-4">
                 <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center"
                   style={{ backdropFilter: 'blur(8px)' }} aria-hidden="true">
@@ -721,40 +717,29 @@ export default function ScanPage() {
                 </div>
                 <div className="text-center">
                   <p className="font-black text-xl tracking-tight">סרוק מסמך</p>
-                  <p className="text-sm text-white/85 mt-0.5">תיקון פרספקטיבה + AI מנתח הכל</p>
+                  <p className="text-sm text-white/85 mt-0.5">AI מסווג ומנתח הכל אוטומטית</p>
                 </div>
               </div>
             </button>
 
-            {/* Secondary options */}
-            {[
-              { m: 'receipt'  as ScanMode, icon: Camera,   bg: 'rgba(108,71,255,0.10)', iconColor: '#6C47FF', title: 'צלם קבלה',           sub: 'תצלום מהיר + חילוץ פרטים',       scanner: true,  ctx: 'receipt'  as const },
-              { m: 'document' as ScanMode, icon: Upload,   bg: 'rgba(59,130,246,0.10)',  iconColor: '#3B82F6', title: 'העלה מסמך הזמנה',  sub: 'טיסה / מלון / מעבורת / פעילות', scanner: false, ctx: 'document' as const },
-              { m: 'passport' as ScanMode, icon: FileText, bg: 'rgba(16,185,129,0.10)', iconColor: '#10B981', title: 'סרוק דרכון',          sub: 'חילוץ פרטי דרכון אוטומטי',      scanner: false, ctx: 'document' as const },
-            ].map(({ m, icon: Icon, bg, iconColor, title, sub, scanner, ctx }) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setMode(m)
-                  if (scanner) { setScannerContext(ctx); setShowScanner(true) }
-                  else fileRef.current?.click()
-                }}
-                aria-label={`${title} — ${sub}`}
-                className="w-full bg-white rounded-2xl p-5 min-h-[80px] shadow-card flex items-center gap-4 active:scale-95 transition-all border border-gray-50/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: bg }} aria-hidden="true">
-                  <Icon className="w-6 h-6" style={{ color: iconColor }} />
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-sm text-gray-900">{title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
-                </div>
-              </button>
-            ))}
+            {/* File upload (PDF / image without scanner) */}
+            <button
+              type="button"
+              onClick={() => { setMode('document'); fileRef.current?.click() }}
+              aria-label="העלה מסמך — טיסה / מלון / מעבורת / פעילות"
+              className="w-full bg-white rounded-2xl p-5 min-h-[80px] shadow-card flex items-center gap-4 active:scale-95 transition-all border border-gray-50/80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(59,130,246,0.10)' }} aria-hidden="true">
+                <Upload className="w-6 h-6 text-blue-500" />
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-sm text-gray-900">העלה קובץ</p>
+                <p className="text-xs text-gray-500 mt-0.5">תמונה או PDF — טיסה / מלון / פעילות</p>
+              </div>
+            </button>
 
             <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f, mode === 'receipt' ? 'receipt' : 'document') }} />
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f, 'document') }} />
           </motion.div>
         )}
 
