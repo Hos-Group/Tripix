@@ -424,78 +424,137 @@ const NON_TRAVEL_TYPES = new Set(['food', 'other'])
 /**
  * Check if a Claude-parsed booking is relevant to the given trip.
  *
- * Rules (in order):
- *  1. Non-travel types (food/other) MUST have destination match — no destination = reject
- *  2. Travel-core types with destination extracted — destination MUST match
- *  3. Travel-core types with NO destination — must be within trip date window
- *  4. Date window check — booking date must be within 365d before trip start .. 30d after end
+ * STRICT HARD GATE — runs regardless of what Claude says in trip_relevant.
+ * Claude is advisory only; this function is the ground truth.
+ *
+ * Rules (strict):
+ *  - Require AT LEAST ONE of {destination-match, date-match} to be TRUE.
+ *    Bookings with neither signal matching are ALWAYS rejected.
+ *
+ *  - For `food` / `other` types: require BOTH dest-match AND a date strictly
+ *    inside the trip window. These are high-noise categories.
+ *
+ *  - For travel-core types with an extracted destination that doesn't match
+ *    the trip → reject, regardless of confidence (even if Claude "thinks"
+ *    it's relevant).
+ *
+ *  - Date window (travel-core): 30 days before trip start → 14 days after end.
+ *    Exception for `insurance` / `visa`: 180 days before start — these are
+ *    routinely bought months in advance.
+ *
+ *  - Travel-core with NO extracted destination → require a date match AND
+ *    confidence ≥ 0.85. Low-confidence dest-less bookings were the #1
+ *    source of false positives in previous regressions.
  *
  * Returns 'ok' | 'wrong_dest' | 'wrong_date'
  */
-function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_dest' | 'wrong_date' {
+export function checkRelevance(booking: ParsedBooking, trip: TripRow): 'ok' | 'wrong_dest' | 'wrong_date' {
   const city    = (booking.destination_city    || '').toLowerCase().trim()
   const country = (booking.destination_country || '').toLowerCase().trim()
   const hasExtractedDest = city.length >= 3 || country.length >= 3
 
-  const tripCountry = resolveTripCountry(trip.destination)
-  const aliases     = tripCountry ? COUNTRY_CITY_MAP[tripCountry] : []
+  // Destination matching: country-alias map + trip.cities
+  const tripCountry   = resolveTripCountry(trip.destination)
+  const countryAlias  = tripCountry ? COUNTRY_CITY_MAP[tripCountry] : []
+  const tripCityList  = (trip.cities || []).map(c => c.toLowerCase().trim()).filter(c => c.length >= 3)
+  const tripDestNorm  = (trip.destination || '').toLowerCase().trim()
+  const allAliases    = [...countryAlias, ...tripCityList, tripDestNorm].filter(a => a && a.length >= 3)
 
   const destMatches = (text: string) =>
     text.length >= 3 &&
-    aliases.some(a => a.length >= 3 && (text.includes(a) || a.includes(text)))
+    allAliases.some(a => text.includes(a) || a.includes(text))
 
   const destOk = hasExtractedDest
     ? (destMatches(city) || destMatches(country))
-    : false  // no destination extracted → not confirmed
+    : false
 
-  // ── Rule 1: Non-travel types need explicit destination match ──────────────
-  if (NON_TRAVEL_TYPES.has(booking.booking_type)) {
-    if (!destOk) {
-      console.log(
-        `[checkRelevance] ✗ non-travel type="${booking.booking_type}" no dest match: "${booking.vendor}" ` +
-        `city="${city}" country="${country}" ≠ trip="${trip.destination}"`,
-      )
-      return 'wrong_dest'
-    }
-  }
+  // ── Date computation ──────────────────────────────────────────────────────
+  // Per-type windows: the 30/14 day defaults were too wide for flights (a
+  // ticket for 11 days after trip-end is almost always a DIFFERENT trip,
+  // not the current one). Tightened per real-world patterns.
+  const tripStart    = new Date(trip.start_date)
+  const tripEnd      = new Date(trip.end_date)
+  const type         = booking.booking_type
 
-  // ── Rule 2: Travel-core types with extracted destination — must match ──────
-  if (TRAVEL_CORE_TYPES.has(booking.booking_type) && hasExtractedDest && !destOk) {
+  // preDays = how far BEFORE the trip the booking-date can be
+  // postDays = how far AFTER the trip the service-date can be
+  const preDays =
+    type === 'insurance' ? 180 :  // annual-policy / pre-trip purchase
+    type === 'hotel'     ? 14  :  // hotel bookings made weeks in advance
+    type === 'flight'    ? 14  :  // flight bookings made weeks in advance
+    14
+  const postDays =
+    type === 'insurance' ? 30  :  // claims can arrive after
+    type === 'hotel'     ? 1   :  // check-out is inside the trip by definition
+    type === 'flight'    ? 2   :  // return flight within a day or two of end
+    type === 'activity'  ? 2   :
+    3
+
+  const windowStart  = new Date(tripStart); windowStart.setDate(windowStart.getDate() - preDays)
+  const windowEnd    = new Date(tripEnd);   windowEnd.setDate(windowEnd.getDate() + postDays)
+
+  const bookingDateStr = booking.check_in || booking.departure_date
+  const bookingDate    = bookingDateStr ? new Date(bookingDateStr) : null
+  const dateOk         = bookingDate ? (bookingDate >= windowStart && bookingDate <= windowEnd) : false
+  const hasDate        = !!bookingDate
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ZERO-TRUST RULES (2026-04-23 regression fix, Omer)
+  //
+  // There are NO CONFIDENCE-BASED ESCAPE HATCHES. If we can't prove the doc
+  // belongs to THIS trip using destination + date signals, we reject.
+  //
+  // Both signals are REQUIRED:
+  //   1. destination extracted AND matches the trip → pass dest gate
+  //   2. date extracted AND inside the window → pass date gate
+  //
+  // Only exception: annual travel insurance without a specific date. For
+  // insurance we allow missing date IFF destination matches.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── Gate 1: DESTINATION — must be extracted AND must match the trip
+  if (!hasExtractedDest) {
     console.log(
-      `[checkRelevance] ✗ dest mismatch: "${booking.vendor}" ` +
-      `city="${city}" country="${country}" ≠ trip="${trip.destination}"`,
+      `[checkRelevance] ✗ NO DESTINATION extracted — reject: ` +
+      `"${booking.vendor}" type=${booking.booking_type} conf=${booking.confidence} ` +
+      `(an extractor that can't name a destination cannot be trusted)`,
+    )
+    return 'wrong_dest'
+  }
+  if (!destOk) {
+    console.log(
+      `[checkRelevance] ✗ DEST MISMATCH: "${booking.vendor}" city="${city}" country="${country}" ` +
+      `≠ trip="${trip.destination}" (aliases=${allAliases.slice(0, 8).join(',')})`,
     )
     return 'wrong_dest'
   }
 
-  // ── Rule 3: Travel-core with NO destination — require high confidence ──────
-  if (TRAVEL_CORE_TYPES.has(booking.booking_type) && !hasExtractedDest) {
-    if (booking.confidence < 0.60) {
-      console.log(
-        `[checkRelevance] ✗ no dest extracted + conf=${booking.confidence} < 0.60: "${booking.vendor}"`,
-      )
-      return 'wrong_dest'
+  // ── Gate 2: DATE — required except for annual-policy insurance
+  if (!hasDate) {
+    if (booking.booking_type === 'insurance') {
+      // Annual / multi-trip insurance w/ dest match: acceptable.
+      console.log(`[checkRelevance] ✓ insurance policy without specific date but dest match: "${booking.vendor}"`)
+      return 'ok'
     }
+    console.log(`[checkRelevance] ✗ NO DATE extracted — reject: "${booking.vendor}" (${booking.booking_type})`)
+    return 'wrong_date'
   }
 
-  // ── Rule 4: Date window ───────────────────────────────────────────────────
-  // 365 days before trip start → 30 days after end
-  // (covers visa applications, travel insurance, advance bookings)
-  const tripStart   = new Date(trip.start_date)
-  const tripEnd     = new Date(trip.end_date)
-  const windowStart = new Date(tripStart)
-  windowStart.setDate(windowStart.getDate() - 365)
-  const windowEnd   = new Date(tripEnd)
-  windowEnd.setDate(windowEnd.getDate() + 30)
+  if (!dateOk) {
+    console.log(
+      `[checkRelevance] ✗ DATE OUT OF WINDOW: "${booking.vendor}" ${bookingDateStr} ` +
+      `outside [${windowStart.toISOString().slice(0, 10)}, ${windowEnd.toISOString().slice(0, 10)}]`,
+    )
+    return 'wrong_date'
+  }
 
-  const bookingDateStr = booking.check_in || booking.departure_date
-  if (bookingDateStr) {
-    const bd = new Date(bookingDateStr)
-    if (bd < windowStart || bd > windowEnd) {
+  // Non-travel types (food/other): tighten further — date must be INSIDE the
+  // actual trip window (not the extended buffer).
+  if (NON_TRAVEL_TYPES.has(booking.booking_type)) {
+    if (bookingDate! < tripStart || bookingDate! > tripEnd) {
       console.log(
-        `[checkRelevance] ✗ date outside window: "${booking.vendor}" ` +
-        `"${bookingDateStr}" outside [${windowStart.toISOString().slice(0, 10)}, ` +
-        `${windowEnd.toISOString().slice(0, 10)}]`,
+        `[checkRelevance] ✗ non-travel "${booking.vendor}" date ${bookingDateStr} ` +
+        `outside strict trip window [${trip.start_date}, ${trip.end_date}]`,
       )
       return 'wrong_date'
     }
@@ -731,13 +790,13 @@ async function processMessages(
         matchReason   = result.reason
       }
 
-      // ── Relevance check: verify booking is actually related to the matched trip ──
-      // Prevents non-travel receipts (food, shopping) and wrong-destination bookings
-      // from being saved under an unrelated trip.
-      if (matchedTripId && !forceTripId) {
+      // ── Relevance check: HARD GATE — runs even for forceTripId ────────────
+      // The forceTripId bypass was a common source of "scan pulled irrelevant
+      // docs" regressions (Omer, 2026-04-23). Forcing a trip does NOT mean
+      // every scanned email is for that trip — the check must still run.
+      if (matchedTripId) {
         const matchedTrip = trips.find(t => t.id === matchedTripId)
         if (matchedTrip) {
-          // Build a minimal TripRow for checkRelevance
           const tripRow = {
             id:          matchedTrip.id,
             name:        matchedTrip.name,
@@ -749,7 +808,8 @@ async function processMessages(
           const relevance = checkRelevance(parsedBooking, tripRow)
           if (relevance !== 'ok') {
             console.log(
-              `[processMessages] ✗ relevance="${relevance}" for "${parsedBooking.vendor}" → skipping`,
+              `[processMessages] ✗ relevance="${relevance}" for "${parsedBooking.vendor}" ` +
+              `(forceTripId=${forceTripId ? 'yes' : 'no'}) → skipping`,
             )
             continue
           }
@@ -1010,17 +1070,29 @@ export async function scanUserGmail(
   // ── 1. Load ALL Gmail connections for this user ───────────────────────────
   const { data: connections, error: connError } = await supabase
     .from('gmail_connections')
-    .select('id, user_id, gmail_address, access_token, refresh_token, token_expiry, needs_reauth')
+    .select('id, user_id, gmail_address, access_token, refresh_token, token_expiry, needs_reauth, connection_type')
     .eq('user_id', userId)
 
   if (connError || !connections?.length) {
     throw new Error('לא נמצא חיבור Gmail — יש להתחבר תחילה')
   }
 
+  // ── Skip 'linked' connections — they have no OAuth tokens and use forwarding ──
+  // Only 'oauth' connections (with access_token) can be scanned directly.
+  const oauthConnections = (connections as Array<{
+    id: string; user_id: string; gmail_address: string;
+    access_token: string | null; refresh_token: string | null;
+    token_expiry: string | null; needs_reauth?: boolean; connection_type?: string
+  }>).filter(c => c.connection_type === 'oauth' && c.access_token)
+
+  if (!oauthConnections.length) {
+    // All connections are 'linked' — scanning not available, but forwarding works
+    return { scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0 }
+  }
+
   // Surface accounts that need re-auth immediately, before trying to scan
-  const revokedUpfront = (connections as Array<{ gmail_address: string; needs_reauth?: boolean }>)
-    .filter(c => c.needs_reauth)
-  if (revokedUpfront.length === connections.length) {
+  const revokedUpfront = oauthConnections.filter(c => c.needs_reauth)
+  if (revokedUpfront.length === oauthConnections.length) {
     // ALL connections need reauth — throw so UI shows reconnect button
     const addrs = revokedUpfront.map(c => c.gmail_address).join(', ')
     const stats: ScanStats = {
@@ -1100,8 +1172,8 @@ export async function scanUserGmail(
     scanned: 0, parsed: 0, created: 0, scannedWithPDF: 0, scannedEmailOnly: 0,
   }
 
-  // ── 3. Scan each connected Gmail account ─────────────────────────────────
-  for (const conn of connections as GmailConnection[]) {
+  // ── 3. Scan each connected Gmail account (oauth only) ────────────────────
+  for (const conn of oauthConnections as GmailConnection[]) {
     try {
       const accessToken = await getValidToken(supabase, conn)
       // Use combined trip query so trip-specific emails are prioritised
@@ -1423,7 +1495,7 @@ export async function scanPushMessages(
 // Trip-specific retroactive scan
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface TripRow {
+export interface TripRow {
   id:              string
   name:            string
   destination:     string
@@ -1671,26 +1743,64 @@ export async function scanTripGmail(
             return { skip: 'low_conf' as const, conf: effectiveConf }
           }
 
-          // ── f. Trip relevance check ──────────────────────────────────────
-          // Context-aware parse sets trip_relevant directly.
-          // Fall back to destination/date check for safety.
-          const tripRelevant = parsed.trip_relevant !== false
-          if (!tripRelevant) {
-            const relevance = checkRelevance(parsed, t)
-            if (relevance !== 'ok') {
-              return { skip: relevance as 'wrong_dest' | 'wrong_date' }
+          // ── f. Trip relevance — HARD GATE ────────────────────────────────
+          // This is the #1 regression fix (2026-04-23, Omer): the deterministic
+          // check ALWAYS runs regardless of Claude's trip_relevant flag. Claude
+          // is advisory only — if destination / dates don't match the trip,
+          // the email is rejected. Period.
+          const relevance = checkRelevance(parsed, t)
+          if (relevance !== 'ok') {
+            console.log(
+              `[gmailScanner/trip] ✗ rejected (${relevance}): "${msg.subject.slice(0, 60)}" ` +
+              `vendor="${parsed.vendor}" city="${parsed.destination_city}" ` +
+              `country="${parsed.destination_country}" date=${parsed.check_in || parsed.departure_date} ` +
+              `claude_said_relevant=${parsed.trip_relevant}`,
+            )
+            return { skip: relevance as 'wrong_dest' | 'wrong_date' }
+          }
+
+          // ── f.2: TRAVELER-NAME HARD GATE for passenger-bound types ──────
+          // Per-passenger docs (flight tickets, boarding passes, passports)
+          // MUST mention a known trip traveler. If Claude extracted names
+          // and NONE of them match any trip traveler → reject.
+          //
+          // Hotels are excluded: one name often represents the whole booking.
+          const passengerBoundTypes = new Set(['flight'])  // flight tickets + boarding passes
+          const subtype = parsed.document_subtype
+          const isPassportOrBoarding = subtype === 'boarding_pass' || subtype === 'e_ticket'
+          if ((passengerBoundTypes.has(parsed.booking_type) || isPassportOrBoarding) && parsed.traveler_names?.length) {
+            const nameMatch = checkTravelerSoftMatch(parsed.traveler_names, t.travelers)
+            if (nameMatch === 'mismatch') {
+              console.log(
+                `[gmailScanner/trip] ✗ rejected (traveler_mismatch): "${msg.subject.slice(0, 60)}" ` +
+                `booking_passengers=[${parsed.traveler_names.join(',')}] ` +
+                `trip_travelers=[${t.travelers.map(tr => tr.name).join(',')}]`,
+              )
+              return { skip: 'wrong_dest' as const }
             }
           }
 
+          // Secondary signal: if Claude explicitly says NOT relevant, demote
+          // to borderline (pending review) even if checkRelevance passed.
+          // This catches edge cases where deterministic rules are too lenient.
+          const claudeRejected = parsed.trip_relevant === false
+
           // Update parsed booking with effective confidence for downstream use
           const parsedBooking: ParsedBooking = { ...parsed, confidence: effectiveConf }
+
+          if (claudeRejected) {
+            console.log(
+              `[gmailScanner/trip] ⚠ checkRelevance=ok but Claude rejected → borderline: "${msg.subject.slice(0, 60)}"`,
+            )
+            return { skip: 'borderline' as const, msg, parsedBooking, emailContent } as BorderlineItem
+          }
 
           // ── g. Borderline → pending review ──────────────────────────────
           if (effectiveConf < AUTO_THRESHOLD) {
             console.log(
               `[gmailScanner/trip] ⚠ BORDERLINE: type=${parsedBooking.booking_type}` +
               ` vendor="${parsedBooking.vendor}" conf=${effectiveConf}` +
-              ` tripRelevant=${tripRelevant} → pending_review`,
+              ` claude_trip_relevant=${parsed.trip_relevant} → pending_review`,
             )
             return { skip: 'borderline' as const, msg, parsedBooking, emailContent } as BorderlineItem
           }
@@ -1730,6 +1840,23 @@ export async function scanTripGmail(
         `${borderline.length} borderline ` +
         `(lowConf=${stats.filteredLowConf} wrongDest=${stats.filteredWrongDest} wrongDate=${stats.filteredWrongDate})`,
       )
+
+      // ── Audit log: EVERY auto-import candidate for trip "${t.name}" ─────────
+      // Gives Omer a clean list to sanity-check before anything is written.
+      console.log(
+        `[gmailScanner/trip] AUDIT — trip="${t.name}" (${t.destination}, ${t.start_date}→${t.end_date}) ` +
+        `will attempt to import ${relevant.length} docs:`,
+      )
+      for (const item of relevant) {
+        const pb = item.parsedBooking
+        const destLabel = [pb.destination_city, pb.destination_country].filter(Boolean).join(', ') || '—'
+        const dateLabel = pb.check_in || pb.departure_date || '—'
+        console.log(
+          `  • [${pb.booking_type}/${pb.document_subtype}] "${pb.vendor}" ` +
+          `dest="${destLabel}" date=${dateLabel} conf=${pb.confidence} ` +
+          `subject="${item.msg.subject.slice(0, 50)}"`,
+        )
+      }
 
       // ── PASS 2: For relevant emails only, download PDF attachments ────────
       // Typically 1-5 emails, so this adds very little time.

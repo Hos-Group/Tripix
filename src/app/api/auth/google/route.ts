@@ -38,9 +38,10 @@ export async function GET(req: NextRequest) {
     client_id:     clientId,
     redirect_uri:  redirectUri,
     response_type: 'code',
-    scope:         'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email',
-    access_type:   'offline',
-    prompt:        'consent',
+    // Only request non-restricted scopes so ANY user can connect (no 403 in Testing mode).
+    // gmail.readonly is a Restricted scope that blocks non-test-users in Testing mode.
+    // We verify Gmail ownership here; actual email processing uses the forwarding inbox.
+    scope:         'https://www.googleapis.com/auth/userinfo.email openid',
     state:         statePayload,
   })
 

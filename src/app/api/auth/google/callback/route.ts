@@ -19,7 +19,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { registerGmailWatch } from '@/lib/gmailClient'
 
 // ── Supabase admin client (bypasses RLS) ──────────────────────────────────────
 function adminClient() {
@@ -185,40 +184,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(failUrl)
   }
 
-  // ── Calculate token expiry ────────────────────────────────────────────────
-  const expiryDate = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-
   // ── Save gmail_connections row (update if exists, insert if not) ─────────
+  // We only request userinfo.email scope now (no gmail.readonly) so that any
+  // user can connect without hitting the "Testing mode" 403 block.
+  // Connections are saved as type='linked' — no OAuth tokens stored.
+  // Email processing flows through the user's forwarding inbox instead.
   const gmailAddress = userInfo.email.toLowerCase()
   const rowData = {
-    user_id:       userId,
-    gmail_address: gmailAddress,
-    access_token:  tokens.access_token,
-    refresh_token: tokens.refresh_token || null,
-    token_expiry:  expiryDate,
+    user_id:         userId,
+    gmail_address:   gmailAddress,
+    access_token:    null,   // not needed for forwarding-based flow
+    refresh_token:   null,
+    token_expiry:    null,
+    connection_type: 'linked',
   }
 
   // Check if a row already exists for this user+email combo
   const { data: existing } = await supabase
     .from('gmail_connections')
-    .select('id')
+    .select('id, connection_type')
     .eq('user_id', userId)
     .eq('gmail_address', gmailAddress)
     .maybeSingle()
 
   let dbError
   if (existing?.id) {
-    // Row exists → update tokens + clear any reauth flag
-    const { error } = await supabase
-      .from('gmail_connections')
-      .update({
-        access_token:  tokens.access_token,
-        refresh_token: tokens.refresh_token || null,
-        token_expiry:  expiryDate,
-        needs_reauth:  false,
-      })
-      .eq('id', existing.id)
-    dbError = error
+    // Row exists: only update if currently 'linked' (don't downgrade an 'oauth' connection)
+    if (existing.connection_type !== 'oauth') {
+      const { error } = await supabase
+        .from('gmail_connections')
+        .update({ connection_type: 'linked', needs_reauth: false })
+        .eq('id', existing.id)
+      dbError = error
+    }
   } else {
     // No row → insert fresh
     const { error } = await supabase
@@ -227,40 +225,21 @@ export async function GET(req: NextRequest) {
     dbError = error
   }
 
+  // ── Auto-register as a verified email alias (enables forwarding routing) ──
+  // Since Google confirmed this email via OAuth, we can trust it immediately.
+  // This lets the email-ingest endpoint route emails sent to inbox_key back to
+  // this user even when forwarded from their Gmail address.
+  await supabase.from('user_email_aliases').upsert(
+    { user_id: userId, email: gmailAddress, label: 'personal', verified: true },
+    { onConflict: 'email' },
+  )
+
   if (dbError) {
     console.error('[google/callback] DB save error:', dbError)
     return NextResponse.redirect(failUrl)
   }
 
-  console.log(`[google/callback] Gmail connected for user ${userId}: ${userInfo.email}`)
-
-  // ── Register Gmail push notifications (real-time sync) ───────────────────
-  // If GMAIL_PUBSUB_TOPIC is configured, register a watch so new emails trigger
-  // an immediate webhook call instead of waiting for the daily cron scan.
-  if (process.env.GMAIL_PUBSUB_TOPIC) {
-    try {
-      const watchResult = await registerGmailWatch(tokens.access_token)
-      const expiresAt   = new Date(Number(watchResult.expiration)).toISOString()
-
-      await supabase
-        .from('gmail_connections')
-        .update({
-          history_id:   watchResult.historyId,
-          watch_expiry: expiresAt,
-          watch_active: true,
-        })
-        .eq('user_id', userId)
-        .eq('gmail_address', gmailAddress)
-
-      console.log(
-        `[google/callback] Gmail watch registered for ${gmailAddress}: ` +
-        `historyId=${watchResult.historyId}, expires=${expiresAt}`,
-      )
-    } catch (watchErr) {
-      // Non-fatal — daily cron will still scan
-      console.warn('[google/callback] Watch registration failed (non-fatal):', watchErr)
-    }
-  }
+  console.log(`[google/callback] Gmail linked for user ${userId}: ${userInfo.email}`)
 
   return NextResponse.redirect(successUrl)
 }

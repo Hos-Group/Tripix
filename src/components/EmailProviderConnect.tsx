@@ -13,10 +13,11 @@ import { Copy, CheckCheck, Mail } from 'lucide-react'
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 interface EmailConnection {
-  id:           string
-  email:        string
-  needs_reauth?: boolean
-  provider:     'gmail' | 'microsoft'
+  id:              string
+  email:           string
+  needs_reauth?:   boolean
+  provider:        'gmail' | 'microsoft'
+  connection_type?: string  // 'oauth' | 'linked'
 }
 
 interface ScanResult {
@@ -130,11 +131,11 @@ export default function EmailProviderConnect({ userId, inboxKey }: EmailProvider
   const loadConnections = useCallback(async () => {
     try {
       const [gmailRes, msRes] = await Promise.all([
-        supabase.from('gmail_connections').select('id, gmail_address, needs_reauth').eq('user_id', userId).order('gmail_address'),
+        supabase.from('gmail_connections').select('id, gmail_address, needs_reauth, connection_type').eq('user_id', userId).order('gmail_address'),
         supabase.from('microsoft_connections').select('id, email, needs_reauth').eq('user_id', userId).order('email'),
       ])
-      const gmail = ((gmailRes.data || []) as Array<{ id: string; gmail_address: string; needs_reauth?: boolean }>)
-        .map(c => ({ id: c.id, email: c.gmail_address, needs_reauth: c.needs_reauth, provider: 'gmail' as const }))
+      const gmail = ((gmailRes.data || []) as Array<{ id: string; gmail_address: string; needs_reauth?: boolean; connection_type?: string }>)
+        .map(c => ({ id: c.id, email: c.gmail_address, needs_reauth: c.needs_reauth, connection_type: c.connection_type, provider: 'gmail' as const }))
       const microsoft = ((msRes.data || []) as Array<{ id: string; email: string; needs_reauth?: boolean }>)
         .map(c => ({ id: c.id, email: c.email, needs_reauth: c.needs_reauth, provider: 'microsoft' as const }))
       setConnections([...gmail, ...microsoft])
@@ -289,7 +290,9 @@ export default function EmailProviderConnect({ userId, inboxKey }: EmailProvider
   const gmailConns    = connections.filter(c => c.provider === 'gmail')
   const msConns       = connections.filter(c => c.provider === 'microsoft')
   const totalConns    = connections.length
-  const hasMsClientId = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  // Only OAuth connections support direct scanning; linked connections use forwarding
+  const scannableConns = connections.filter(c => c.provider !== 'gmail' || c.connection_type === 'oauth')
+  const hasMsClientId  = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
     // We show Microsoft tab always — if not configured it shows a setup notice
 
   return (
@@ -346,6 +349,7 @@ export default function EmailProviderConnect({ userId, inboxKey }: EmailProvider
               hintEmail={hintEmail}
               hintError={hintError}
               hintInputRef={hintInputRef}
+              inboxEmail={inboxEmail}
               onSetShowAddPanel={setShowAddPanel}
               onSetHintEmail={(v) => { setHintEmail(v); setHintError('') }}
               onConnect={handlePanelConnect}
@@ -381,8 +385,8 @@ export default function EmailProviderConnect({ userId, inboxKey }: EmailProvider
         </div>
       </div>
 
-      {/* ── Scan controls (shown when at least one account connected) ── */}
-      {totalConns > 0 && (
+      {/* ── Scan controls (shown when at least one OAuth account is connected) ── */}
+      {scannableConns.length > 0 && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
           {lastScan && (
             <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700 space-y-1">
@@ -397,8 +401,8 @@ export default function EmailProviderConnect({ userId, inboxKey }: EmailProvider
                 )}
                 {' '}· יצרנו {lastScan.created} הוצאות
               </p>
-              {totalConns > 1 && (
-                <p className="text-blue-500">סורקים {totalConns} חשבונות מייל</p>
+              {scannableConns.length > 1 && (
+                <p className="text-blue-500">סורקים {scannableConns.length} חשבונות מייל</p>
               )}
             </div>
           )}
@@ -413,8 +417,8 @@ export default function EmailProviderConnect({ userId, inboxKey }: EmailProvider
             className="w-full bg-primary text-white rounded-xl py-2.5 text-sm font-semibold active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
             {scanning
-              ? <><span className="animate-spin text-base">⏳</span>סורק {totalConns > 1 ? 'כל החשבונות' : 'מיילים'}...</>
-              : <><span>🔄</span>סרוק עכשיו{totalConns > 1 ? ` (${totalConns} חשבונות)` : ''}</>
+              ? <><span className="animate-spin text-base">⏳</span>סורק {scannableConns.length > 1 ? 'כל החשבונות' : 'מיילים'}...</>
+              : <><span>🔄</span>סרוק עכשיו{scannableConns.length > 1 ? ` (${scannableConns.length} חשבונות)` : ''}</>
             }
           </button>
 
@@ -443,6 +447,7 @@ interface OAuthTabProps {
   hintEmail:         string
   hintError:         string
   hintInputRef:      React.RefObject<HTMLInputElement>
+  inboxEmail?:       string | null   // only needed for Gmail linked-connection guide
   onSetShowAddPanel: (v: boolean) => void
   onSetHintEmail:    (v: string) => void
   onConnect:         () => void
@@ -451,15 +456,28 @@ interface OAuthTabProps {
 
 function GmailTabContent({
   connections, scanning, disconnecting, showAddPanel,
-  hintEmail, hintError, hintInputRef,
+  hintEmail, hintError, hintInputRef, inboxEmail,
   onSetShowAddPanel, onSetHintEmail, onConnect, onDisconnect,
 }: OAuthTabProps) {
+  const [inboxCopied, setInboxCopied] = useState(false)
+
+  const copyInbox = async () => {
+    if (!inboxEmail) return
+    await navigator.clipboard.writeText(inboxEmail)
+    setInboxCopied(true)
+    setTimeout(() => setInboxCopied(false), 2500)
+  }
+
+  // Linked connections — verified address, forwarding-based flow
+  const linkedConns = connections.filter(c => c.connection_type !== 'oauth')
+  const hasLinked    = linkedConns.length > 0
+
   if (connections.length === 0 && !showAddPanel) {
     return (
       <div className="space-y-3">
         <p className="text-xs text-gray-500 leading-relaxed">
-          חבר את Gmail ואנחנו נסרוק אוטומטית אישורי הזמנות.
-          <br /><span className="text-gray-400">אפשר לחבר מספר חשבונות.</span>
+          חבר Gmail כדי לקבל אישורי הזמנות אוטומטית.
+          <br /><span className="text-gray-400">Tripix יאמת את הכתובת ויראה לך איך להעביר מיילים.</span>
         </p>
         <ConnectWithHint
           placeholder="your@gmail.com"
@@ -469,7 +487,7 @@ function GmailTabContent({
           onSetHintEmail={onSetHintEmail}
           onConnect={onConnect}
           logo={<GoogleLogo className="w-5 h-5 flex-shrink-0" />}
-          label="סנכרן Gmail עם Tripix"
+          label="חבר Gmail עם Tripix"
         />
       </div>
     )
@@ -480,6 +498,38 @@ function GmailTabContent({
       {connections.map(conn => (
         <ConnectionRow key={conn.id} conn={conn} disconnecting={disconnecting} scanning={scanning} onDisconnect={onDisconnect} />
       ))}
+
+      {/* ── Forwarding guide for linked connections ── */}
+      {hasLinked && inboxEmail && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
+          <p className="text-xs font-semibold text-blue-800">📨 כדי לקבל מיילים אוטומטית — הפנה ל-Tripix</p>
+          <p className="text-[11px] text-blue-700 leading-relaxed">
+            העתק את הכתובת ושים אותה ב-BCC בכל הזמנה, או הגדר העברת מיילים אוטומטית בגמייל.
+          </p>
+          <div className="flex items-center gap-2 bg-white rounded-lg px-2.5 py-1.5 border border-blue-200">
+            <span className="text-[11px] font-mono text-blue-900 flex-1 truncate" dir="ltr">{inboxEmail}</span>
+            <button
+              onClick={copyInbox}
+              className="text-blue-500 hover:text-blue-600 active:scale-95 transition-all flex-shrink-0"
+              title="העתק כתובת"
+            >
+              {inboxCopied
+                ? <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                : <Copy className="w-3.5 h-3.5" />
+              }
+            </button>
+          </div>
+          <a
+            href="https://mail.google.com/mail/u/0/#settings/filters"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block text-center text-[11px] text-blue-600 underline"
+          >
+            פתח הגדרות סינון בגמייל →
+          </a>
+        </div>
+      )}
+
       {showAddPanel ? (
         <AddAccountPanel
           hintEmail={hintEmail}
@@ -655,20 +705,25 @@ function ConnectionRow({
     ? <GoogleLogo className="w-3.5 h-3.5 flex-shrink-0" />
     : <MicrosoftLogo className="w-3.5 h-3.5 flex-shrink-0" />
 
+  const isLinked = conn.provider === 'gmail' && conn.connection_type !== 'oauth'
+
   return (
-    <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${conn.needs_reauth ? 'bg-red-50' : 'bg-emerald-50'}`}>
-      <span className={`text-base flex-shrink-0 ${conn.needs_reauth ? 'text-red-400' : 'text-emerald-500'}`}>
-        {conn.needs_reauth ? '⚠️' : '✅'}
+    <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 ${conn.needs_reauth ? 'bg-red-50' : isLinked ? 'bg-blue-50' : 'bg-emerald-50'}`}>
+      <span className={`text-base flex-shrink-0 ${conn.needs_reauth ? 'text-red-400' : isLinked ? 'text-blue-400' : 'text-emerald-500'}`}>
+        {conn.needs_reauth ? '⚠️' : isLinked ? '🔗' : '✅'}
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           {providerIcon}
-          <p className={`text-xs font-medium truncate ${conn.needs_reauth ? 'text-red-700' : 'text-emerald-700'}`} dir="ltr">
+          <p className={`text-xs font-medium truncate ${conn.needs_reauth ? 'text-red-700' : isLinked ? 'text-blue-700' : 'text-emerald-700'}`} dir="ltr">
             {conn.email}
           </p>
         </div>
         {conn.needs_reauth && (
           <p className="text-[10px] text-red-500 mt-0.5">נדרש חיבור מחדש</p>
+        )}
+        {isLinked && !conn.needs_reauth && (
+          <p className="text-[10px] text-blue-500 mt-0.5">מחובר — הפנה מיילים לסריקה אוטומטית</p>
         )}
       </div>
       <button
