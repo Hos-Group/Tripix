@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { signOut as authSignOut } from '@/lib/auth'
 import type { User, Session } from '@supabase/supabase-js'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface Profile {
   id: string
@@ -63,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(() => !hasStoredSession())
   const router = useRouter()
   const pathname = usePathname()
+  const { t, dir } = useLanguage()
 
   async function loadProfile(userId: string) {
     const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
@@ -121,7 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       <div
         role="status"
         aria-live="polite"
-        aria-label="טוען את Tripix"
+        aria-label={t('status_loading_app')}
+        dir={dir}
         className="min-h-screen flex items-center justify-center bg-gray-50"
       >
         <div className="text-center">
@@ -140,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin mx-auto"
             aria-hidden="true"
           />
-          <span className="sr-only">טוען…</span>
+          <span className="sr-only">{t('loading_short')}</span>
         </div>
       </div>
     )

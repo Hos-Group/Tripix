@@ -42,11 +42,16 @@ export default function CommunityPage() {
       {/* Header */}
       <div className="bg-gradient-to-bl from-[#1D9E75] to-[#146B50] text-white px-4 pt-4 pb-5">
         <div className="flex items-center justify-between mb-3">
-          <button onClick={() => router.back()} className="p-2 rounded-xl hover:bg-white/10 active:scale-95">
-            <ChevronLeft className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="חזרה"
+            className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-white/10 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <ChevronLeft className="w-5 h-5 rtl:rotate-180" aria-hidden="true" />
           </button>
           <h1 className="text-lg font-bold">קהילת Tripix</h1>
-          <div className="w-9" />
+          <div className="w-11" aria-hidden="true" />
         </div>
         <p className="text-sm opacity-80 text-center">למד מטיולים של אחרים. שתף את שלך.</p>
       </div>

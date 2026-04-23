@@ -2,6 +2,7 @@
 
 import { Component, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { LANG_META, t as translate, type Lang } from '@/lib/i18n'
 
 interface Props {
   children: ReactNode
@@ -10,6 +11,15 @@ interface Props {
 
 interface State {
   error: Error | null
+}
+
+function getLang(): Lang {
+  if (typeof window === 'undefined') return 'he'
+  try {
+    const saved = localStorage.getItem('tripix_lang')
+    if (saved === 'en' || saved === 'es' || saved === 'he') return saved
+  } catch { /* ignore */ }
+  return 'he'
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
@@ -35,18 +45,21 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     if (this.props.fallback) return this.props.fallback(error, this.reset)
 
+    const lang = getLang()
+    const dir = LANG_META[lang].dir
     return (
       <div
         role="alert"
         aria-live="assertive"
+        dir={dir}
         className="min-h-[60vh] flex flex-col items-center justify-center px-6 text-center"
       >
         <div className="w-16 h-16 rounded-3xl bg-red-50 flex items-center justify-center mb-4" aria-hidden="true">
           <AlertTriangle className="w-8 h-8 text-red-500" />
         </div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">משהו השתבש</h1>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">{translate('err_generic_title', lang)}</h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-6 max-w-sm">
-          התרחשה שגיאה לא צפויה. ננסה שוב? אם הבעיה חוזרת, רענן את הדף.
+          {translate('err_generic_desc', lang)}
         </p>
         <div className="flex flex-col gap-2 w-full max-w-xs">
           <button
@@ -56,14 +69,14 @@ export default class ErrorBoundary extends Component<Props, State> {
             style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}
           >
             <RefreshCw className="w-4 h-4" aria-hidden="true" />
-            נסה שוב
+            {translate('err_try_again', lang)}
           </button>
           <button
             type="button"
             onClick={() => window.location.reload()}
             className="w-full rounded-2xl py-3 min-h-[48px] font-bold text-gray-700 bg-white border border-gray-200 active:bg-gray-50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
-            רענן את הדף
+            {translate('err_reload_page', lang)}
           </button>
         </div>
         {process.env.NODE_ENV !== 'production' && (

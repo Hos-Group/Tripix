@@ -97,7 +97,7 @@ export default function HamburgerMenu() {
         type="button"
         onClick={() => setOpen(true)}
         data-tour="hamburger-btn"
-        aria-label="פתח תפריט ניווט"
+        aria-label={t('menu_open')}
         aria-expanded={open}
         aria-controls="app-nav-menu"
         aria-haspopup="menu"
@@ -132,7 +132,7 @@ export default function HamburgerMenu() {
               id="app-nav-menu"
               role="dialog"
               aria-modal="true"
-              aria-label="תפריט ניווט ראשי"
+              aria-label={t('menu_main_aria')}
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }}
               className="fixed top-0 right-0 bottom-0 w-[300px] z-[70] overflow-y-auto"
@@ -153,7 +153,7 @@ export default function HamburgerMenu() {
                     ref={closeRef}
                     type="button"
                     onClick={() => setOpen(false)}
-                    aria-label="סגור תפריט"
+                    aria-label={t('menu_close')}
                     className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
                   >
                     <X className="w-5 h-5 text-white" aria-hidden="true" />
@@ -172,13 +172,13 @@ export default function HamburgerMenu() {
                     </div>
                     <div>
                       <p className="text-white font-semibold text-sm">{displayName}</p>
-                      <p className="text-white/70 text-[11px]">חשבון פעיל</p>
+                      <p className="text-white/70 text-[11px]">{t('menu_active_account')}</p>
                     </div>
                   </div>
                 )}
               </div>
 
-              <nav aria-label="פעולות וטיולים" className="p-4 flex flex-col gap-3">
+              <nav aria-label={t('menu_actions_aria')} className="p-4 flex flex-col gap-3">
 
                 {/* ── Active trip card + inline switcher ─────────────────── */}
                 {currentTrip && (
@@ -189,7 +189,7 @@ export default function HamburgerMenu() {
                         onClick={() => { setOpen(false); router.push('/dashboard') }}
                         className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}
-                        aria-label="עבור לדשבורד של הטיול הנוכחי"
+                        aria-label={t('menu_to_dashboard')}
                       >
                         <Plane className="w-5 h-5 text-white" aria-hidden="true" />
                       </button>
@@ -198,14 +198,14 @@ export default function HamburgerMenu() {
                         onClick={() => setShowSwitcher(s => !s)}
                         aria-expanded={showSwitcher}
                         aria-controls="trip-switcher-list"
-                        aria-label={`טיול פעיל: ${currentTrip.name}. החלף טיול`}
+                        aria-label={`${t('menu_active_trip')}: ${currentTrip.name}. ${t('menu_switch_trip')}`}
                         className="flex-1 min-w-0 text-right active:opacity-70 transition-opacity focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
                       >
                         <p className="text-sm font-bold truncate">{currentTrip.name}</p>
                         <p className="text-[11px] text-gray-400 truncate">{currentTrip.destination}</p>
                       </button>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-full">פעיל</span>
+                        <span className="text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-full">{t('menu_active_trip')}</span>
                         {otherTrips.length > 0 && (
                           <span aria-hidden="true" className="inline-flex">
                             <ChevronDown
@@ -228,14 +228,14 @@ export default function HamburgerMenu() {
                           className="overflow-hidden border-t border-gray-100"
                         >
                           <div className="px-2 py-1.5 space-y-0.5" role="list">
-                            <p className="text-[10px] text-gray-400 font-semibold px-1 py-0.5">החלפת טיול</p>
+                            <p className="text-[10px] text-gray-400 font-semibold px-1 py-0.5">{t('menu_switch_trip')}</p>
                             {otherTrips.map(trip => (
                               <button
                                 key={trip.id}
                                 type="button"
                                 onClick={() => handleSwitchTrip(trip.id)}
                                 role="listitem"
-                                aria-label={`החלף לטיול ${trip.name} ב${trip.destination}`}
+                                aria-label={`${t('menu_switch_trip')}: ${trip.name} — ${trip.destination}`}
                                 className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-xl active:bg-primary/5 transition-all text-right focus-visible:ring-2 focus-visible:ring-primary"
                               >
                                 <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0" aria-hidden="true">
@@ -318,18 +318,18 @@ export default function HamburgerMenu() {
                     <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center" aria-hidden="true">
                       <Settings className="w-4 h-4 text-gray-500" />
                     </div>
-                    <span className="text-sm font-medium text-gray-600">הגדרות</span>
+                    <span className="text-sm font-medium text-gray-600">{t('menu_settings')}</span>
                   </Link>
                   <button
                     type="button"
                     onClick={() => { setOpen(false); signOut() }}
                     className="flex items-center gap-3 px-3 py-3 min-h-[48px] w-full active:bg-red-50 transition-all focus-visible:ring-2 focus-visible:ring-red-400"
-                    aria-label="התנתק מהחשבון"
+                    aria-label={t('menu_logout')}
                   >
                     <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center" aria-hidden="true">
                       <LogOut className="w-4 h-4 text-red-400" />
                     </div>
-                    <span className="text-sm font-medium text-red-500">התנתקות</span>
+                    <span className="text-sm font-medium text-red-500">{t('menu_logout')}</span>
                   </button>
                 </div>
 

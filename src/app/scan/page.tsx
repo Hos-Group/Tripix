@@ -555,44 +555,42 @@ export default function ScanPage() {
         const amt = dt === 'flight' ? flight.totalAmount : dt === 'hotel' ? hotel.amount : generic.amount
         const cur = dt === 'flight' ? flight.totalCurrency : dt === 'hotel' ? hotel.currency : generic.currency
 
-        if (dt === 'flight') {
-          // Multi-leg flights: one expense per leg so every segment appears on
-          // its own departure date in the timeline.
-          // Only the FIRST leg carries the total amount; the rest are ₪0
-          // (the seats were all purchased together — no double-counting).
-          for (let li = 0; li < flight.legs.length; li++) {
-            const leg = flight.legs[li]
-            const isFirst = li === 0
-            const legDate = leg.departureDate || new Date().toISOString().split('T')[0]
-            const legTitle =
-              (leg.departureCity && leg.arrivalCity)
-                ? `${leg.departureCity} → ${leg.arrivalCity}`
-                : (leg.departureAirport && leg.arrivalAirport)
-                  ? `${leg.departureAirport} → ${leg.arrivalAirport}`
-                  : `טיסה ${li + 1}`
-            const legAmt    = isFirst && amt && parseFloat(amt) > 0 ? parseFloat(amt) : 0
-            const legAmtIls = legAmt > 0 ? await convertToILS(legAmt, cur, legDate) : 0
-            const legNotes  = [
-              leg.flightNumber   ? leg.flightNumber          : null,
-              leg.airline        ? leg.airline               : null,
-              leg.isConnection   ? 'קונקשיין'               : null,
-              !isFirst           ? 'כלול במחיר הכרטיס'      : null,
-            ].filter(Boolean).join(' · ') || null
+        if (dt === 'flight' && amt && parseFloat(amt) > 0) {
+          // One expense per flight (not per leg) — all legs are a single
+          // purchase. Per-segment display on the timeline reads from
+          // documents.extracted_data.legs, so we don't need phantom ₪0 rows
+          // that would violate the DB CHECK (amount > 0) constraint and
+          // pollute the Expenses page.
+          const firstLeg = flight.legs[0]
+          const lastLeg  = flight.legs[flight.legs.length - 1]
+          const flightTitle =
+            (firstLeg?.departureCity && lastLeg?.arrivalCity)
+              ? `${firstLeg.departureCity} → ${lastLeg.arrivalCity}`
+              : (firstLeg?.departureAirport && lastLeg?.arrivalAirport)
+                ? `${firstLeg.departureAirport} → ${lastLeg.arrivalAirport}`
+                : 'כרטיס טיסה'
+          const flightDate = firstLeg?.departureDate || new Date().toISOString().split('T')[0]
+          const flightAmt  = parseFloat(amt)
+          const flightIls  = await convertToILS(flightAmt, cur, flightDate)
+          const flightNotes = [
+            flight.legs.map(l => l.flightNumber).filter(Boolean).join(' · ') || null,
+            flight.hasConnection ? `דרך ${flight.connectionCity || 'קונקשיין'}` : null,
+            flight.bookingRef ? `אישור: ${flight.bookingRef}` : null,
+          ].filter(Boolean).join('\n') || null
 
-            await supabase.from('expenses').insert({
-              trip_id:      tripId,
-              user_id:      user?.id,
-              title:        legTitle,
-              category:     'flight',
-              amount:       legAmt,
-              currency:     cur,
-              amount_ils:   legAmtIls,
-              expense_date: legDate,
-              source:       'document',
-              document_id:  docId || null,
-              notes:        legNotes,
-            })
-          }
+          await supabase.from('expenses').insert({
+            trip_id:      tripId,
+            user_id:      user?.id,
+            title:        flightTitle,
+            category:     'flight',
+            amount:       flightAmt,
+            currency:     cur,
+            amount_ils:   flightIls,
+            expense_date: flightDate,
+            source:       'document',
+            document_id:  docId || null,
+            notes:        flightNotes,
+          })
         } else if (amt && parseFloat(amt) > 0) {
           // Hotels, ferries, activities, generic — one expense
           const expCat   = dt === 'hotel' ? 'hotel' : dt === 'ferry' ? 'ferry' : dt === 'activity' ? 'activity' : 'other'

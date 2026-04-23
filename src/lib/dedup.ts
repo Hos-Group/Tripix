@@ -18,9 +18,22 @@ import { supabase as defaultSupabase } from './supabase'
 
 // ─── Text normalisation ──────────────────────────────────────────────────────
 
-/** Normalise free text for stable hashing across languages. ES5-compatible. */
+/**
+ * Normalise free text for stable hashing across languages. ES5-compatible.
+ *
+ * Also strips passenger-name suffixes that the per-trip Gmail scanner
+ * appends (e.g. "Bangkok Airways PG250 – Halevy Omer" → "bangkok airways pg250").
+ * Without this strip, the generic scanner (`processMessages`) and the
+ * per-passenger scanner (`processTripMessages`) produce different
+ * fingerprints for the same booking and both rows survive the DB unique
+ * index, leading to visible duplicates on the Expenses page.
+ */
 function normaliseTitle(input: string): string {
-  return input
+  // Strip " – <passenger>", " - <passenger>", " — <passenger>" at the end.
+  // Keeps the pre-dash portion (which is the booking/flight identifier).
+  // No /u flag (tsconfig target=es5); character class lists the 3 dash variants.
+  const noPassenger = input.replace(/\s*[\u2013\u2014-]\s*[^\u2013\u2014-]+$/, '')
+  return noPassenger
     .normalize('NFKC')
     .toLowerCase()
     .replace(/[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g, ' ')
@@ -81,6 +94,41 @@ export async function findDuplicateExpense(
   if (tripId) q = q.eq('trip_id', tripId)
   const { data } = await q.maybeSingle()
   return data ?? null
+}
+
+/**
+ * Cross-date vendor lookup: finds an existing expense in the same trip with
+ * the same normalized title + amount + currency, regardless of the expense
+ * date.
+ *
+ * Intended for document/scan-sourced inserts only — one booking confirmation
+ * is one payment, so if the same "Anantara Layan Phuket" @ 28907.42 THB
+ * already exists in the trip under ANY date, importing it again (even with
+ * a different parsed date like 2026-04-22 vs 2026-04-11) is a duplicate.
+ *
+ * NOT called for manual entries: a user might legitimately spend 50 THB at
+ * the same street-food stall on three different days.
+ */
+export async function findVendorExpense(
+  tripId:   string,
+  title:    string,
+  amount:   number,
+  currency: string,
+): Promise<DuplicateExpense | null> {
+  const normTitle = normaliseTitle(title)
+  // PostgREST lets us filter by content_hash prefix to narrow the query;
+  // then we match on the normalized title + amount + currency client-side
+  // (the DB row's content_hash already encodes a date, so we can't index-
+  // match directly — full scan on the trip's rows is fine at Tripix's scale).
+  const { data } = await defaultSupabase
+    .from('expenses')
+    .select('id, title, amount, currency, expense_date, source')
+    .eq('trip_id',  tripId)
+    .eq('currency', currency)
+    .eq('amount',   amount)
+  if (!data || data.length === 0) return null
+  const match = data.find(r => normaliseTitle(r.title) === normTitle)
+  return (match as DuplicateExpense | undefined) ?? null
 }
 
 // ─── Document fingerprint ────────────────────────────────────────────────────
@@ -326,6 +374,16 @@ export async function insertExpenseFromDocument(
              || 'other'
 
   const currency = (input.extracted_data?.currency || 'ILS').toUpperCase()
+
+  // Cross-date vendor check: if the SAME trip already has an expense for
+  // the SAME normalized vendor + amount + currency under any other date,
+  // treat this new import as a duplicate.  This catches the case where
+  // one Gmail confirmation yields two "Anantara Layan Phuket @ 28907.42 THB"
+  // rows dated on check-in vs booking-date.
+  const vendorMatch = await findVendorExpense(input.trip_id, input.name, amount, currency)
+  if (vendorMatch) {
+    return { inserted: false, reason: 'duplicate', id: vendorMatch.id }
+  }
 
   const fingerprint = buildExpenseFingerprint(input.trip_id, amount, expenseDate, input.name)
 

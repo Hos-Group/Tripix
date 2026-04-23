@@ -90,7 +90,7 @@ export default function BudgetPage() {
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard"
-          aria-label="חזרה לדשבורד"
+          aria-label={t('back_to_dashboard')}
           className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />

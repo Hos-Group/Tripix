@@ -7,8 +7,12 @@ import { Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { signIn, signOut } from '@/lib/auth'
 import { Analytics, identifyUser } from '@/lib/analytics'
+import { useLanguage } from '@/contexts/LanguageContext'
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
+import { tFormat } from '@/lib/i18n'
 
 export default function SignupPage() {
+  const { t, dir, lang } = useLanguage()
   const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -31,17 +35,18 @@ export default function SignupPage() {
     return s // 0-5
   })()
 
-  const pwLabel  = ['', 'חלשה', 'בינונית', 'טובה', 'חזקה', 'מצוינת'][pwStrength]
+  const pwLabelKeys = ['', 'auth_pw_weak', 'auth_pw_medium', 'auth_pw_good', 'auth_pw_strong', 'auth_pw_excellent'] as const
+  const pwLabel = pwStrength > 0 ? t(pwLabelKeys[pwStrength] as 'auth_pw_weak') : ''
   const pwColor  = ['', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-emerald-500'][pwStrength]
 
   const validate = () => {
     const next: typeof errors = {}
-    if (!name.trim()) next.name = 'נא להזין שם מלא'
-    else if (name.trim().length < 2) next.name = 'השם קצר מדי'
-    if (!email.trim()) next.email = 'נא להזין כתובת אימייל'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'כתובת אימייל אינה תקינה'
-    if (!password) next.password = 'נא להזין סיסמא'
-    else if (password.length < 6) next.password = 'הסיסמא חייבת להכיל לפחות 6 תווים'
+    if (!name.trim()) next.name = t('auth_err_name_required')
+    else if (name.trim().length < 2) next.name = t('auth_err_name_short')
+    if (!email.trim()) next.email = t('auth_err_email_required')
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = t('auth_err_email_invalid')
+    if (!password) next.password = t('auth_err_password_required')
+    else if (password.length < 6) next.password = t('auth_err_password_short')
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -65,7 +70,7 @@ export default function SignupPage() {
       const json = await res.json()
 
       if (!res.ok) {
-        const message = json.error || 'שגיאה בהרשמה'
+        const message = json.error || t('auth_err_signup')
         setErrors({ form: message })
         toast.error(message)
         setLoading(false)
@@ -81,10 +86,10 @@ export default function SignupPage() {
       }
       Analytics.signedUp('email')
 
-      toast.success('ברוך הבא לטריפיקס!')
+      toast.success(t('auth_welcome_signup'))
       router.push('/onboarding')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'שגיאה בהרשמה'
+      const message = err instanceof Error ? err.message : t('auth_err_signup')
       setErrors({ form: message })
       toast.error(message)
     }
@@ -92,7 +97,15 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gray-50 py-8">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gray-50 py-8" dir={dir}>
+      {/* Top-right: language switcher */}
+      <div
+        className="fixed top-0 right-0 z-50 p-3"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)', paddingRight: '16px' }}
+      >
+        <LanguageSwitcher />
+      </div>
+
       <div className="w-full max-w-sm space-y-6">
 
         {/* Header */}
@@ -108,7 +121,7 @@ export default function SignupPage() {
           >
             Tripix
           </h1>
-          <p className="text-gray-500 text-sm">צור חשבון ותתחיל לתכנן את הטיול שלך</p>
+          <p className="text-gray-500 text-sm">{t('auth_signup_desc')}</p>
         </div>
 
         {/* Form */}
@@ -118,7 +131,7 @@ export default function SignupPage() {
           aria-describedby={errors.form ? 'signup-form-error' : undefined}
           className="bg-white rounded-3xl p-6 shadow-sm space-y-4"
         >
-          <h2 className="text-lg font-bold text-center">הרשמה</h2>
+          <h2 className="text-lg font-bold text-center">{t('auth_signup_title')}</h2>
 
           {errors.form && (
             <div
@@ -133,14 +146,14 @@ export default function SignupPage() {
           {/* Name */}
           <div className="flex flex-col gap-1">
             <label htmlFor="signup-name" className="text-xs font-semibold text-gray-700">
-              שם מלא <span aria-hidden="true" className="text-red-500">*</span>
+              {t('auth_full_name')} <span aria-hidden="true" className="text-red-500">*</span>
             </label>
             <input
               id="signup-name"
               type="text"
               value={name}
               onChange={(e) => { setName(e.target.value); if (errors.name) setErrors(s => ({ ...s, name: undefined })) }}
-              placeholder="ישראל ישראלי"
+              placeholder={t('auth_full_name_ph')}
               autoComplete="name"
               required
               aria-invalid={errors.name ? true : undefined}
@@ -159,7 +172,7 @@ export default function SignupPage() {
           {/* Email */}
           <div className="flex flex-col gap-1">
             <label htmlFor="signup-email" className="text-xs font-semibold text-gray-700">
-              אימייל <span aria-hidden="true" className="text-red-500">*</span>
+              {t('auth_email')} <span aria-hidden="true" className="text-red-500">*</span>
             </label>
             <input
               id="signup-email"
@@ -167,7 +180,7 @@ export default function SignupPage() {
               inputMode="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); if (errors.email) setErrors(s => ({ ...s, email: undefined })) }}
-              placeholder="name@example.com"
+              placeholder={t('auth_email_ph')}
               dir="ltr"
               autoComplete="email"
               required
@@ -187,7 +200,7 @@ export default function SignupPage() {
           {/* Password */}
           <div className="flex flex-col gap-1">
             <label htmlFor="signup-password" className="text-xs font-semibold text-gray-700">
-              סיסמא <span aria-hidden="true" className="text-red-500">*</span>
+              {t('auth_password')} <span aria-hidden="true" className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -195,7 +208,7 @@ export default function SignupPage() {
                 type={showPw ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); if (errors.password) setErrors(s => ({ ...s, password: undefined })) }}
-                placeholder="לפחות 6 תווים"
+                placeholder={t('auth_password_hint_short')}
                 dir="ltr"
                 autoComplete="new-password"
                 required
@@ -209,7 +222,7 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={() => setShowPw(!showPw)}
-                aria-label={showPw ? 'הסתר סיסמא' : 'הצג סיסמא'}
+                aria-label={showPw ? t('auth_hide_password') : t('auth_show_password')}
                 aria-pressed={showPw}
                 className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 active:bg-gray-100 focus-visible:ring-2 focus-visible:ring-primary"
               >
@@ -226,7 +239,7 @@ export default function SignupPage() {
             {/* Password strength bar */}
             {password.length > 0 && (
               <div id={pwStrengthId} className="space-y-1 pt-1" aria-live="polite">
-                <div className="flex gap-1" role="meter" aria-label="חוזק הסיסמא" aria-valuenow={pwStrength} aria-valuemin={0} aria-valuemax={5}>
+                <div className="flex gap-1" role="meter" aria-label={t('auth_pw_meter')} aria-valuenow={pwStrength} aria-valuemin={0} aria-valuemax={5}>
                   {[1,2,3,4,5].map(i => (
                     <div
                       key={i}
@@ -240,15 +253,15 @@ export default function SignupPage() {
                 <p className={`text-[11px] font-medium text-left ${
                   pwStrength <= 1 ? 'text-red-500' : pwStrength <= 2 ? 'text-orange-500' : 'text-emerald-600'
                 }`}>
-                  סיסמא {pwLabel}
+                  {tFormat('auth_pw_label', lang, { strength: pwLabel })}
                 </p>
               </div>
             )}
           </div>
 
           {/* Benefits list */}
-          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-3 space-y-1.5" aria-label="יתרונות החשבון">
-            {['ניהול הוצאות בכל מטבע', 'סריקת קבלות חכמה', 'שיתוף עם הנוסעים'].map(item => (
+          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-3 space-y-1.5" aria-label={t('auth_benefits_title')}>
+            {[t('auth_benefit_1'), t('auth_benefit_2'), t('auth_benefit_3')].map(item => (
               <div key={item} className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-primary flex-shrink-0" aria-hidden="true" />
                 <span className="text-xs text-gray-600">{item}</span>
@@ -265,22 +278,22 @@ export default function SignupPage() {
             style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
-            {loading ? 'יוצר חשבון…' : 'צור חשבון'}
+            {loading ? t('auth_creating') : t('auth_signup_btn')}
           </button>
 
           {/* Fine print */}
           <p className="text-center text-[11px] text-gray-400">
-            ללא צורך באישור אימייל — מתחילים מיד
+            {t('auth_no_email_confirm')}
           </p>
         </form>
 
         <p className="text-center text-sm text-gray-500">
-          כבר יש לך חשבון?{' '}
+          {t('auth_have_account')}{' '}
           <Link
             href="/auth/login"
             className="text-primary font-bold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
           >
-            התחבר
+            {t('auth_login_link')}
           </Link>
         </p>
       </div>

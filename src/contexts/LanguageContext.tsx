@@ -10,6 +10,8 @@ interface LanguageContextValue {
   t:       (key: TranslationKey) => string
 }
 
+const STORAGE_KEY = 'tripix_lang'
+
 const LanguageContext = createContext<LanguageContextValue>({
   lang:    'he',
   dir:     'rtl',
@@ -17,28 +19,43 @@ const LanguageContext = createContext<LanguageContextValue>({
   t:       (key) => key,
 })
 
+function readSavedLang(): Lang {
+  if (typeof window === 'undefined') return 'he'
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved === 'he' || saved === 'en' || saved === 'es') return saved
+  } catch { /* ignore */ }
+  return 'he'
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>('he')
+  // Lazy initializer reads from localStorage on first render — this prevents
+  // the previous race where the "save current lang" effect would overwrite the
+  // stored value before the "load saved lang" effect could apply it.
+  const [lang, setLangState] = useState<Lang>(() => readSavedLang())
 
-  // Load persisted language on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('tripix_lang') as Lang | null
-      if (saved && (saved === 'he' || saved === 'en' || saved === 'es')) {
-        setLangState(saved)
-      }
-    } catch { /* ignore */ }
-  }, [])
-
-  // Update HTML element attributes when language changes
+  // Whenever lang changes, sync HTML attributes + localStorage.
   useEffect(() => {
     const meta = LANG_META[lang]
     document.documentElement.lang = lang
     document.documentElement.dir  = meta.dir
     try {
-      localStorage.setItem('tripix_lang', lang)
+      localStorage.setItem(STORAGE_KEY, lang)
     } catch { /* ignore */ }
   }, [lang])
+
+  // Cross-tab sync: if the user changes the language in another tab,
+  // mirror the change here.
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== STORAGE_KEY || !e.newValue) return
+      if (e.newValue === 'he' || e.newValue === 'en' || e.newValue === 'es') {
+        setLangState(e.newValue)
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   const setLang = useCallback((newLang: Lang) => {
     setLangState(newLang)

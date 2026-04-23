@@ -798,9 +798,12 @@ export default function LifestylePage() {
           style={{ background: 'white', transform: 'translate(-25%, 40%)' }} />
 
         {/* Back */}
-        <Link href="/dashboard"
-          className="relative inline-flex items-center gap-1 text-white/80 text-sm mb-4 active:scale-95">
-          <ChevronLeft className="w-4 h-4" />
+        <Link
+          href="/dashboard"
+          aria-label="חזרה לדשבורד"
+          className="relative inline-flex items-center gap-1 text-white/90 text-sm mb-4 px-2 py-1 min-h-[44px] rounded-xl active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <ChevronLeft className="w-4 h-4 rtl:rotate-180" aria-hidden="true" />
           חזרה
         </Link>
 

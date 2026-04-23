@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Smartphone, ShieldCheck,
   Building2, Car, Calendar, Clock,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatMoney, getDaysRemaining, getTripDays } from '@/lib/utils'
@@ -22,6 +22,7 @@ import GmailScanButton from '@/components/GmailScanButton'
 import CurrencySelector from '@/components/CurrencySelector'
 import WeatherWidget from '@/components/WeatherWidget'
 import { DashboardSkeleton } from '@/components/ui/Skeleton'
+import { heroStagger, itemVariants, staggerContainer, spring } from '@/lib/motion'
 
 // ── Upcoming event extracted from documents ────────────────────────────────────
 interface UpcomingEvent {
@@ -114,6 +115,7 @@ export default function DashboardPage() {
   const { currentTrip, trips, loading: tripsLoading } = useTrip()
   const { displayName } = useAuth()
   const { t, dir } = useLanguage()
+  const reduce = useReducedMotion()
   const [expenses, setExpenses]         = useState<Expense[]>([])
   const [documents, setDocuments]       = useState<TripDoc[]>([])
   const [loading, setLoading]           = useState(true)
@@ -176,7 +178,7 @@ export default function DashboardPage() {
   if (loading || tripsLoading) {
     return (
       <>
-        <span className="sr-only" role="status" aria-live="polite">טוען את הדשבורד…</span>
+        <span className="sr-only" role="status" aria-live="polite">{t('dash_loading')}</span>
         <DashboardSkeleton />
       </>
     )
@@ -197,11 +199,11 @@ export default function DashboardPage() {
             <Plane className="w-12 h-12 text-white" />
           </div>
           {displayName && (
-            <p className="text-gray-400 text-sm mb-1">שלום {displayName} 👋</p>
+            <p className="text-gray-400 text-sm mb-1">{t('dash_hello')} {displayName} 👋</p>
           )}
           <h2 className="text-2xl font-bold tracking-tight mb-2">{t('dash_ready')}</h2>
           <p className="text-gray-500 text-sm leading-relaxed mb-8">
-            צור נסיעה ראשונה כדי להתחיל לעקוב אחר ההוצאות, המסמכים ולוח הזמנים שלך
+            {t('dash_first_trip_subtitle')}
           </p>
           <Link href="/trips/new"
             className="w-full text-white rounded-2xl py-4 font-bold text-base flex items-center justify-center gap-2 active:scale-95 transition-all shadow-fab"
@@ -211,13 +213,13 @@ export default function DashboardPage() {
           </Link>
           <Link href="/quiz"
             className="w-full mt-3 border border-violet-200 bg-violet-50 text-violet-600 rounded-2xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
-            🌍 לא יודע לאן לטוס? קבל המלצה אישית
+            {t('dash_quiz_recommendation')}
           </Link>
           <div className="grid grid-cols-3 gap-3 mt-8">
             {[
-              { emoji: '💰', label: 'מעקב הוצאות' },
-              { emoji: '📸', label: 'סריקת קבלות' },
-              { emoji: '🧳', label: 'רשימת אריזה' },
+              { emoji: '💰', label: t('dash_feature_expenses') },
+              { emoji: '📸', label: t('dash_feature_scan') },
+              { emoji: '🧳', label: t('dash_feature_packing') },
             ].map((f, i) => (
               <motion.div key={i}
                 initial={{ opacity: 0, y: 10 }}
@@ -236,117 +238,158 @@ export default function DashboardPage() {
 
   // ── Main Revolut-style dashboard ───────────────────────────────────────────
   return (
-    <div className="page-enter -mx-4" dir={dir}>
+    <div className="-mx-4" dir={dir}>
       {/* ══════════════════════════════════════════════════════
-          HERO SECTION — full-width gradient background
+          HERO SECTION — full-width gradient + animated aurora
           ════════════════════════════════════════════════════ */}
-      <div
+      <motion.section
+        variants={heroStagger}
+        initial={reduce ? false : 'initial'}
+        animate="animate"
+        aria-labelledby="hero-balance-label"
         className="relative px-5 pt-4 pb-8 overflow-hidden"
         style={{
           background: 'linear-gradient(160deg, #EEE9FF 0%, #DDD4FF 35%, #C5B3FF 70%, #A98EFF 100%)',
           minHeight: 260,
+          boxShadow: 'inset 0 -1px 0 rgba(108,71,255,0.08)',
         }}
       >
-        {/* Decorative blobs */}
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full pointer-events-none"
-          style={{ background: 'rgba(255,255,255,0.25)', transform: 'translate(40%, -40%)' }} />
-        <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full pointer-events-none"
-          style={{ background: 'rgba(108,71,255,0.12)', transform: 'translate(-30%, 40%)' }} />
+        {/* Animated aurora blobs */}
+        <motion.div
+          aria-hidden="true"
+          className="absolute top-0 right-0 w-72 h-72 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.40) 0%, transparent 70%)', transform: 'translate(40%, -40%)' }}
+          animate={reduce ? undefined : { scale: [1, 1.12, 1], x: ['40%', '32%', '40%'] }}
+          transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          aria-hidden="true"
+          className="absolute bottom-0 left-0 w-56 h-56 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(108,71,255,0.18) 0%, transparent 70%)', transform: 'translate(-30%, 40%)' }}
+          animate={reduce ? undefined : { scale: [1, 1.18, 1], y: ['40%', '46%', '40%'] }}
+          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+        />
 
         {/* Top row: greeting + currency */}
-        <div className="relative flex items-center justify-between mb-6">
+        <motion.div variants={itemVariants} className="relative flex items-center justify-between mb-6">
           <div>
             <p className="text-primary-dark/70 text-xs font-medium">
-              {displayName ? `שלום, ${displayName}` : 'ברוך הבא'}
+              {displayName ? `${t('dash_hello')}, ${displayName}` : t('dash_welcome')}
             </p>
             <p className="text-primary-dark font-bold text-sm truncate max-w-[180px]">
               {currentTrip?.name || t('dash_no_trip')}
             </p>
           </div>
           <CurrencySelector value={displayCurrency} onChange={setDisplayCurrency} />
-        </div>
+        </motion.div>
 
         {/* Giant balance */}
-        <div className="relative text-center mb-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary-dark/60 mb-1">
-            סה״כ הוצאות
+        <motion.div variants={itemVariants} className="relative text-center mb-2">
+          <p id="hero-balance-label" className="text-xs font-semibold uppercase tracking-widest text-primary-dark/60 mb-1">
+            {t('dash_total_expenses')}
           </p>
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={reduce ? undefined : { opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4, delay: 0.05 }}
+            transition={{ ...spring.pop, delay: 0.18 }}
           >
             {/* Big balance — currency symbol + formatted number */}
             <div className="flex items-end justify-center gap-1 leading-none">
               <span className="text-2xl font-bold text-primary-dark/70 mb-2">
                 {CURRENCY_SYMBOL[displayCurrency]}
               </span>
-              <span className="text-[52px] font-black tracking-tight text-primary-dark">
+              <span
+                className="text-[52px] font-black tracking-tight text-primary-dark tabular-nums"
+                aria-live="polite"
+              >
                 {Math.round(totalIls * RATE_FROM_ILS[displayCurrency]).toLocaleString('he-IL')}
               </span>
             </div>
           </motion.div>
           <p className="text-xs text-primary-dark/55 mt-1 font-medium">
-            {currentTrip?.destination} · {totalTripDays} ימים · {daysRemaining} נותרו
+            {currentTrip?.destination} · {totalTripDays} {t('dash_days')} · {daysRemaining} {t('dash_left')}
           </p>
-        </div>
+        </motion.div>
 
         {/* Trip switcher pill */}
         {trips.length > 1 && (
-          <div className="relative flex justify-center mt-3">
-            <Link href="/trips"
-              className="flex items-center gap-2 px-4 py-1.5 rounded-full active:scale-95 transition-all"
-              style={{ background: 'rgba(255,255,255,0.50)', backdropFilter: 'blur(8px)' }}>
-              <Plane className="w-3 h-3 text-primary-dark" />
+          <motion.div variants={itemVariants} className="relative flex justify-center mt-3">
+            <Link
+              href="/trips"
+              aria-label={`עבור לרשימת כל הטיולים — סה״כ ${trips.length}`}
+              className="flex items-center gap-2 px-4 py-2 min-h-[36px] rounded-full active:scale-95 transition-all hover:bg-white/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(10px)' }}>
+              <Plane className="w-3.5 h-3.5 text-primary-dark" aria-hidden="true" />
               <span className="text-xs font-semibold text-primary-dark">{t('dash_all_trips')}</span>
-              <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+              <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center" aria-hidden="true">
                 <span className="text-[9px] font-bold text-white">{trips.length}</span>
               </div>
             </Link>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.section>
 
       {/* ══════════════════════════════════════════════════════
           QUICK ACTIONS — 5 service shortcuts (horizontal scroll)
           ════════════════════════════════════════════════════ */}
-      <div className="bg-white px-5 pt-5 pb-4 border-b border-gray-50">
-        <div className="flex gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+      <motion.section
+        aria-label={t('dash_quick_actions')}
+        variants={staggerContainer}
+        initial={reduce ? false : 'initial'}
+        animate="animate"
+        className="bg-white px-5 pt-5 pb-4 border-b border-gray-50"
+      >
+        <ul role="list" className="flex gap-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
           {[
-            { href: 'https://www.airalo.com',  icon: Smartphone,  label: 'eSim',          color: '#6C47FF', bg: 'rgba(108,71,255,0.12)', external: true  },
-            { href: '/documents',              icon: ShieldCheck,  label: 'ביטוח',         color: '#10B981', bg: 'rgba(16,185,129,0.10)', external: false },
-            { href: '/documents',              icon: Building2,    label: 'מלונות',        color: '#0891B2', bg: 'rgba(8,145,178,0.10)',  external: false },
-            { href: '/documents',              icon: Car,          label: 'השכרת רכב',    color: '#D97706', bg: 'rgba(217,119,6,0.10)',  external: false },
-            { href: '/documents',              icon: Plane,        label: 'טיסות',         color: '#3B82F6', bg: 'rgba(59,130,246,0.10)', external: false },
-          ].map((item, i) => (
-            <motion.div key={i}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.05 }}
-              className="flex-shrink-0">
-              {item.external ? (
-                <a href={item.href} target="_blank" rel="noopener noreferrer"
-                  className="flex flex-col items-center gap-1.5 active:scale-90 transition-all">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                    style={{ background: item.bg }}>
-                    <item.icon className="w-6 h-6" style={{ color: item.color }} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-[11px] font-semibold text-gray-600 text-center">{item.label}</span>
-                </a>
-              ) : (
-                <Link href={item.href}
-                  className="flex flex-col items-center gap-1.5 active:scale-90 transition-all">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                    style={{ background: item.bg }}>
-                    <item.icon className="w-6 h-6" style={{ color: item.color }} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-[11px] font-semibold text-gray-600 text-center">{item.label}</span>
-                </Link>
-              )}
-            </motion.div>
-          ))}
-        </div>
-      </div>
+            { href: 'https://www.airalo.com',  icon: Smartphone,  label: t('dash_quick_esim'),       color: '#6C47FF', bg: 'rgba(108,71,255,0.12)', external: true  },
+            { href: '/documents',              icon: ShieldCheck,  label: t('dash_quick_insurance'), color: '#10B981', bg: 'rgba(16,185,129,0.10)', external: false },
+            { href: '/documents',              icon: Building2,    label: t('dash_quick_hotels'),    color: '#0891B2', bg: 'rgba(8,145,178,0.10)',  external: false },
+            { href: '/documents',              icon: Car,          label: t('dash_quick_carrental'), color: '#D97706', bg: 'rgba(217,119,6,0.10)',  external: false },
+            { href: '/documents',              icon: Plane,        label: t('dash_quick_flights'),   color: '#3B82F6', bg: 'rgba(59,130,246,0.10)', external: false },
+          ].map((item, i) => {
+            const Inner = (
+              <>
+                <motion.div
+                  whileTap={reduce ? undefined : { scale: 0.88 }}
+                  transition={spring.tight}
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                  style={{
+                    background: item.bg,
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.6)',
+                  }}
+                  aria-hidden="true"
+                >
+                  <item.icon className="w-6 h-6" style={{ color: item.color }} strokeWidth={1.8} />
+                </motion.div>
+                <span className="text-[11px] font-semibold text-gray-700 text-center">{item.label}</span>
+              </>
+            )
+            return (
+              <motion.li key={i} variants={itemVariants} className="flex-shrink-0">
+                {item.external ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${item.label} ${t('dash_external_open')}`}
+                    className="flex flex-col items-center gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl p-1"
+                  >
+                    {Inner}
+                  </a>
+                ) : (
+                  <Link
+                    href={item.href}
+                    aria-label={item.label}
+                    className="flex flex-col items-center gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl p-1"
+                  >
+                    {Inner}
+                  </Link>
+                )}
+              </motion.li>
+            )
+          })}
+        </ul>
+      </motion.section>
 
       {/* ══════════════════════════════════════════════════════
           GMAIL SCAN BUTTON
@@ -358,35 +401,42 @@ export default function DashboardPage() {
       {/* ══════════════════════════════════════════════════════
           STATS STRIP — horizontal scroll
           ════════════════════════════════════════════════════ */}
-      <div className="bg-white px-5 py-3 border-b border-gray-50">
-        <div className="flex gap-3 overflow-x-auto pb-1">
+      <motion.section
+        aria-label={t('dash_trip_stats')}
+        variants={staggerContainer}
+        initial={reduce ? false : 'initial'}
+        animate="animate"
+        className="bg-white px-5 py-3 border-b border-gray-50"
+      >
+        <ul role="list" className="flex gap-3 overflow-x-auto pb-1">
           {[
-            { label: 'ממוצע יומי', value: convert(avgDaily),  icon: TrendingUp,   color: '#10B981', bg: '#ECFDF5' },
-            { label: 'היום',       value: convert(todayTotal), icon: CalendarDays, color: '#F59E0B', bg: '#FFFBEB' },
-            { label: t('dash_travel_days'),  value: `${totalTripDays}`, icon: Plane,        color: '#3B82F6', bg: '#EFF6FF' },
+            { label: t('dash_avg_daily'), value: convert(avgDaily),  icon: TrendingUp,   color: '#10B981', bg: '#ECFDF5' },
+            { label: t('dash_today'),     value: convert(todayTotal), icon: CalendarDays, color: '#F59E0B', bg: '#FFFBEB' },
+            { label: t('dash_travel_days'),  value: `${totalTripDays}`, icon: Plane,     color: '#3B82F6', bg: '#EFF6FF' },
           ].map((s, i) => (
-            <motion.div key={i}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.15 + i * 0.05 }}
+            <motion.li
+              key={i}
+              variants={itemVariants}
               className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl flex-shrink-0"
-              style={{ background: s.bg }}>
-              <s.icon className="w-4 h-4 flex-shrink-0" style={{ color: s.color }} />
+              style={{
+                background: s.bg,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
+              }}>
+              <s.icon className="w-4 h-4 flex-shrink-0" style={{ color: s.color }} aria-hidden="true" />
               <div>
-                <p className="text-[10px] text-gray-400 font-medium">{s.label}</p>
-                <p className="text-sm font-bold text-gray-800 leading-tight">{s.value}</p>
+                <p className="text-[10px] text-gray-500 font-medium">{s.label}</p>
+                <p className="text-sm font-bold text-gray-800 leading-tight tabular-nums">{s.value}</p>
               </div>
-            </motion.div>
+            </motion.li>
           ))}
           {/* Weather mini-widget */}
           {currentTrip?.destination && (
-            <WeatherWidget
-              city={getDestinationCity(currentTrip.destination)}
-              className="flex-shrink-0"
-            />
+            <motion.li variants={itemVariants} className="flex-shrink-0 list-none">
+              <WeatherWidget city={getDestinationCity(currentTrip.destination)} />
+            </motion.li>
           )}
-        </div>
-      </div>
+        </ul>
+      </motion.section>
 
       {/* ══════════════════════════════════════════════════════
           UPCOMING SCHEDULE — from timeline documents
@@ -396,11 +446,11 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-50">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-bold text-gray-800">לוז קרוב</h2>
+            <h2 className="text-sm font-bold text-gray-800">{t('dash_upcoming_short')}</h2>
           </div>
           <Link href="/timeline"
             className="text-xs font-semibold text-primary px-2.5 py-1 rounded-full active:scale-95">
-            הכל
+            {t('dash_view_all')}
           </Link>
         </div>
 
@@ -427,7 +477,7 @@ export default function DashboardPage() {
                         <span className="text-[11px] font-bold text-primary tabular-nums">{ev.time}</span>
                       )}
                       <p className="text-[11px] text-gray-400">
-                        {isEvToday ? 'היום' : ev.date}
+                        {isEvToday ? t('dash_today') : ev.date}
                         {ev.subtitle ? ` · ${ev.subtitle}` : ''}
                       </p>
                     </div>
@@ -436,17 +486,19 @@ export default function DashboardPage() {
                   {/* Today badge */}
                   {isEvToday && (
                     <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex-shrink-0">
-                      היום
+                      {t('dash_today')}
                     </span>
                   )}
                 </motion.div>
               )
             })}
 
-            <Link href="/timeline"
-              className="flex items-center justify-between px-5 py-3.5 border-t border-gray-50 active:bg-gray-50 transition-colors">
-              <span className="text-sm font-semibold text-primary">ציר הזמן המלא</span>
-              <ChevronLeft className="w-4 h-4 text-primary" />
+            <Link
+              href="/timeline"
+              aria-label={t('dash_open_timeline')}
+              className="flex items-center justify-between px-5 py-3.5 min-h-[48px] border-t border-gray-50 active:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
+              <span className="text-sm font-semibold text-primary">{t('dash_full_timeline')}</span>
+              <ChevronLeft className="w-4 h-4 text-primary rtl:rotate-180" aria-hidden="true" />
             </Link>
           </div>
         ) : (
@@ -456,13 +508,13 @@ export default function DashboardPage() {
               style={{ background: 'linear-gradient(135deg, #6C47FF18, #9B7BFF18)' }}>
               <Clock className="w-7 h-7 text-primary/50" />
             </div>
-            <p className="text-sm font-bold text-gray-600 mb-1">אין אירועים קרובים</p>
-            <p className="text-xs text-gray-400 mb-5">הוסף מסמכי הזמנה כדי לראות את הלוז</p>
+            <p className="text-sm font-bold text-gray-600 mb-1">{t('dash_no_upcoming')}</p>
+            <p className="text-xs text-gray-400 mb-5">{t('dash_no_upcoming_hint')}</p>
             <Link href="/scan"
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-bold text-white active:scale-95 transition-all"
               style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
               <ScanLine className="w-4 h-4" />
-              הוסף מסמך ראשון
+              {t('dash_add_first_doc')}
             </Link>
           </div>
         )}

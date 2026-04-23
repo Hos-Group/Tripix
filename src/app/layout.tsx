@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { Analytics } from '@vercel/analytics/react'
 import Providers from '@/components/Providers'
 import LayoutWrapper from '@/components/layout/LayoutWrapper'
+import SkipLink from '@/components/ui/SkipLink'
 import './globals.css'
 
 const inter = Inter({
@@ -29,6 +30,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Default: no pinch-zoom (prevents accidental zoom during tap interactions).
+  // Overridden dynamically to 5× inside DocumentViewer via useViewerZoom().
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
   themeColor: '#6C47FF',
 }
@@ -43,28 +48,48 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="bg-surface-secondary text-gray-900 antialiased">
-        <a href="#main-content" className="skip-link">דלג לתוכן הראשי</a>
         <Providers>
+          <SkipLink />
           <LayoutWrapper>
             {children}
           </LayoutWrapper>
           <Analytics />
           <Toaster
             position="top-center"
+            gutter={10}
+            containerStyle={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
             toastOptions={{
-              duration: 3000,
+              duration: 3200,
               ariaProps: { role: 'status', 'aria-live': 'polite' },
               style: {
                 direction: 'rtl',
-                borderRadius: '14px',
+                borderRadius: '18px',
                 fontSize: '14px',
-                fontWeight: '500',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                border: 'none',
-                padding: '12px 16px',
+                fontWeight: '600',
+                color: '#1F2937',
+                background: 'rgba(255,255,255,0.95)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                boxShadow: '0 12px 40px rgba(15,12,40,0.18), 0 0 0 1px rgba(255,255,255,0.7) inset',
+                border: '1px solid rgba(108,71,255,0.10)',
+                padding: '14px 18px',
+                maxWidth: '92vw',
               },
               success: {
-                iconTheme: { primary: '#6C47FF', secondary: '#fff' },
+                duration: 2800,
+                iconTheme: { primary: '#10B981', secondary: '#ECFDF5' },
+              },
+              error: {
+                duration: 4500,
+                iconTheme: { primary: '#EF4444', secondary: '#FEF2F2' },
+                style: {
+                  background: 'rgba(254,242,242,0.95)',
+                  border: '1px solid rgba(239,68,68,0.20)',
+                  color: '#7F1D1D',
+                },
+              },
+              loading: {
+                iconTheme: { primary: '#6C47FF', secondary: '#F3F0FF' },
               },
             }}
           />

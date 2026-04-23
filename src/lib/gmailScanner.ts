@@ -44,6 +44,7 @@ import {
   idempotencyKey,
   buildExpenseFingerprint,
   buildDocumentFingerprint,
+  findVendorExpense,
 } from './dedup'
 import { computeFileHashFromBase64, computeFileHashFromBuffer, buildDedupKey, isDedupViolation } from './documentDedup'
 
@@ -854,41 +855,61 @@ async function processMessages(
       }
 
       // ── 3. expenses record — visible in Expenses page ───────────────────
-      const expenseAmount = parsedBooking.amount || 0
-      const expenseDate   =
-        parsedBooking.check_in ||
-        parsedBooking.departure_date ||
-        new Date().toISOString().split('T')[0]
-      const expenseHash = buildExpenseFingerprint(
-        matchedTripId, expenseAmount, expenseDate, bookingTitle,
-      )
-      const { data: expense, error: expenseError } = await supabase
-        .from('expenses')
-        .insert({
-          trip_id:         matchedTripId,
-          title:           bookingTitle,
-          amount:          expenseAmount,
-          currency:        parsedBooking.currency || 'ILS',
-          amount_ils:      expenseAmount,
-          category:        CATEGORY_MAP[parsedBooking.booking_type] || 'other',
-          expense_date:    expenseDate,
-          notes:           `${gmidKey}\nמספר אישור: ${parsedBooking.confirmation_number || '—'}\nמ: ${msg.from}`,
-          source:          'scan',
-          is_paid:         true,
-          content_hash:    expenseHash,   // logical fingerprint (unique)
-          idempotency_key: pmIdemKey,     // "gmail:<id>" — hard backstop per trip
-        })
-        .select('id')
-        .single()
+      // Only create the expense when the booking has a clearly paid amount > 0.
+      // Confirmations without a total (passport renewals, free cancellations,
+      // itinerary-only emails) stay on the Documents page — the Expenses page
+      // must not surface ₪0 rows.
+      const expenseAmount = Number(parsedBooking.amount) || 0
+      let expense: { id: string } | null = null
+      if (expenseAmount > 0) {
+        const expenseDate =
+          parsedBooking.check_in ||
+          parsedBooking.departure_date ||
+          new Date().toISOString().split('T')[0]
+        const expenseCurrency = parsedBooking.currency || 'ILS'
 
-      if (expenseError) {
-        // 23505 = unique violation on content_hash → same expense already exists.
-        // Safe to ignore (the doc record already links the user back to it).
-        if (expenseError.code !== '23505') {
-          console.error('[processMessages] Expense insert error:', expenseError.message)
+        // Cross-date vendor dedup — catches cases where the same booking
+        // arrives in two Gmail confirmations with different parsed dates.
+        const vendorMatch = await findVendorExpense(
+          matchedTripId, bookingTitle, expenseAmount, expenseCurrency,
+        )
+        if (vendorMatch) {
+          console.log(`[processMessages] dup expense skipped (vendor match): "${bookingTitle}" → existing ${vendorMatch.id.slice(0, 8)}`)
+          expense = { id: vendorMatch.id }
         } else {
-          console.log(`[processMessages] dup expense skipped (DB unique): GMID=${msg.id}`)
+          const expenseHash = buildExpenseFingerprint(
+            matchedTripId, expenseAmount, expenseDate, bookingTitle,
+          )
+          const { data: inserted, error: expenseError } = await supabase
+            .from('expenses')
+            .insert({
+              trip_id:         matchedTripId,
+              title:           bookingTitle,
+              amount:          expenseAmount,
+              currency:        expenseCurrency,
+              amount_ils:      expenseAmount,
+              category:        CATEGORY_MAP[parsedBooking.booking_type] || 'other',
+              expense_date:    expenseDate,
+              notes:           `${gmidKey}\nמספר אישור: ${parsedBooking.confirmation_number || '—'}\nמ: ${msg.from}`,
+              source:          'scan',
+              is_paid:         true,
+              content_hash:    expenseHash,   // logical fingerprint (unique)
+              idempotency_key: pmIdemKey,     // "gmail:<id>" — hard backstop per trip
+            })
+            .select('id')
+            .single()
+          if (expenseError) {
+            if (expenseError.code !== '23505') {
+              console.error('[processMessages] Expense insert error:', expenseError.message)
+            } else {
+              console.log(`[processMessages] dup expense skipped (DB unique): GMID=${msg.id}`)
+            }
+          } else {
+            expense = inserted
+          }
         }
+      } else {
+        console.log(`[processMessages] ✓ doc saved without expense (amount=0): "${bookingTitle}"`)
       }
 
       // ── Link expense + document to ingest record ────────────────────────

@@ -37,6 +37,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'missing required fields' }, { status: 400 })
   }
 
+  // Enforce the product rule at the API layer (DB CHECK enforces it again
+  // as a backstop). Zero-amount rows never belong on the Expenses page —
+  // they come from failed OCR parses or multi-leg flight phantoms.
+  const amountNumber = Number(expense.amount)
+  if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+    return NextResponse.json(
+      { error: 'invalid_amount', message: 'סכום חייב להיות גדול מ-0' },
+      { status: 400 },
+    )
+  }
+
   // Two-layer dedup:
   //   1. Soft pre-check via fingerprint → return existing row with 409 when the
   //      client can offer a "save anyway" path (force=true bypasses).

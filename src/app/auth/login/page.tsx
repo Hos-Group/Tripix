@@ -7,11 +7,14 @@ import { Loader2, ScanFace, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { signIn } from '@/lib/auth'
 import { Analytics, identifyUser } from '@/lib/analytics'
+import { useLanguage } from '@/contexts/LanguageContext'
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
 
 const REMEMBER_KEY = 'tripix_remember'
 const BIOMETRIC_KEY = 'tripix_biometric'
 
 export default function LoginPage() {
+  const { t, dir } = useLanguage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -42,10 +45,10 @@ export default function LoginPage() {
 
   const validate = () => {
     const next: typeof errors = {}
-    if (!email.trim()) next.email = 'נא להזין כתובת אימייל'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'כתובת אימייל אינה תקינה'
-    if (!password) next.password = 'נא להזין סיסמא'
-    else if (password.length < 6) next.password = 'סיסמא חייבת להכיל לפחות 6 תווים'
+    if (!email.trim()) next.email = t('auth_err_email_required')
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = t('auth_err_email_invalid')
+    if (!password) next.password = t('auth_err_password_required')
+    else if (password.length < 6) next.password = t('auth_err_password_short')
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -69,10 +72,10 @@ export default function LoginPage() {
       }
       Analytics.signedIn('email')
 
-      toast.success('התחברת בהצלחה!')
+      toast.success(t('auth_login_success'))
       router.push('/dashboard')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'שגיאה בהתחברות'
+      const message = err instanceof Error ? err.message : t('auth_err_generic')
       setErrors({ form: message })
       toast.error(message)
     }
@@ -82,7 +85,7 @@ export default function LoginPage() {
   const handleBiometric = async () => {
     const bioData = localStorage.getItem(BIOMETRIC_KEY)
     if (!bioData) {
-      toast.error('יש להתחבר עם סיסמא פעם ראשונה כדי להפעיל Face ID')
+      toast.error(t('auth_face_id_first'))
       return
     }
 
@@ -101,7 +104,7 @@ export default function LoginPage() {
         const { email: e, password: p } = JSON.parse(bioData)
         setLoading(true)
         await signIn(e, p)
-        toast.success('התחברת עם Face ID!')
+        toast.success(t('auth_face_id_success'))
         router.push('/dashboard')
       }
     } catch {
@@ -109,17 +112,25 @@ export default function LoginPage() {
         const { email: e, password: p } = JSON.parse(bioData)
         setLoading(true)
         await signIn(e, p)
-        toast.success('התחברת בהצלחה!')
+        toast.success(t('auth_login_success'))
         router.push('/dashboard')
       } catch {
-        toast.error('שגיאה בהתחברות')
+        toast.error(t('auth_err_generic'))
       }
     }
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gray-50">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-gray-50" dir={dir}>
+      {/* Top-right: language switcher (auth pages don't have GlobalHeader) */}
+      <div
+        className="fixed top-0 right-0 z-50 p-3"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)', paddingRight: '16px' }}
+      >
+        <LanguageSwitcher />
+      </div>
+
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <h1
@@ -133,7 +144,7 @@ export default function LoginPage() {
           >
             Tripix
           </h1>
-          <p className="text-gray-500 text-sm">מנהל טיול חכם</p>
+          <p className="text-gray-500 text-sm">{t('auth_subtitle')}</p>
         </div>
 
         <form
@@ -142,7 +153,7 @@ export default function LoginPage() {
           aria-describedby={errors.form ? 'login-form-error' : undefined}
           className="bg-white rounded-3xl p-6 shadow-sm space-y-4"
         >
-          <h2 className="text-lg font-bold text-center">התחברות</h2>
+          <h2 className="text-lg font-bold text-center">{t('auth_login_title')}</h2>
 
           {errors.form && (
             <div
@@ -157,7 +168,7 @@ export default function LoginPage() {
           {/* Email */}
           <div className="flex flex-col gap-1">
             <label htmlFor="login-email" className="text-xs font-semibold text-gray-700">
-              אימייל <span aria-hidden="true" className="text-red-500">*</span>
+              {t('auth_email')} <span aria-hidden="true" className="text-red-500">*</span>
             </label>
             <input
               id="login-email"
@@ -170,7 +181,7 @@ export default function LoginPage() {
               onChange={(e) => { setEmail(e.target.value); if (errors.email) setErrors(s => ({ ...s, email: undefined })) }}
               aria-invalid={errors.email ? true : undefined}
               aria-describedby={errors.email ? 'login-email-err' : undefined}
-              placeholder="name@example.com"
+              placeholder={t('auth_email_ph')}
               className={`w-full bg-gray-50 rounded-2xl px-4 py-3 min-h-[48px] text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white text-left transition-all ${
                 errors.email ? 'ring-2 ring-red-300 bg-red-50/50' : ''
               }`}
@@ -185,7 +196,7 @@ export default function LoginPage() {
           {/* Password */}
           <div className="flex flex-col gap-1">
             <label htmlFor="login-password" className="text-xs font-semibold text-gray-700">
-              סיסמא <span aria-hidden="true" className="text-red-500">*</span>
+              {t('auth_password')} <span aria-hidden="true" className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -206,7 +217,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(v => !v)}
-                aria-label={showPassword ? 'הסתר סיסמא' : 'הצג סיסמא'}
+                aria-label={showPassword ? t('auth_hide_password') : t('auth_show_password')}
                 aria-pressed={showPassword}
                 className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 active:bg-gray-100 focus-visible:ring-2 focus-visible:ring-primary"
               >
@@ -241,7 +252,7 @@ export default function LoginPage() {
                 </svg>
               )}
             </span>
-            <span className="text-sm text-gray-600">זכור אותי</span>
+            <span className="text-sm text-gray-600">{t('auth_remember_me')}</span>
           </label>
 
           <button
@@ -252,7 +263,7 @@ export default function LoginPage() {
             style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
-            {loading ? 'מתחבר…' : 'התחבר'}
+            {loading ? t('auth_logging_in') : t('auth_login_btn')}
           </button>
 
           {/* Face ID / Biometric */}
@@ -261,22 +272,22 @@ export default function LoginPage() {
               type="button"
               onClick={handleBiometric}
               disabled={loading}
-              aria-label="התחבר באמצעות Face ID או טביעת אצבע"
+              aria-label={t('auth_face_id_aria')}
               className="w-full border-2 border-gray-200 rounded-2xl py-3 min-h-[52px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               <ScanFace className="w-5 h-5" aria-hidden="true" />
-              התחבר עם Face ID
+              {t('auth_face_id')}
             </button>
           )}
         </form>
 
         <p className="text-center text-sm text-gray-500">
-          אין לך חשבון?{' '}
+          {t('auth_no_account')}{' '}
           <Link
             href="/auth/signup"
             className="text-primary font-bold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
           >
-            הרשם עכשיו
+            {t('auth_signup_link')}
           </Link>
         </p>
       </div>

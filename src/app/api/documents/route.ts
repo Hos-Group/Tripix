@@ -7,6 +7,8 @@ import {
   isDedupViolation,
   dedupReasonLabel,
 } from '@/lib/documentDedup'
+import { insertExpenseFromDocument, type ExtractedAmountData } from '@/lib/dedup'
+import { convertToILS } from '@/lib/rates'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -149,7 +151,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json(data)
+  // ── Auto-create a linked expense when the document carries a paid amount ──
+  // Rule: only when extracted_data.amount > 0 (passports / blank insurance /
+  // zero-amount bookings stay on the Documents page only — no expense row).
+  const doc           = data as Record<string, unknown>
+  const extracted     = (doc.extracted_data as ExtractedAmountData | null | undefined) || null
+  const rawAmount     = extracted?.amount
+  const amountNumber  = typeof rawAmount === 'number' ? rawAmount : Number(rawAmount)
+  let   expenseStatus: { inserted: boolean; reason?: string; id?: string } = { inserted: false, reason: 'no_amount' }
+
+  if (Number.isFinite(amountNumber) && amountNumber > 0) {
+    const currency = (extracted?.currency || 'ILS').toUpperCase()
+    const expenseDate =
+      extracted?.check_in        ||
+      extracted?.departure_date  ||
+      (docData.valid_from as string | null) ||
+      new Date().toISOString().split('T')[0]
+
+    let amountIls = amountNumber
+    try {
+      amountIls = await convertToILS(amountNumber, currency, expenseDate)
+    } catch (convErr) {
+      console.warn('[documents] convertToILS failed — using raw amount:', convErr)
+    }
+
+    expenseStatus = await insertExpenseFromDocument({
+      trip_id:         String(docData.trip_id),
+      user_id:         (docData.user_id as string | null) || null,
+      document_id:     String(doc.id),
+      doc_type:        String(docData.doc_type),
+      name:            String(docData.name),
+      extracted_data:  extracted,
+      amount_ils:      amountIls,
+      fallback_date:   (docData.valid_from as string | null) || null,
+      source:          'document',
+      idempotency_key: `doc:${doc.id}`,   // stable source key → DB unique blocks re-run
+    })
+  }
+
+  return NextResponse.json({
+    ...doc,
+    expense_created: expenseStatus.inserted,
+    expense_skip_reason: expenseStatus.inserted ? undefined : expenseStatus.reason,
+  })
 }
 
 export async function DELETE(request: NextRequest) {

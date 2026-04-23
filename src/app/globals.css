@@ -31,6 +31,10 @@ body {
   font-size: 16px;
   line-height: 1.5;
   color: #111827;
+  /* Block pinch-zoom and double-tap-zoom site-wide.
+     The DocumentViewer overrides this to `pinch-zoom pan-x pan-y`
+     so users CAN zoom into receipts / passports / tickets. */
+  touch-action: pan-x pan-y;
 }
 
 input, textarea, select {

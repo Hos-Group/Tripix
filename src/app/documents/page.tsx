@@ -1,36 +1,77 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw, Mail, Settings, ChevronRight, CheckSquare, Square, Download, X, FolderOpen, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Filter, List, LayoutGrid, CreditCard, RefreshCw, Mail, Settings, ChevronRight, CheckSquare, Square, Download, X, FolderOpen, ChevronDown, ChevronUp, Search, ArrowUpDown, Check, Clock, AlertTriangle, Plane, ShieldCheck } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { formatDateShort } from '@/lib/utils'
 import { Document, DocType, DOC_TYPE_META, TravelerId } from '@/types'
-import { DocTypeIconBadge } from '@/lib/iconConfig'
+import { DocTypeIconBadge, DOC_TYPE_ICON } from '@/lib/iconConfig'
 import DocumentViewer from '@/components/DocumentViewer'
 import { loadTravelers, getTravelerName, type Traveler } from '@/lib/travelers'
 import { useTrip } from '@/contexts/TripContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { ListSkeleton } from '@/components/ui/Skeleton'
+import { tFormat } from '@/lib/i18n'
 
 const DOC_TYPES: DocType[] = ['passport', 'flight', 'hotel', 'ferry', 'activity', 'insurance', 'visa', 'other']
 
-// ── Email web URL — Gmail or Outlook deep link ─────────────────────────────
-function getEmailWebUrl(messageId: string | null | undefined): string | null {
-  if (!messageId) return null
-  if (messageId.startsWith('ms_')) {
-    // Outlook Web — best-effort: deep link to the message by its internet ID
-    return `https://outlook.live.com/mail/0/deeplink/read/${encodeURIComponent(messageId.slice(3))}`
-  }
-  return `https://mail.google.com/mail/u/0/#inbox/${messageId}`
+// ── Expiry status ───────────────────────────────────────────────────────────
+// Used by the UI to surface passports / visas / insurances about to expire,
+// and flights / hotels about to depart.
+type DocStatus =
+  | { kind: 'expired';     daysLeft: number; label: string; tone: 'red' }
+  | { kind: 'expiring';    daysLeft: number; label: string; tone: 'amber' }
+  | { kind: 'upcoming';    daysLeft: number; label: string; tone: 'blue' }
+  | { kind: 'active';      daysLeft: number; label: string; tone: 'green' }
+  | null
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-function openEmailInWeb(messageId: string | null | undefined) {
-  const url = getEmailWebUrl(messageId)
-  if (url) window.open(url, '_blank', 'noopener')
+function getDocStatus(doc: Document): DocStatus {
+  const now = new Date()
+  const until = doc.valid_until ? new Date(doc.valid_until) : null
+  const from  = doc.valid_from  ? new Date(doc.valid_from)  : null
+
+  // Long-term validity (passport / visa / insurance) — flag expiry.
+  if (['passport', 'visa', 'insurance'].includes(doc.doc_type) && until) {
+    const d = daysBetween(until, now)
+    if (d < 0)   return { kind: 'expired',  daysLeft: d, label: `פג תוקף לפני ${Math.abs(d)} ימים`, tone: 'red' }
+    if (d <= 90) return { kind: 'expiring', daysLeft: d, label: `פג תוקף בעוד ${d} ימים`,           tone: 'amber' }
+    return null
+  }
+
+  // Bookings (flight / hotel / ferry / activity) — flag upcoming / active.
+  if (['flight', 'hotel', 'ferry', 'activity'].includes(doc.doc_type) && from) {
+    const d = daysBetween(from, now)
+    if (d > 0 && d <= 30)   return { kind: 'upcoming', daysLeft: d, label: `בעוד ${d} ימים`,    tone: 'blue' }
+    if (d >= -7 && d <= 0 && until && until.getTime() >= now.getTime())
+      return { kind: 'active',   daysLeft: 0, label: 'מתקיים עכשיו',         tone: 'green' }
+  }
+  return null
+}
+
+const STATUS_CLASSES: Record<NonNullable<DocStatus>['tone'], { bg: string; text: string; Icon: typeof Clock }> = {
+  red:   { bg: 'bg-red-50 border-red-200',       text: 'text-red-700',   Icon: AlertTriangle },
+  amber: { bg: 'bg-amber-50 border-amber-200',   text: 'text-amber-700', Icon: Clock },
+  blue:  { bg: 'bg-blue-50 border-blue-200',     text: 'text-blue-700',  Icon: Plane },
+  green: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', Icon: ShieldCheck },
+}
+
+function StatusBadge({ status }: { status: NonNullable<DocStatus> }) {
+  const cls = STATUS_CLASSES[status.tone]
+  const Icon = cls.Icon
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${cls.bg} ${cls.text}`}>
+      <Icon className="w-3 h-3" />
+      {status.label}
+    </span>
+  )
 }
 
 // ── Document grouping by booking_ref ───────────────────────────────────────
@@ -43,14 +84,16 @@ const TYPE_PRIORITY: Partial<Record<DocType, number>> = {
   hotel: 0, flight: 1, ferry: 2, activity: 3, insurance: 4, visa: 5, passport: 6, other: 7,
 }
 
-function buildDocGroups(docs: Document[]): DocGroup[] {
+function buildDocGroups(docs: Document[], preserveOrder = false): DocGroup[] {
+  // Use Map insertion order so caller-provided sort is retained when asked.
   const byRef = new Map<string, Document[]>()
   const noRef: Document[] = []
+  const refOrder: string[] = []
 
   for (const doc of docs) {
     const ref = doc.booking_ref?.trim().toLowerCase()
     if (ref) {
-      if (!byRef.has(ref)) byRef.set(ref, [])
+      if (!byRef.has(ref)) { byRef.set(ref, []); refOrder.push(ref) }
       byRef.get(ref)!.push(doc)
     } else {
       noRef.push(doc)
@@ -58,19 +101,23 @@ function buildDocGroups(docs: Document[]): DocGroup[] {
   }
 
   const result: DocGroup[] = []
-  byRef.forEach((groupDocs) => {
+  for (const ref of refOrder) {
+    const groupDocs = byRef.get(ref)!
     const sorted = [...groupDocs].sort(
       (a, b) => (TYPE_PRIORITY[a.doc_type] ?? 7) - (TYPE_PRIORITY[b.doc_type] ?? 7)
     )
     result.push({ key: sorted[0].id, docs: sorted })
-  })
+  }
   for (const doc of noRef) {
     result.push({ key: doc.id, docs: [doc] })
   }
-  // Sort groups by primary doc date (newest first)
-  result.sort((a, b) =>
-    new Date(b.docs[0].created_at).getTime() - new Date(a.docs[0].created_at).getTime()
-  )
+
+  if (!preserveOrder) {
+    // Default: newest primary doc first
+    result.sort((a, b) =>
+      new Date(b.docs[0].created_at).getTime() - new Date(a.docs[0].created_at).getTime()
+    )
+  }
   return result
 }
 
@@ -86,11 +133,88 @@ function getSubDocLabel(doc: Document): string {
 }
 
 // ── Type-level folder grouping ───────────────────────────────────────────────
-// When too many docs of the same type accumulate, collapse them into a typed folder.
+// When multiple docs of the same type accumulate, collapse them into a typed
+// folder. Inside the folder they're further grouped by entity (hotel name,
+// flight route, passport owner…) — see buildEntityGroups below.
 const TYPE_FOLDER_THRESHOLD: Partial<Record<DocType, number>> = {
-  passport: 2,   // 2+ passports → Passports folder
-  hotel:    3,   // 3+ hotel bookings → Hotels folder
-  flight:   3,   // 3+ flights → Flights folder
+  passport:  2,   // 2+ passports  → Passports folder
+  hotel:     2,   // 2+ hotels     → Hotels folder
+  flight:    2,   // 2+ flights    → Flights folder
+  ferry:     2,
+  activity:  3,
+  insurance: 2,
+  visa:      2,
+}
+
+// ── Entity (sub-category) extraction ─────────────────────────────────────────
+// Returns the "natural" entity a document belongs to: the hotel name for a
+// hotel booking, the flight route for a flight, etc. Used to group multiple
+// bookings/documents of the same real-world thing into one sub-folder.
+function getEntityLabel(doc: Document): string {
+  const ext = doc.extracted_data as Record<string, unknown> | null
+
+  if (doc.doc_type === 'hotel') {
+    const hotelName = ext?.hotel_name as string | undefined
+    if (hotelName && hotelName.trim()) return hotelName.trim()
+    return (doc.name || '').trim() || 'מלון'
+  }
+
+  if (doc.doc_type === 'flight') {
+    const legs = ext?.legs as Array<{ departureCity?: string; arrivalCity?: string }> | undefined
+    if (legs?.length) {
+      const first = legs[0]
+      const last  = legs[legs.length - 1]
+      if (first?.departureCity && last?.arrivalCity) {
+        return `${first.departureCity} → ${last.arrivalCity}`
+      }
+    }
+    // Fallback: parse the doc name (format "DEP → ARR – PassengerName")
+    const m = (doc.name || '').match(/^([^–]+?)\s*(?:→|->)\s*([^–]+?)(?:\s*–|$)/)
+    if (m) return `${m[1].trim()} → ${m[2].trim()}`
+    return (doc.name || '').trim() || 'טיסה'
+  }
+
+  if (doc.doc_type === 'passport') {
+    const first = (ext?.first_name as string | undefined) || ''
+    const last  = (ext?.last_name  as string | undefined) || ''
+    const full  = (ext?.full_name  as string | undefined) || `${first} ${last}`.trim()
+    if (full && full.trim()) return full.trim()
+    return (doc.name || '').replace(/^דרכון\s+/, '').trim() || 'דרכון'
+  }
+
+  if (doc.doc_type === 'ferry') {
+    const vendor = (ext?.vendor as string | undefined) || (ext?.company as string | undefined)
+    if (vendor && vendor.trim()) return vendor.trim()
+    return (doc.name || '').trim() || 'מעבורת'
+  }
+
+  // Insurance / visa / activity / other — fall back to doc.name (trimmed).
+  return (doc.name || '').trim() || DOC_TYPE_META[doc.doc_type]?.label || 'מסמך'
+}
+
+function getEntityKey(doc: Document): string {
+  return getEntityLabel(doc).toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+interface EntityGroup {
+  key:    string       // stable key (normalized)
+  label:  string       // display label (e.g. "Ritz Carlton")
+  groups: DocGroup[]   // one or more bookings for this entity
+}
+
+function buildEntityGroups(groups: DocGroup[]): EntityGroup[] {
+  const byEntity = new Map<string, EntityGroup>()
+  const order:    string[] = []
+  for (const g of groups) {
+    const primary = g.docs[0]
+    const key     = getEntityKey(primary)
+    if (!byEntity.has(key)) {
+      byEntity.set(key, { key, label: getEntityLabel(primary), groups: [] })
+      order.push(key)
+    }
+    byEntity.get(key)!.groups.push(g)
+  }
+  return order.map(k => byEntity.get(k)!)
 }
 
 const TYPE_FOLDER_STYLE: Partial<Record<DocType, {
@@ -102,14 +226,14 @@ const TYPE_FOLDER_STYLE: Partial<Record<DocType, {
 }
 
 interface TypeFolderItem {
-  kind:   'type_folder'
-  type:   DocType
-  groups: DocGroup[]
+  kind:     'type_folder'
+  type:     DocType
+  entities: EntityGroup[]   // NEW — sub-category layer
 }
 type DisplayItem = TypeFolderItem | { kind: 'doc_group'; group: DocGroup }
 
-function buildDisplayItems(docs: Document[]): DisplayItem[] {
-  const allGroups = buildDocGroups(docs)
+function buildDisplayItems(docs: Document[], preserveOrder = false): DisplayItem[] {
+  const allGroups = buildDocGroups(docs, preserveOrder)
 
   // Separate groups by whether their type has a threshold
   const typeGroupMap = new Map<DocType, DocGroup[]>()
@@ -130,7 +254,8 @@ function buildDisplayItems(docs: Document[]): DisplayItem[] {
   // Create type folders for over-threshold types; spill rest to otherGroups
   typeGroupMap.forEach((groups, type) => {
     if (groups.length >= TYPE_FOLDER_THRESHOLD[type]!) {
-      result.push({ kind: 'type_folder', type, groups })
+      const entities = buildEntityGroups(groups)
+      result.push({ kind: 'type_folder', type, entities })
     } else {
       for (const g of groups) otherGroups.push(g)
     }
@@ -138,23 +263,25 @@ function buildDisplayItems(docs: Document[]): DisplayItem[] {
 
   for (const g of otherGroups) result.push({ kind: 'doc_group', group: g })
 
-  // Sort by most recent doc date
-  result.sort((a, b) => {
-    const aMs = a.kind === 'type_folder'
-      ? Math.max(...a.groups.map(g => new Date(g.docs[0].created_at).getTime()))
-      : new Date(a.group.docs[0].created_at).getTime()
-    const bMs = b.kind === 'type_folder'
-      ? Math.max(...b.groups.map(g => new Date(g.docs[0].created_at).getTime()))
-      : new Date(b.group.docs[0].created_at).getTime()
-    return bMs - aMs
-  })
+  if (!preserveOrder) {
+    // Default: sort by most recent doc date
+    result.sort((a, b) => {
+      const aMs = a.kind === 'type_folder'
+        ? Math.max(...a.entities.flatMap(en => en.groups.map(g => new Date(g.docs[0].created_at).getTime())))
+        : new Date(a.group.docs[0].created_at).getTime()
+      const bMs = b.kind === 'type_folder'
+        ? Math.max(...b.entities.flatMap(en => en.groups.map(g => new Date(g.docs[0].created_at).getTime())))
+        : new Date(b.group.docs[0].created_at).getTime()
+      return bMs - aMs
+    })
+  }
 
   return result
 }
 
 export default function DocumentsPage() {
   const { currentTrip } = useTrip()
-  const { t, dir } = useLanguage()
+  const { t, dir, lang } = useLanguage()
   const [travelers, setTravelers] = useState<Traveler[]>([])
 
   useEffect(() => {
@@ -190,6 +317,18 @@ export default function DocumentsPage() {
     setExpandedTypeFolders(prev => {
       const next = new Set(prev)
       if (next.has(type)) next.delete(type); else next.add(type)
+      return next
+    })
+  }, [])
+
+  // ── Entity sub-folder expand state (hotel name, flight route, etc.) ─────
+  // Key format: `${type}|${entityKey}` so the same label across types doesn't collide.
+  const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set())
+  const toggleEntity = useCallback((type: DocType, entityKey: string) => {
+    setExpandedEntities(prev => {
+      const k = `${type}|${entityKey}`
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k); else next.add(k)
       return next
     })
   }, [])
@@ -232,6 +371,54 @@ export default function DocumentsPage() {
   const [viewMode,       setViewMode]       = useState<'list' | 'cards' | 'grid'>('list')
   const [viewerUrl,      setViewerUrl]      = useState<string | null>(null)
 
+  // ── Search + sort (international-polish additions) ────────────────────────
+  type SortKey = 'recent' | 'name' | 'date' | 'type' | 'expiring'
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortKey,     setSortKey]     = useState<SortKey>('recent')
+  const [showSortMenu,setShowSortMenu]= useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // ── In-app email viewer ────────────────────────────────────────────────────
+  // Live-fetches Gmail/Outlook messages via /api/gmail/fetch-message and
+  // renders them inside DocumentViewer — users never leave the app.
+  const [emailHtml,     setEmailHtml]     = useState<string | null>(null)
+  const [emailMeta,     setEmailMeta]     = useState<{ subject?: string; from?: string } | null>(null)
+  const [emailLoading,  setEmailLoading]  = useState(false)
+  const openEmailInApp = useCallback(async (messageId: string | null | undefined) => {
+    if (!messageId) return
+    setEmailHtml('')         // opens viewer immediately with loading state
+    setEmailMeta(null)
+    setEmailLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) { toast.error('לא מחובר'); setEmailLoading(false); setEmailHtml(null); return }
+      const res = await fetch('/api/gmail/fetch-message', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ gmail_message_id: messageId }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        toast.error(json.error || 'לא הצלחנו למשוך את המייל')
+        setEmailHtml(null)
+      } else {
+        setEmailHtml(json.html || '<p style="padding:20px;color:#888">המייל ריק</p>')
+        setEmailMeta({ subject: json.subject, from: json.from })
+      }
+    } catch {
+      toast.error('שגיאת רשת')
+      setEmailHtml(null)
+    } finally {
+      setEmailLoading(false)
+    }
+  }, [])
+  const closeEmailViewer = useCallback(() => {
+    setEmailHtml(null)
+    setEmailMeta(null)
+    setEmailLoading(false)
+  }, [])
+
   // ── Load Gmail connections ──────────────────────────────────────────────
   const loadGmailConnections = useCallback(async () => {
     try {
@@ -272,6 +459,38 @@ export default function DocumentsPage() {
   }, [currentTrip])
 
   useEffect(() => { fetchDocuments() }, [fetchDocuments])
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────
+  // Cmd/Ctrl+K or /  → focus search
+  // Esc              → clear search / exit select mode / close sort menu
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const editable =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.getAttribute?.('contenteditable') === 'true'
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+        return
+      }
+      if (e.key === '/' && !editable) {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        return
+      }
+      if (e.key === 'Escape') {
+        if (showSortMenu) { setShowSortMenu(false); return }
+        if (searchQuery)  { setSearchQuery('');    return }
+        if (selectMode)   { setSelectMode(false); setSelectedIds(new Set()); return }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showSortMenu, searchQuery, selectMode])
 
   // ── Scan Gmail for this trip ─────────────────────────────────────────────
   const handleGmailScan = useCallback(async () => {
@@ -418,7 +637,7 @@ export default function DocumentsPage() {
     const ok = await deleteDocumentsByIds([id])
     setDeletingSingle(false)
     if (ok) {
-      toast.success('המסמך נמחק')
+      toast.success(t('doc_deleted'))
       setDocuments(prev => prev.filter(d => d.id !== id))
     }
     setDeletingDoc(null)
@@ -436,7 +655,7 @@ export default function DocumentsPage() {
     const ids = Array.from(selectedIds)
     const ok = await deleteDocumentsByIds(ids)
     if (ok) {
-      toast.success(`נמחקו ${ids.length} מסמכים`)
+      toast.success(tFormat('doc_bulk_deleted', lang, { count: ids.length }))
       setDocuments(prev => prev.filter(d => !ids.includes(d.id)))
       setSelectedIds(new Set())
       setSelectMode(false)
@@ -504,13 +723,49 @@ export default function DocumentsPage() {
     fetchDocuments()
   }
 
+  // ── Filter + search + sort pipeline ────────────────────────────────────
+  const normalizedQuery = searchQuery.trim().toLowerCase()
   const filtered = documents.filter(d => {
-    if (filterType && d.doc_type !== filterType) return false
+    if (filterType     && d.doc_type    !== filterType)     return false
     if (filterTraveler && d.traveler_id !== filterTraveler) return false
+    if (normalizedQuery) {
+      const hay = [
+        d.name,
+        d.booking_ref,
+        d.flight_number,
+        (d.extracted_data as Record<string, unknown> | null)?.passenger_name as string | undefined,
+        (d.extracted_data as Record<string, unknown> | null)?.hotel_name     as string | undefined,
+      ].filter(Boolean).join(' ').toLowerCase()
+      if (!hay.includes(normalizedQuery)) return false
+    }
     return true
   })
 
-  const displayItems = buildDisplayItems(filtered)
+  const sorted = [...filtered].sort((a, b) => {
+    switch (sortKey) {
+      case 'name':     return (a.name || '').localeCompare(b.name || '', undefined, { numeric: true })
+      case 'type':     return (a.doc_type || '').localeCompare(b.doc_type || '')
+      case 'date': {
+        const aDate = a.valid_from || a.created_at
+        const bDate = b.valid_from || b.created_at
+        return new Date(aDate).getTime() - new Date(bDate).getTime()
+      }
+      case 'expiring': {
+        // Docs with valid_until come first, soonest-expiring at top.
+        // Docs without valid_until fall to the bottom.
+        const aT = a.valid_until ? new Date(a.valid_until).getTime() : Infinity
+        const bT = b.valid_until ? new Date(b.valid_until).getTime() : Infinity
+        return aT - bT
+      }
+      case 'recent':
+      default:
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    }
+  })
+
+  // Preserve the user's chosen sort order only when they actually picked one.
+  // Default ('recent') keeps the old group-by-primary-doc-date behavior.
+  const displayItems = buildDisplayItems(sorted, sortKey !== 'recent')
 
   // ── Gmail card ────────────────────────────────────────────────────────────
   const gmailCard = (
@@ -718,12 +973,12 @@ export default function DocumentsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">{t('doc_title')}</h1>
           <Link href="/scan"
-            aria-label="העלה מסמך חדש"
+            aria-label={t('doc_upload_new')}
             className="bg-primary text-white rounded-xl px-4 py-2.5 min-h-[44px] text-sm font-medium active:scale-95 transition-transform flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-            <Plus className="w-4 h-4" aria-hidden="true" /> העלאה
+            <Plus className="w-4 h-4" aria-hidden="true" /> {t('doc_upload_short')}
           </Link>
         </div>
-        <span className="sr-only" role="status" aria-live="polite">טוען מסמכים…</span>
+        <span className="sr-only" role="status" aria-live="polite">{t('doc_loading')}</span>
         {gmailCard}
         <ListSkeleton rows={6} />
       </div>
@@ -743,7 +998,7 @@ export default function DocumentsPage() {
           onClick={(e) => {
             if (selectMode) return toggleSelect(doc.id, e)
             if (doc.file_url) return setViewerUrl(doc.file_url)
-            if (doc.gmail_message_id) return openEmailInWeb(doc.gmail_message_id)
+            if (doc.gmail_message_id) return openEmailInApp(doc.gmail_message_id)
           }}
           className={`bg-white rounded-2xl p-3 shadow-sm active:scale-[0.97] transition-transform relative ${
             clickable ? 'cursor-pointer' : ''
@@ -764,7 +1019,7 @@ export default function DocumentsPage() {
               {doc.file_url && <ExternalLink className="w-3 h-3 text-primary" />}
               {doc.gmail_message_id && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); openEmailInWeb(doc.gmail_message_id) }}
+                  onClick={(e) => { e.stopPropagation(); openEmailInApp(doc.gmail_message_id) }}
                   title="פתח מייל מקורי"
                   className="p-0.5 rounded hover:bg-orange-50 active:scale-90 transition-all">
                   <Mail className="w-3 h-3 text-orange-400" />
@@ -775,7 +1030,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                aria-label={`מחק את ${doc.name}`}
+                aria-label={`${t('doc_delete_action')} ${doc.name}`}
                 className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400">
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -792,7 +1047,7 @@ export default function DocumentsPage() {
           onClick={(e) => {
             if (selectMode) return toggleSelect(doc.id, e)
             if (doc.file_url) return setViewerUrl(doc.file_url)
-            if (doc.gmail_message_id) return openEmailInWeb(doc.gmail_message_id)
+            if (doc.gmail_message_id) return openEmailInApp(doc.gmail_message_id)
           }}
           className={`bg-gradient-to-bl from-white to-gray-50 rounded-2xl p-5 shadow-sm border active:scale-[0.98] transition-transform relative ${
             clickable ? 'cursor-pointer' : ''
@@ -814,7 +1069,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-                aria-label={`מחק את ${doc.name}`}
+                aria-label={`${t('doc_delete_action')} ${doc.name}`}
                 className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400">
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -841,7 +1096,7 @@ export default function DocumentsPage() {
             )}
             {doc.gmail_message_id && (
               <button
-                onClick={(e) => { e.stopPropagation(); openEmailInWeb(doc.gmail_message_id) }}
+                onClick={(e) => { e.stopPropagation(); openEmailInApp(doc.gmail_message_id) }}
                 className="bg-orange-50 text-orange-600 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform hover:bg-orange-100">
                 <Mail className="w-2.5 h-2.5" /> פתח מייל
               </button>
@@ -853,24 +1108,36 @@ export default function DocumentsPage() {
 
     // List view (default)
     const clickable = selectMode || doc.file_url || doc.gmail_message_id
+    const typeGradient = DOC_TYPE_ICON[doc.doc_type]?.gradient || DOC_TYPE_ICON.other.gradient
     return (
       <motion.div key={doc.id}
-        initial={{ opacity: 0, y: isNew ? -8 : 0 }}
+        initial={{ opacity: 0, y: isNew ? -8 : 6 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+        whileHover={clickable ? { y: -1 } : undefined}
         onClick={(e) => {
           if (selectMode) return toggleSelect(doc.id, e)
           if (doc.file_url) return setViewerUrl(doc.file_url)
-          if (doc.gmail_message_id) return openEmailInWeb(doc.gmail_message_id)
+          if (doc.gmail_message_id) return openEmailInApp(doc.gmail_message_id)
         }}
-        className={`rounded-2xl p-4 shadow-sm active:scale-[0.98] transition-all relative ${
-          clickable ? 'cursor-pointer' : ''
+        className={`group rounded-2xl p-4 transition-all relative overflow-hidden border ${
+          clickable ? 'cursor-pointer active:scale-[0.985]' : ''
         } ${
           isSel
-            ? 'bg-primary/5 border-2 border-primary ring-2 ring-primary/10'
+            ? 'bg-primary/5 border-primary/50 shadow-[0_4px_16px_rgba(108,71,255,0.12)] ring-2 ring-primary/20'
             : isNew
-              ? 'bg-emerald-50 border-2 border-emerald-300 ring-2 ring-emerald-100'
-              : 'bg-white'
+              ? 'bg-emerald-50 border-emerald-200 shadow-[0_4px_16px_rgba(16,185,129,0.12)]'
+              : 'bg-white border-gray-100/80 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)] hover:border-gray-200/80'
         }`}>
+        {/* Accent strip on the leading edge — matches the doc-type gradient */}
+        {!isSel && !isNew && (
+          <div
+            className={`absolute top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity ${
+              dir === 'rtl' ? 'right-0' : 'left-0'
+            }`}
+            style={{ background: typeGradient }}
+          />
+        )}
         <div className="flex items-start gap-3">
           <div className="flex items-center justify-center flex-shrink-0">
             {selectMode
@@ -878,11 +1145,15 @@ export default function DocumentsPage() {
               : <DocTypeIconBadge type={doc.doc_type} size="md" />}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <p className="text-sm font-bold truncate">{doc.name}</p>
               {isNew && (
                 <span className="flex-shrink-0 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
               )}
+              {(() => {
+                const s = getDocStatus(doc)
+                return s ? <StatusBadge status={s} /> : null
+              })()}
             </div>
             <p className="text-xs text-gray-400 mt-0.5">{getTravelerName(travelers, doc.traveler_id)}</p>
             {doc.booking_ref && (
@@ -907,7 +1178,7 @@ export default function DocumentsPage() {
               )}
               {doc.gmail_message_id && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); openEmailInWeb(doc.gmail_message_id) }}
+                  onClick={(e) => { e.stopPropagation(); openEmailInApp(doc.gmail_message_id) }}
                   className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded-full active:scale-95 transition-transform hover:bg-orange-100">
                   <Mail className="w-3 h-3" /> פתח מייל
                 </button>
@@ -918,7 +1189,7 @@ export default function DocumentsPage() {
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); handleDelete(doc.id) }}
-              aria-label={`מחק את ${doc.name}`}
+              aria-label={`${t('doc_delete_action')} ${doc.name}`}
               className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400 flex-shrink-0">
               <Trash2 className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -958,7 +1229,7 @@ export default function DocumentsPage() {
           onClick={() => {
             if (selectMode) return toggleGroupSelect(group)
             if (primary.file_url) return setViewerUrl(primary.file_url)
-            if (primary.gmail_message_id) return openEmailInWeb(primary.gmail_message_id)
+            if (primary.gmail_message_id) return openEmailInApp(primary.gmail_message_id)
           }}
         >
           <div className="flex items-start gap-3">
@@ -1003,7 +1274,7 @@ export default function DocumentsPage() {
                 )}
                 {primary.gmail_message_id && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); openEmailInWeb(primary.gmail_message_id) }}
+                    onClick={(e) => { e.stopPropagation(); openEmailInApp(primary.gmail_message_id) }}
                     className="inline-flex items-center gap-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded-full active:scale-95 transition-transform hover:bg-orange-100">
                     <Mail className="w-3 h-3" /> פתח מייל
                   </button>
@@ -1015,7 +1286,7 @@ export default function DocumentsPage() {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); handleDelete(primary.id) }}
-                aria-label={`מחק את ${primary.name}`}
+                aria-label={`${t('doc_delete_action')} ${primary.name}`}
                 className="w-10 h-10 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400 flex-shrink-0">
                 <Trash2 className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1099,7 +1370,7 @@ export default function DocumentsPage() {
                         )}
                         {doc.gmail_message_id && (
                           <button
-                            onClick={() => openEmailInWeb(doc.gmail_message_id)}
+                            onClick={() => openEmailInApp(doc.gmail_message_id)}
                             title="פתח מייל מקורי"
                             className="text-orange-500 active:scale-95 p-1 rounded hover:bg-orange-50">
                             <Mail className="w-3.5 h-3.5" />
@@ -1109,7 +1380,7 @@ export default function DocumentsPage() {
                           <button
                             type="button"
                             onClick={() => handleDelete(doc.id)}
-                            aria-label={`מחק את ${doc.name}`}
+                            aria-label={`${t('doc_delete_action')} ${doc.name}`}
                             className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-red-400">
                             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
@@ -1127,14 +1398,116 @@ export default function DocumentsPage() {
   }
 
   // ── Render a type-level folder (Passports / Hotels / Flights) ─────────────
+  // ── Entity sub-folder card ───────────────────────────────────────────
+  // Renders a single "sub-category" (e.g. "Ritz Carlton" inside "Hotels").
+  // Shows a compact header with a chevron; on expand, renders each booking
+  // (DocGroup) underneath.
+  const renderEntitySubfolder = (type: DocType, entity: EntityGroup) => {
+    const entityKey = `${type}|${entity.key}`
+    const isOpen    = expandedEntities.has(entityKey)
+    const totalDocs = entity.groups.reduce((s, g) => s + g.docs.length, 0)
+    const hasNew    = entity.groups.some(g => g.docs.some(d => newDocIds.has(d.id)))
+    const allSel    = entity.groups.every(g => g.docs.every(d => selectedIds.has(d.id)))
+    const anySel    = entity.groups.some(g => g.docs.some(d => selectedIds.has(d.id)))
+    const typeGradient = DOC_TYPE_ICON[type]?.gradient || DOC_TYPE_ICON.other.gradient
+
+    // Earliest relevant date for context under the label (check-in, flight date, passport expiry).
+    const primary = entity.groups[0].docs[0]
+    const contextDate = primary.valid_from || primary.valid_until
+
+    return (
+      <div
+        key={`entity-${entityKey}`}
+        className={`rounded-xl overflow-hidden border bg-white transition-all ${
+          allSel ? 'border-primary/50 shadow-[0_2px_10px_rgba(108,71,255,0.08)]'
+          : hasNew ? 'border-emerald-200'
+          : 'border-gray-100'
+        }`}
+      >
+        <button
+          onClick={() => selectMode
+            ? entity.groups.forEach(g => {
+                setSelectedIds(prev => {
+                  const next = new Set(prev)
+                  const groupAllSel = g.docs.every(d => next.has(d.id))
+                  if (groupAllSel) g.docs.forEach(d => next.delete(d.id))
+                  else g.docs.forEach(d => next.add(d.id))
+                  return next
+                })
+              })
+            : toggleEntity(type, entity.key)}
+          className="w-full flex items-center gap-3 px-3 py-3 text-right active:bg-gray-50 transition-colors"
+        >
+          {/* Thin vertical accent matching the type gradient */}
+          <div className="w-1 h-9 rounded-full flex-shrink-0" style={{ background: typeGradient }} />
+
+          <div className="flex-1 min-w-0 text-right">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-bold text-gray-800 truncate">{entity.label}</p>
+              {entity.groups.length > 1 && (
+                <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
+                  {entity.groups.length} הזמנות
+                </span>
+              )}
+              {totalDocs > entity.groups.length && (
+                <span className="text-[10px] text-gray-400">{totalDocs} מסמכים</span>
+              )}
+              {hasNew && (
+                <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
+              )}
+            </div>
+            {contextDate && (
+              <p className="text-[10px] text-gray-400 mt-0.5">{formatDateShort(contextDate)}</p>
+            )}
+          </div>
+
+          {selectMode ? (
+            <div className="flex-shrink-0">
+              {allSel
+                ? <CheckSquare className="w-4 h-4 text-primary" />
+                : anySel
+                  ? <CheckSquare className="w-4 h-4 text-primary/40" />
+                  : <Square className="w-4 h-4 text-gray-300" />}
+            </div>
+          ) : (
+            isOpen
+              ? <ChevronUp   className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          )}
+        </button>
+
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-gray-100 p-2.5 space-y-2 bg-gray-50/50">
+                {entity.groups.map(group =>
+                  group.docs.length === 1
+                    ? renderSingleDoc(group.docs[0], 'list')
+                    : renderFolderCard(group)
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
+  }
+
   const renderTypeFolder = (item: TypeFolderItem) => {
     const meta = DOC_TYPE_META[item.type]
     const isExpanded = expandedTypeFolders.has(item.type)
-    const totalDocs  = item.groups.reduce((sum, g) => sum + g.docs.length, 0)
-    const hasNew     = item.groups.some(g => g.docs.some(d => newDocIds.has(d.id)))
-    const allSel     = item.groups.every(g => g.docs.every(d => selectedIds.has(d.id)))
-    const anySel     = item.groups.some(g => g.docs.some(d => selectedIds.has(d.id)))
-    const preview    = item.groups.slice(0, 3).map(g => g.docs[0].name).join(' · ')
+    const allGroups  = item.entities.flatMap(e => e.groups)
+    const totalDocs  = allGroups.reduce((sum, g) => sum + g.docs.length, 0)
+    const hasNew     = allGroups.some(g => g.docs.some(d => newDocIds.has(d.id)))
+    const allSel     = allGroups.every(g => g.docs.every(d => selectedIds.has(d.id)))
+    const anySel     = allGroups.some(g => g.docs.some(d => selectedIds.has(d.id)))
+    const preview    = item.entities.slice(0, 3).map(en => en.label).join(' · ')
 
     return (
       <motion.div
@@ -1148,7 +1521,7 @@ export default function DocumentsPage() {
         {/* ── Type folder header ── */}
         <button
           onClick={() => selectMode
-            ? item.groups.forEach(g => {
+            ? allGroups.forEach(g => {
                 setSelectedIds(prev => {
                   const next = new Set(prev)
                   const allGroupSel = g.docs.every(d => next.has(d.id))
@@ -1173,16 +1546,16 @@ export default function DocumentsPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-base font-bold text-gray-800">{meta.label}</p>
               <span className="bg-primary/10 text-primary text-xs font-semibold px-2 py-0.5 rounded-full">
-                {item.groups.length} הזמנות
+                {item.entities.length} {item.entities.length === 1 ? 'פריט' : 'פריטים'}
               </span>
-              {totalDocs !== item.groups.length && (
+              {totalDocs !== item.entities.length && (
                 <span className="text-gray-400 text-[10px]">{totalDocs} מסמכים</span>
               )}
               {hasNew && (
                 <span className="bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">חדש</span>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-0.5 truncate">{preview}{item.groups.length > 3 ? ` ועוד ${item.groups.length - 3}…` : ''}</p>
+            <p className="text-xs text-gray-500 mt-0.5 truncate">{preview}{item.entities.length > 3 ? ` ועוד ${item.entities.length - 3}…` : ''}</p>
           </div>
           {!selectMode && (
             isExpanded
@@ -1191,7 +1564,7 @@ export default function DocumentsPage() {
           )}
         </button>
 
-        {/* ── Expanded content ── */}
+        {/* ── Expanded content: entity sub-folders ── */}
         <AnimatePresence>
           {isExpanded && (
             <motion.div
@@ -1202,10 +1575,12 @@ export default function DocumentsPage() {
               className="overflow-hidden"
             >
               <div className="border-t border-gray-100 p-3 space-y-2">
-                {item.groups.map(group =>
-                  group.docs.length === 1
-                    ? renderSingleDoc(group.docs[0], 'list')
-                    : renderFolderCard(group)
+                {item.entities.map(entity =>
+                  // If the entity has just one booking with one doc → render flat.
+                  // Otherwise render as an expandable sub-folder.
+                  entity.groups.length === 1 && entity.groups[0].docs.length === 1
+                    ? renderSingleDoc(entity.groups[0].docs[0], 'list')
+                    : renderEntitySubfolder(item.type, entity)
                 )}
               </div>
             </motion.div>
@@ -1215,13 +1590,28 @@ export default function DocumentsPage() {
     )
   }
 
+  // ── At-a-glance header stats ──────────────────────────────────────────
+  const headerStats = (() => {
+    let expiringSoon = 0
+    let upcoming     = 0
+    let passports    = 0
+    for (const d of documents) {
+      if (d.doc_type === 'passport') passports++
+      const s = getDocStatus(d)
+      if (!s) continue
+      if (s.kind === 'expiring' || s.kind === 'expired') expiringSoon++
+      else if (s.kind === 'upcoming')                    upcoming++
+    }
+    return { expiringSoon, upcoming, passports, total: documents.length }
+  })()
+
   return (
     <div className="space-y-4 pb-32" dir={dir}>
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black gradient-text">{t('doc_title')}</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{documents.length} מסמכים שמורים</p>
+      {/* ── Hero header ─────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-black gradient-text tracking-tight">{t('doc_title')}</h1>
+          <p className="text-[11px] text-gray-400 mt-0.5">ניהול חכם של כל מסמכי הנסיעה</p>
         </div>
         <div className="flex items-center gap-2">
           {/* View mode */}
@@ -1257,15 +1647,163 @@ export default function DocumentsPage() {
             <RefreshCw className={`w-4 h-4 ${reprocessingAll ? 'animate-spin' : ''}`} />
           </button>
 
-          <Link href="/scan"
+          <Link href="/scan" aria-label={t('doc_upload_new')}
             className="btn-cta px-4 py-2 text-sm flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> העלאה
+            <Plus className="w-4 h-4" aria-hidden="true" /> {t('doc_upload_short')}
           </Link>
         </div>
       </div>
 
+      {/* ── Stat cards ────────────────────────────────────────────────────── */}
+      {documents.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="relative overflow-hidden bg-gradient-to-br from-white to-violet-50/60 border border-violet-100/80 rounded-2xl p-3 shadow-[0_2px_8px_rgba(124,58,237,0.06)]">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+                <FolderOpen className="w-4 h-4 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-500 font-medium">סך הכל</p>
+                <p className="text-lg font-black text-gray-800 leading-tight">{headerStats.total}</p>
+              </div>
+            </div>
+            <div className="absolute -left-3 -bottom-3 w-16 h-16 rounded-full bg-primary/5" />
+          </div>
+
+          <div className={`relative overflow-hidden border rounded-2xl p-3 ${
+            headerStats.upcoming > 0
+              ? 'bg-gradient-to-br from-white to-blue-50/60 border-blue-100/80 shadow-[0_2px_8px_rgba(37,99,235,0.06)]'
+              : 'bg-white border-gray-100'
+          }`}>
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                style={{ background: headerStats.upcoming > 0
+                  ? 'linear-gradient(135deg, #2563EB 0%, #60A5FA 100%)'
+                  : 'linear-gradient(135deg, #CBD5E1 0%, #E2E8F0 100%)' }}>
+                <Plane className="w-4 h-4 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-500 font-medium">קרובים</p>
+                <p className={`text-lg font-black leading-tight ${headerStats.upcoming > 0 ? 'text-blue-700' : 'text-gray-400'}`}>
+                  {headerStats.upcoming}
+                </p>
+              </div>
+            </div>
+            {headerStats.upcoming > 0 && <div className="absolute -left-3 -bottom-3 w-16 h-16 rounded-full bg-blue-500/5" />}
+          </div>
+
+          <div className={`relative overflow-hidden border rounded-2xl p-3 ${
+            headerStats.expiringSoon > 0
+              ? 'bg-gradient-to-br from-white to-amber-50/70 border-amber-100/80 shadow-[0_2px_8px_rgba(217,119,6,0.07)]'
+              : 'bg-white border-gray-100'
+          }`}>
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                style={{ background: headerStats.expiringSoon > 0
+                  ? 'linear-gradient(135deg, #D97706 0%, #FBBF24 100%)'
+                  : 'linear-gradient(135deg, #CBD5E1 0%, #E2E8F0 100%)' }}>
+                <AlertTriangle className="w-4 h-4 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-500 font-medium">פגי תוקף</p>
+                <p className={`text-lg font-black leading-tight ${headerStats.expiringSoon > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                  {headerStats.expiringSoon}
+                </p>
+              </div>
+            </div>
+            {headerStats.expiringSoon > 0 && <div className="absolute -left-3 -bottom-3 w-16 h-16 rounded-full bg-amber-500/5" />}
+          </div>
+        </div>
+      )}
+
       {/* ── Gmail Sync Card ───────────────────────────────────────────────── */}
       {gmailCard}
+
+      {/* ── Search + Sort bar ────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 relative">
+          <Search className="absolute top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+            style={dir === 'rtl' ? { right: '0.75rem' } : { left: '0.75rem' }} />
+          <input
+            ref={searchInputRef}
+            type="search"
+            inputMode="search"
+            autoComplete="off"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setSearchQuery('') }}
+            placeholder="חיפוש — שם, הזמנה, מספר טיסה, נוסע"
+            aria-label="חיפוש מסמכים"
+            className={`w-full bg-white/90 backdrop-blur-sm rounded-2xl shadow-[0_2px_10px_rgba(15,23,42,0.04)] border border-gray-100/80 text-sm py-3 ${
+              dir === 'rtl' ? 'pr-10 pl-10' : 'pl-10 pr-10'
+            } focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40 focus:shadow-[0_4px_20px_rgba(108,71,255,0.10)] transition-all placeholder:text-gray-400`}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(''); searchInputRef.current?.focus() }}
+              aria-label="נקה חיפוש"
+              className="absolute top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center"
+              style={dir === 'rtl' ? { left: '0.5rem' } : { right: '0.5rem' }}>
+              <X className="w-3 h-3 text-gray-500" />
+            </button>
+          )}
+          <kbd className={`hidden sm:flex absolute top-1/2 -translate-y-1/2 text-[10px] text-gray-300 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 font-mono ${
+            searchQuery ? 'opacity-0' : ''
+          }`} style={dir === 'rtl' ? { left: '0.5rem' } : { right: '0.5rem' }}>
+            ⌘K
+          </kbd>
+        </div>
+
+        {/* Sort menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowSortMenu(v => !v)}
+            aria-label="מיון"
+            title={`מיון: ${sortKey}`}
+            className={`h-12 w-12 rounded-2xl flex items-center justify-center active:scale-95 transition-all ${
+              sortKey !== 'recent'
+                ? 'text-white shadow-[0_4px_14px_rgba(108,71,255,0.35)]'
+                : 'bg-white/90 backdrop-blur-sm shadow-[0_2px_10px_rgba(15,23,42,0.04)] border border-gray-100/80 text-gray-500 hover:text-primary hover:border-primary/30'
+            }`}
+            style={sortKey !== 'recent' ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : undefined}>
+            <ArrowUpDown className="w-4 h-4" strokeWidth={2.2} />
+          </button>
+          <AnimatePresence>
+            {showSortMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute z-50 mt-2 min-w-[190px] bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+                  style={dir === 'rtl' ? { left: 0 } : { right: 0 }}>
+                  {([
+                    { key: 'recent',   label: 'נוסף לאחרונה' },
+                    { key: 'date',     label: 'לפי תאריך'      },
+                    { key: 'expiring', label: 'בקרוב פג תוקף'  },
+                    { key: 'name',     label: 'לפי שם'         },
+                    { key: 'type',     label: 'לפי סוג'        },
+                  ] as Array<{ key: SortKey; label: string }>).map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => { setSortKey(key); setShowSortMenu(false) }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 text-sm text-right active:bg-gray-50 transition-colors ${
+                        sortKey === key ? 'bg-primary/5 text-primary font-semibold' : 'text-gray-700'
+                      }`}>
+                      {label}
+                      {sortKey === key && <Check className="w-4 h-4" />}
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
 
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div className="space-y-2">
@@ -1310,17 +1848,43 @@ export default function DocumentsPage() {
       {/* ── Documents ─────────────────────────────────────────────────────── */}
       <div ref={newDocsRef} />
       {displayItems.length === 0 ? (
-        <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
-            <FolderOpen className="w-8 h-8 text-white" />
-          </div>
-          <p className="font-bold text-gray-800 mb-1">{t('doc_no_docs')}</p>
-          <p className="text-sm text-gray-400 mb-4">הוסף מסמכי הזמנה, דרכונים וכרטיסי טיסה</p>
-          <Link href="/scan" className="inline-flex items-center gap-2 btn-cta px-6 py-3 text-sm">
-            <Plus className="w-4 h-4" /> הוסף מסמך ראשון
-          </Link>
-        </div>
+        (() => {
+          const hasAnyDocs   = documents.length > 0
+          const hasAnyFilter = !!filterType || !!filterTraveler || !!searchQuery.trim()
+          // Case 1 — filters/search returned nothing
+          if (hasAnyDocs && hasAnyFilter) {
+            return (
+              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+                <div className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center bg-gray-100">
+                  <Search className="w-7 h-7 text-gray-400" />
+                </div>
+                <p className="font-bold text-gray-800 mb-1">לא נמצאו מסמכים</p>
+                <p className="text-sm text-gray-400 mb-4">
+                  {searchQuery ? <>אין תוצאות ל-<span className="font-semibold text-gray-600">&quot;{searchQuery}&quot;</span></> : 'לא נמצאו מסמכים לפי הסינון שבחרת'}
+                </p>
+                <button
+                  onClick={() => { setSearchQuery(''); setFilterType(null); setFilterTraveler(null) }}
+                  className="inline-flex items-center gap-2 bg-primary/10 text-primary font-semibold rounded-xl px-4 py-2 text-sm active:scale-95 transition-transform">
+                  <X className="w-4 h-4" /> נקה סינון
+                </button>
+              </div>
+            )
+          }
+          // Case 2 — truly empty
+          return (
+            <div className="bg-white rounded-2xl p-10 text-center shadow-sm">
+              <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' }}>
+                <FolderOpen className="w-8 h-8 text-white" />
+              </div>
+              <p className="font-bold text-gray-800 mb-1">{t('doc_no_docs')}</p>
+              <p className="text-sm text-gray-400 mb-4">הוסף מסמכי הזמנה, דרכונים וכרטיסי טיסה</p>
+              <Link href="/scan" className="inline-flex items-center gap-2 btn-cta px-6 py-3 text-sm">
+                <Plus className="w-4 h-4" /> הוסף מסמך ראשון
+              </Link>
+            </div>
+          )
+        })()
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 gap-2">
           {displayItems.map(item =>
@@ -1358,17 +1922,17 @@ export default function DocumentsPage() {
             exit={{ y: 80, opacity: 0 }}
             className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-50">
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-3 flex items-center gap-3">
-              <span className="text-sm font-bold text-gray-800 flex-1">{selectedIds.size} נבחרו</span>
+              <span className="text-sm font-bold text-gray-800 flex-1">{tFormat('doc_selected_count', lang, { count: selectedIds.size })}</span>
               <button onClick={handleExport} className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-xl px-4 py-2.5 text-sm font-semibold active:scale-95">
-                <Download className="w-4 h-4" /> ייצוא
+                <Download className="w-4 h-4" aria-hidden="true" /> {t('doc_export_label')}
               </button>
               <button
                 type="button"
                 onClick={requestBulkDelete}
                 disabled={bulkDeleting}
-                aria-label={`מחק ${selectedIds.size} מסמכים שנבחרו`}
+                aria-label={tFormat('doc_delete_bulk_btn', lang, { count: selectedIds.size })}
                 className="flex items-center gap-1.5 bg-red-500 text-white rounded-xl px-4 py-3 min-h-[44px] text-sm font-semibold active:scale-95 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400">
-                <Trash2 className="w-4 h-4" aria-hidden="true" /> {bulkDeleting ? 'מוחק…' : 'מחק'}
+                <Trash2 className="w-4 h-4" aria-hidden="true" /> {bulkDeleting ? t('doc_deleting') : t('delete')}
               </button>
             </div>
           </motion.div>
@@ -1377,12 +1941,25 @@ export default function DocumentsPage() {
 
       <DocumentViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
 
+      {/* In-app email viewer — fetches HTML from Gmail/Outlook server-side */}
+      {(emailHtml !== null || emailLoading) && (
+        <DocumentViewer
+          url={null}
+          htmlContent={emailHtml}
+          htmlLoading={emailLoading}
+          title={emailMeta?.subject || 'מייל'}
+          subtitle={emailMeta?.from || ''}
+          docType="other"
+          onClose={closeEmailViewer}
+        />
+      )}
+
       <ConfirmDialog
         open={showBulkConfirm}
-        title={`למחוק ${selectedIds.size} מסמכים?`}
-        description="פעולה זו אינה הפיכה. הקבצים יוסרו מהחשבון שלך."
-        confirmLabel={`מחק ${selectedIds.size} מסמכים`}
-        cancelLabel="ביטול"
+        title={tFormat('doc_delete_bulk_title', lang, { count: selectedIds.size })}
+        description={t('doc_delete_bulk_desc')}
+        confirmLabel={tFormat('doc_delete_bulk_btn', lang, { count: selectedIds.size })}
+        cancelLabel={t('cancel')}
         variant="danger"
         loading={bulkDeleting}
         onConfirm={handleBulkDelete}
@@ -1391,14 +1968,14 @@ export default function DocumentsPage() {
 
       <ConfirmDialog
         open={!!deletingDoc}
-        title="למחוק את המסמך?"
+        title={t('doc_delete_single_title')}
         description={
           deletingDoc
-            ? `"${deletingDoc.name}" יוסר לצמיתות. לא ניתן לשחזר.`
+            ? `"${deletingDoc.name}" — ${t('doc_delete_single_desc')}`
             : undefined
         }
-        confirmLabel="מחק לצמיתות"
-        cancelLabel="ביטול"
+        confirmLabel={t('exp_delete_permanent')}
+        cancelLabel={t('cancel')}
         variant="danger"
         loading={deletingSingle}
         onConfirm={handleConfirmSingleDelete}

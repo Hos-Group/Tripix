@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { CURRENCIES, CURRENCY_SYMBOL, Currency } from '@/types'
 import { useTrip } from '@/contexts/TripContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { getDestinationConfig } from '@/lib/destinations'
 
 const TIP_PRESETS = [5, 10, 15, 20]
@@ -32,6 +33,7 @@ type TabType = 'rates' | 'converter' | 'tip'
 
 export default function ToolsPage() {
   const { currentTrip } = useTrip()
+  const { t } = useLanguage()
   const destConfig = (() => {
     if (!currentTrip?.destination) return null
     const parts = currentTrip.destination.split(',').map(p => p.trim())
@@ -136,8 +138,12 @@ export default function ToolsPage() {
     <div className="space-y-4 pb-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href="/dashboard" className="active:scale-95 transition-transform">
-          <ChevronLeft className="w-5 h-5 text-gray-500" />
+        <Link
+          href="/dashboard"
+          aria-label={t('back_to_dashboard')}
+          className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
         </Link>
         <h1
           className="text-2xl font-black"

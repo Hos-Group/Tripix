@@ -27,6 +27,7 @@ import {
   idempotencyKey,
   buildDocumentFingerprint,
   buildExpenseFingerprint,
+  findVendorExpense,
 } from './dedup'
 
 // ── Token refresh ─────────────────────────────────────────────────────────────
@@ -410,28 +411,43 @@ export async function scanUserMicrosoft(
             activity: 'activity', tour: 'activity', insurance: 'insurance',
             ferry: 'ferry', train: 'train', other: 'other',
           }
-          const msExpenseAmount = parsed.amount || 0
-          const msExpenseDate   = parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0]
-          const msExpenseHash   = buildExpenseFingerprint(
-            matchedTripId, msExpenseAmount, msExpenseDate, bookingTitle,
-          )
-          const { error: expErr } = await supabase.from('expenses').insert({
-            trip_id:         matchedTripId,
-            user_id:         userId,
-            title:           bookingTitle,
-            amount:          msExpenseAmount,
-            currency:        parsed.currency || 'ILS',
-            amount_ils:      msExpenseAmount,
-            category:        CATEGORY_MAP[parsed.booking_type] || 'other',
-            expense_date:    msExpenseDate,
-            notes:           `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${fromAddress}`,
-            source:          'scan',
-            is_paid:         true,
-            content_hash:    msExpenseHash,
-            idempotency_key: msIdemKey,   // migration 017 — hard backstop
-          })
-          if (expErr && expErr.code !== '23505') {
-            console.error('[microsoftScanner] expense insert error:', expErr.message)
+          const msExpenseAmount = Number(parsed.amount) || 0
+          if (msExpenseAmount > 0) {
+            const msExpenseDate = parsed.check_in || parsed.departure_date || new Date().toISOString().split('T')[0]
+            const msExpenseCurrency = parsed.currency || 'ILS'
+
+            // Cross-date vendor dedup — catches the same booking arriving
+            // via a second confirmation with a different parsed date.
+            const vendorMatch = await findVendorExpense(
+              matchedTripId, bookingTitle, msExpenseAmount, msExpenseCurrency,
+            )
+            if (vendorMatch) {
+              console.log(`[microsoftScanner] dup expense skipped (vendor match): "${bookingTitle}"`)
+            } else {
+              const msExpenseHash = buildExpenseFingerprint(
+                matchedTripId, msExpenseAmount, msExpenseDate, bookingTitle,
+              )
+              const { error: expErr } = await supabase.from('expenses').insert({
+                trip_id:         matchedTripId,
+                user_id:         userId,
+                title:           bookingTitle,
+                amount:          msExpenseAmount,
+                currency:        msExpenseCurrency,
+                amount_ils:      msExpenseAmount,
+                category:        CATEGORY_MAP[parsed.booking_type] || 'other',
+                expense_date:    msExpenseDate,
+                notes:           `מספר אישור: ${parsed.confirmation_number || '—'}\nמ: ${fromAddress}`,
+                source:          'scan',
+                is_paid:         true,
+                content_hash:    msExpenseHash,
+                idempotency_key: msIdemKey,   // migration 017 — hard backstop
+              })
+              if (expErr && expErr.code !== '23505') {
+                console.error('[microsoftScanner] expense insert error:', expErr.message)
+              }
+            }
+          } else {
+            console.log(`[microsoftScanner] ✓ doc saved without expense (amount=0): "${bookingTitle}"`)
           }
 
           stats.created++

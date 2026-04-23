@@ -1,23 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import {
-  ChevronDown, ChevronLeft, Trash2, Pencil, X, Check,
-  TrendingUp, Calendar, Wallet, LayoutList, BarChart2,
-  Plane, Hotel, Car, Briefcase, MapPin, Clock, Users, Paperclip,
-} from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ChevronLeft, Calendar, Paperclip } from 'lucide-react'
 import Link from 'next/link'
-import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
-import { formatMoney, formatDate, cn } from '@/lib/utils'
-import { Expense, Category, CATEGORY_META, Currency, CURRENCY_SYMBOL, Document as TripDoc } from '@/types'
-import { DocEventIconBadge, CategoryIconBadge } from '@/lib/iconConfig'
+import { cn } from '@/lib/utils'
+import { Document as TripDoc } from '@/types'
+import { DocEventIconBadge } from '@/lib/iconConfig'
 import { useTrip } from '@/contexts/TripContext'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { eachDayOfInterval, parseISO, format, isToday, differenceInDays } from 'date-fns'
-import CurrencySelector from '@/components/CurrencySelector'
-import DocumentViewer  from '@/components/DocumentViewer'
+import DocumentViewer from '@/components/DocumentViewer'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -39,13 +33,8 @@ interface DayData {
   isToday:   boolean
   isPast:    boolean
   isFuture:  boolean
-  expenses:  Expense[]
   docEvents: DocEvent[]
-  totalIls:  number
 }
-
-type FilterCat  = 'all' | Category
-type ViewMode   = 'timeline' | 'summary'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -73,31 +62,17 @@ function sortByTime(a: DocEvent, b: DocEvent): number {
 function buildDays(
   startDate: string,
   endDate:   string,
-  expenses:  Expense[],
   documents: TripDoc[],
 ): DayData[] {
   const tripStart = parseISO(startDate)
   const tripEnd   = parseISO(endDate)
 
-  // Extend range to cover any expense dates that fall outside the trip window
-  const expDates = expenses
-    .map(e => parseISO(e.expense_date))
-    .filter(d => !isNaN(d.getTime()))
-
-  const start = expDates.length > 0
-    ? new Date(Math.min(tripStart.getTime(), ...expDates.map(d => d.getTime())))
-    : tripStart
-  const end   = expDates.length > 0
-    ? new Date(Math.max(tripEnd.getTime(),   ...expDates.map(d => d.getTime())))
-    : tripEnd
-
-  const days  = eachDayOfInterval({ start, end })
+  // טווח לפי תאריכי הנסיעה בלבד — לא מתרחב לפי הוצאות
+  const days  = eachDayOfInterval({ start: tripStart, end: tripEnd })
   const today = new Date()
 
   return days.map((day) => {
-    const dateStr  = format(day, 'yyyy-MM-dd')
-    const dayExps  = expenses.filter(e => e.expense_date === dateStr)
-    const totalIls = dayExps.reduce((s, e) => s + (e.amount_ils || 0), 0)
+    const dateStr   = format(day, 'yyyy-MM-dd')
     const dayNumber = differenceInDays(day, tripStart) + 1
 
     // ── Build document events for this day ──────────────────────────────────
@@ -134,11 +109,9 @@ function buildDays(
             time:     depTime || undefined,
           })
         }
-
       }
 
       // ── Car rental events (detected via extracted_data fields) ─────────
-      // car_rental is not a DocType — detect via extracted_data presence
       const hasCarRentalData = ext?.pickup_date || ext?.dropoff_date || ext?.rental_company || ext?.car_type
       if (hasCarRentalData) {
         const company     = ext?.company         || ext?.rental_company  || ''
@@ -148,6 +121,7 @@ function buildDays(
         const pickupDate  = ext?.pickup_date  as string | undefined
         const dropoffDate = ext?.dropoff_date as string | undefined
         const pickupTime  = ext?.pickup_time  || ''
+        const dropoffTime = ext?.dropoff_time || ''
 
         if (pickupDate === dateStr) {
           docEvents.push({
@@ -166,24 +140,24 @@ function buildDays(
           docEvents.push({
             type:     'car_dropoff',
             title:    `החזרת רכב${company ? ` — ${company}` : ''}`,
-            subtitle: [carType, dropoffLoc].filter(Boolean).join(' · ') || undefined,
+            subtitle: [carType, dropoffLoc, dropoffTime && `עד ${dropoffTime}`].filter(Boolean).join(' · ') || undefined,
             icon:     '🏁',
             color:    '#d97706',
             bgColor:  '#fffbeb',
             docId:    doc.id,
-            time:     '',
+            time:     dropoffTime || undefined,
           })
         }
       }
 
       // ── Hotel events ───────────────────────────────────────────────────────
       if (doc.doc_type === 'hotel') {
-        const hotelName   = ext?.hotel_name  || doc.name
-        const checkIn     = ext?.check_in    as string | undefined
-        const checkOut    = ext?.check_out   as string | undefined
+        const hotelName    = ext?.hotel_name  || doc.name
+        const checkIn      = ext?.check_in    as string | undefined
+        const checkOut     = ext?.check_out   as string | undefined
         const checkInTime  = ext?.check_in_time  as string | undefined
         const checkOutTime = ext?.check_out_time as string | undefined
-        const roomType    = ext?.room_type   as string | undefined
+        const roomType     = ext?.room_type   as string | undefined
         const totalNights = checkIn && checkOut
           ? differenceInDays(parseISO(checkOut), parseISO(checkIn))
           : 0
@@ -192,6 +166,7 @@ function buildDays(
           const parts = [
             roomType,
             totalNights ? `${totalNights} לילות` : undefined,
+            checkInTime ? `מ־${checkInTime}` : undefined,
           ].filter(Boolean)
           docEvents.push({
             type:     'hotel_checkin',
@@ -207,13 +182,29 @@ function buildDays(
           docEvents.push({
             type:     'hotel_checkout',
             title:    `צ׳ק אאוט — ${hotelName}`,
-            subtitle: checkOutTime ? `עד שעה ${checkOutTime}` : undefined,
+            subtitle: checkOutTime ? `עד ${checkOutTime}` : undefined,
             icon:     '🚪',
             color:    '#dc2626',
             bgColor:  '#fef2f2',
             docId:    doc.id,
             time:     checkOutTime,
           })
+        } else if (checkIn && checkOut) {
+          // יום בתוך שהייה — מציגים אינדיקציה דקה
+          const inDate  = parseISO(checkIn)
+          const outDate = parseISO(checkOut)
+          const curr    = parseISO(dateStr)
+          if (curr > inDate && curr < outDate) {
+            docEvents.push({
+              type:     'hotel_stay',
+              title:    `שהייה — ${hotelName}`,
+              subtitle: roomType || undefined,
+              icon:     '🛏️',
+              color:    '#16a34a',
+              bgColor:  '#f0fdf4',
+              docId:    doc.id,
+            })
+          }
         }
       }
 
@@ -249,136 +240,12 @@ function buildDays(
       isToday:   isToday(day),
       isPast:    day < today && !isToday(day),
       isFuture:  day > today,
-      expenses:  dayExps,
       docEvents,
-      totalIls,
     }
   })
-}
-
-// ── Summary view helpers ───────────────────────────────────────────────────────
-
-interface FlightSummary {
-  title:    string
-  date:     string
-  notes:    string | null
-  amountIls: number
-  currency:  Currency
-  amount:    number
-}
-
-interface HotelStay {
-  title:    string
-  checkIn:  string
-  checkOut: string | null
-  nights:   number
-  amountIls: number
-}
-
-interface CarRental {
-  title:    string
-  pickup:   string
-  dropoff:  string | null
-  amountIls: number
-}
-
-interface SummaryData {
-  flights:      FlightSummary[]
-  destinations: string[]
-  hotels:       HotelStay[]
-  cars:         CarRental[]
-  activities:   Expense[]
-  totalDays:    number
-  totalFlights: number
-  totalIls:     number
-}
-
-function buildSummary(expenses: Expense[], tripStart: string, tripEnd: string): SummaryData {
-  const totalDays = differenceInDays(parseISO(tripEnd), parseISO(tripStart)) + 1
-
-  // Flights — each leg is a separate expense with category='flight'
-  const flightExps = expenses
-    .filter(e => e.category === 'flight')
-    .sort((a, b) => a.expense_date.localeCompare(b.expense_date))
-
-  const flights: FlightSummary[] = flightExps.map(e => ({
-    title:     e.title,
-    date:      e.expense_date,
-    notes:     e.notes,
-    amountIls: e.amount_ils || 0,
-    currency:  e.currency,
-    amount:    e.amount,
-  }))
-
-  // Destinations: extract arrival city from flight titles ("TLV → Bangkok")
-  const destinations: string[] = []
-  flightExps.forEach(e => {
-    const parts = e.title.split('→')
-    if (parts.length === 2) {
-      const dest = parts[1].trim()
-      if (dest && !destinations.includes(dest)) destinations.push(dest)
-    }
-  })
-
-  // Hotels
-  const hotelExps = expenses
-    .filter(e => e.category === 'hotel')
-    .sort((a, b) => a.expense_date.localeCompare(b.expense_date))
-
-  const hotels: HotelStay[] = hotelExps.map((e, i) => {
-    const nextDate = hotelExps[i + 1]?.expense_date || tripEnd
-    const nights = differenceInDays(parseISO(nextDate), parseISO(e.expense_date))
-    return {
-      title:     e.title,
-      checkIn:   e.expense_date,
-      checkOut:  nextDate || null,
-      nights:    Math.max(1, nights),
-      amountIls: e.amount_ils || 0,
-    }
-  })
-
-  // Car rentals (taxi category in the system)
-  const carExps = expenses
-    .filter(e => e.category === 'taxi')
-    .sort((a, b) => a.expense_date.localeCompare(b.expense_date))
-
-  const cars: CarRental[] = carExps.map((e, i) => {
-    const nextDate = carExps[i + 1]?.expense_date || null
-    return {
-      title:     e.title,
-      pickup:    e.expense_date,
-      dropoff:   nextDate,
-      amountIls: e.amount_ils || 0,
-    }
-  })
-
-  // Activities
-  const activities = expenses
-    .filter(e => e.category === 'activity')
-    .sort((a, b) => a.expense_date.localeCompare(b.expense_date))
-
-  const totalIls = expenses.reduce((s, e) => s + (e.amount_ils || 0), 0)
-
-  return {
-    flights,
-    destinations,
-    hotels,
-    cars,
-    activities,
-    totalDays,
-    totalFlights: flights.length,
-    totalIls,
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-/** Extracts a document UUID from an expense's notes field (pattern: "doc:UUID") */
-function extractDocId(notes: string | null | undefined): string | null {
-  if (!notes) return null
-  const match = notes.match(/doc:([0-9a-f-]{36})/i)
-  return match ? match[1] : null
-}
-
 function getWeekday(dateStr: string, weekdays: string[]): string {
   const d = parseISO(dateStr)
   return weekdays[d.getDay()]
@@ -390,40 +257,29 @@ export default function TimelinePage() {
   const { t, dir } = useLanguage()
   const WEEKDAYS = [t('day_sun'), t('day_mon'), t('day_tue'), t('day_wed'), t('day_thu'), t('day_fri'), t('day_sat')]
 
-  const [expenses,    setExpenses]    = useState<Expense[]>([])
-  const [documents,   setDocuments]   = useState<TripDoc[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [filterCat,   setFilterCat]   = useState<FilterCat>('all')
-  const [viewMode,    setViewMode]    = useState<ViewMode>('timeline')
-  const [editingId,   setEditingId]   = useState<string | null>(null)
-  const [editTitle,   setEditTitle]   = useState('')
-  const [deletingId,  setDeletingId]  = useState<string | null>(null)
-  const [currency,    setCurrency]    = useState<Currency>('ILS')
-
-  // Per-day expense expansion state
-  const [expandedExpDay, setExpandedExpDay] = useState<string | null>(null)
+  const [documents, setDocuments] = useState<TripDoc[]>([])
+  const [loading,   setLoading]   = useState(true)
 
   // ── Document viewer state ────────────────────────────────────────────────
-  const [viewerDoc,    setViewerDoc]    = useState<{ url: string; title: string; docType: string } | null>(null)
-  const [loadingDocId, setLoadingDocId] = useState<string | null>(null)
+  const [viewerDoc, setViewerDoc] = useState<{ url: string; title: string; docType: string } | null>(null)
 
   // ── Auto-scroll to today ────────────────────────────────────────────────
   const todayRef = useRef<HTMLDivElement | null>(null)
 
-  // ── Fetch expenses + documents ─────────────────────────────────────────────
-  const fetchExpenses = useCallback(async () => {
-    if (!currentTrip) { setExpenses([]); setDocuments([]); setLoading(false); return }
+  // ── Fetch documents ───────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    if (!currentTrip) { setDocuments([]); setLoading(false); return }
 
-    const [{ data: expData, error: expErr }, { data: docData }] = await Promise.all([
-      supabase.from('expenses').select('*').eq('trip_id', currentTrip.id).order('expense_date', { ascending: true }),
-      supabase.from('documents').select('*').eq('trip_id', currentTrip.id),
-    ])
-    if (!expErr) setExpenses(expData || [])
+    const { data: docData } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('trip_id', currentTrip.id)
+
     setDocuments(docData || [])
     setLoading(false)
   }, [currentTrip])
 
-  useEffect(() => { fetchExpenses() }, [fetchExpenses])
+  useEffect(() => { fetchData() }, [fetchData])
 
   // Auto-scroll to today after load
   useEffect(() => {
@@ -437,88 +293,8 @@ export default function TimelinePage() {
   // ── Derived data ──────────────────────────────────────────────────────────
   const days = useMemo(() => {
     if (!currentTrip) return []
-    return buildDays(currentTrip.start_date, currentTrip.end_date, expenses, documents)
-  }, [currentTrip, expenses, documents])
-
-  const filteredDays = useMemo(() => {
-    if (filterCat === 'all') return days
-    return days.map(d => ({
-      ...d,
-      expenses:  d.expenses.filter(e => e.category === filterCat),
-      totalIls:  d.expenses.filter(e => e.category === filterCat)
-                   .reduce((s, e) => s + (e.amount_ils || 0), 0),
-    }))
-  }, [days, filterCat])
-
-  const totalIls      = expenses.reduce((s, e) => s + (e.amount_ils || 0), 0)
-  const daysWithSpend = days.filter(d => d.totalIls > 0).length
-  const avgPerDay     = daysWithSpend > 0 ? totalIls / daysWithSpend : 0
-
-  const usedCategories = useMemo(() => {
-    const cats = new Set(expenses.map(e => e.category))
-    return Array.from(cats) as Category[]
-  }, [expenses])
-
-  const summary = useMemo(() => {
-    if (!currentTrip) return null
-    return buildSummary(expenses, currentTrip.start_date, currentTrip.end_date)
-  }, [expenses, currentTrip])
-
-  // Currency conversion
-  const RATE: Record<Currency, number> = {
-    ILS: 1, USD: 1/3.70, THB: 1/0.105, EUR: 1/4.00, GBP: 1/4.65,
-    JPY: 1/0.025, AED: 1/1.01, SGD: 1/2.74, TRY: 1/0.11, CHF: 1/4.10, AUD: 1/2.38, CAD: 1/2.72,
-  }
-  const convert = (ils: number) => {
-    const val = ils * RATE[currency]
-    return `${CURRENCY_SYMBOL[currency]}${Math.round(val).toLocaleString('he-IL')}`
-  }
-
-  // ── Inline rename ─────────────────────────────────────────────────────────
-  const handleRename = async (exp: Expense) => {
-    if (!editTitle.trim() || editTitle === exp.title) { setEditingId(null); return }
-    const { error } = await supabase.from('expenses').update({ title: editTitle }).eq('id', exp.id)
-    if (error) { toast.error('שגיאה בשמירה'); return }
-    setExpenses(prev => prev.map(e => e.id === exp.id ? { ...e, title: editTitle } : e))
-    setEditingId(null)
-    toast.success('עודכן')
-  }
-
-  // ── Delete expense ────────────────────────────────────────────────────────
-  const handleDelete = async (id: string) => {
-    setDeletingId(id)
-    const { error } = await supabase.from('expenses').delete().eq('id', id)
-    if (error) { toast.error('שגיאה במחיקה'); setDeletingId(null); return }
-    setExpenses(prev => prev.filter(e => e.id !== id))
-    setDeletingId(null)
-    toast.success('נמחק')
-  }
-
-  // ── Open document from expense ────────────────────────────────────────────
-  const handleOpenDoc = async (exp: Expense) => {
-    const docId = extractDocId(exp.notes)
-    if (!docId) return
-
-    setLoadingDocId(exp.id)
-    const { data, error } = await supabase
-      .from('documents')
-      .select('file_url, name, doc_type')
-      .eq('id', docId)
-      .single()
-
-    setLoadingDocId(null)
-
-    if (error || !data?.file_url) {
-      toast.error('לא נמצא המסמך')
-      return
-    }
-
-    setViewerDoc({
-      url:     data.file_url,
-      title:   data.name  || exp.title,
-      docType: data.doc_type || exp.category,
-    })
-  }
+    return buildDays(currentTrip.start_date, currentTrip.end_date, documents)
+  }, [currentTrip, documents])
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
@@ -556,9 +332,6 @@ export default function TimelinePage() {
     )
   }
 
-  const totalDays     = differenceInDays(parseISO(currentTrip.end_date), parseISO(currentTrip.start_date)) + 1
-  const daysRemaining = Math.max(0, differenceInDays(parseISO(currentTrip.end_date), new Date()))
-
   return (
     <div className="space-y-4 pb-8" dir={dir}>
 
@@ -567,7 +340,7 @@ export default function TimelinePage() {
         <div className="flex items-center gap-3">
           <Link
             href="/dashboard"
-            aria-label="חזרה לדשבורד"
+            aria-label={t('back_to_dashboard')}
             className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
@@ -577,682 +350,156 @@ export default function TimelinePage() {
             <p className="text-xs text-gray-500 mt-0.5">{currentTrip?.destination || ''}</p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* View mode toggle — pill style */}
-          <div className="flex items-center p-1 bg-surface-secondary rounded-2xl gap-0.5">
-            <button
-              onClick={() => setViewMode('timeline')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all',
-                viewMode === 'timeline' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'
-              )}>
-              <LayoutList className="w-3.5 h-3.5" />
-              <span>{t('timeline_view')}</span>
-            </button>
-            <button
-              onClick={() => setViewMode('summary')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all',
-                viewMode === 'summary' ? 'bg-white text-primary shadow-sm' : 'text-gray-400'
-              )}>
-              <BarChart2 className="w-3.5 h-3.5" />
-              <span>{t('timeline_summary')}</span>
-            </button>
-          </div>
-
-          <CurrencySelector value={currency} onChange={setCurrency} size="sm" />
-        </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════
-          SUMMARY VIEW
+          TIMELINE — actions only
       ══════════════════════════════════════════════════════════════════ */}
-      <AnimatePresence mode="wait">
-        {viewMode === 'summary' && summary && (
-          <motion.div key="summary"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-3">
 
-            {/* ── Trip header ───────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="text-base font-bold mb-0.5">סיכום נסיעה</h2>
-              <p className="text-xs text-gray-400">{currentTrip.destination} · {formatDate(currentTrip.start_date)} — {formatDate(currentTrip.end_date)}</p>
-            </div>
+        {days.map((day) => {
+          const hasDocEvents = day.docEvents.length > 0
 
-            {/* ── Trip stats strip ──────────────────────────────────────── */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-1">
-                  <Calendar className="w-4 h-4 text-primary" />
-                  <span className="text-xs text-gray-500">משך הנסיעה</span>
+          // Empty days — very compact
+          if (!hasDocEvents) {
+            return (
+              <div
+                key={day.date}
+                ref={day.isToday ? todayRef : undefined}
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
+                  day.isToday
+                    ? 'bg-primary/5 ring-1 ring-primary/20'
+                    : day.isFuture ? 'opacity-30' : 'opacity-50'
+                }`}>
+                <div
+                  className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
+                    !day.isToday && day.isPast ? 'bg-gray-300 text-white' :
+                    !day.isToday ? 'bg-gray-100 text-gray-400' : ''
+                  }`}
+                  style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
+                  <span className="text-[9px] leading-none opacity-70">{t('timeline_day')}</span>
+                  <span className="text-xs font-bold">{day.dayNumber}</span>
                 </div>
-                <p className="text-xl font-bold">{summary.totalDays}</p>
-                <p className="text-xs text-gray-400">ימים סה&quot;כ</p>
-              </div>
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-1">
-                  <Plane className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs text-gray-500">טיסות</span>
-                </div>
-                <p className="text-xl font-bold">{summary.totalFlights}</p>
-                <p className="text-xs text-gray-400">רגלי טיסה</p>
-              </div>
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-1">
-                  <Hotel className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs text-gray-500">לינות</span>
-                </div>
-                <p className="text-xl font-bold">{summary.hotels.reduce((s, h) => s + h.nights, 0)}</p>
-                <p className="text-xs text-gray-400">לילות</p>
-              </div>
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-1">
-                  <Wallet className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs text-gray-500">סה&quot;כ הוצאות</span>
-                </div>
-                <p className="text-lg font-bold">{formatMoney(summary.totalIls)}</p>
-                <p className="text-xs text-gray-400">כל הקטגוריות</p>
-              </div>
-            </div>
-
-            {/* ── Destinations list ─────────────────────────────────────── */}
-            {summary.destinations.length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <MapPin className="w-4 h-4 text-red-500" />
-                  <h3 className="text-sm font-bold">יעדים בנסיעה</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {summary.destinations.map((dest, i) => (
-                    <span key={i}
-                      className="flex items-center gap-1 bg-red-50 text-red-700 text-xs px-3 py-1.5 rounded-full font-medium">
-                      📍 {dest}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Flights breakdown — table style ───────────────────────── */}
-            {summary.flights.length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <Plane className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <h3 className="text-sm font-bold">לוח טיסות</h3>
-                  <span className="text-xs text-gray-400 mr-auto">{summary.flights.length} רגלים</span>
-                </div>
-                <div className="space-y-2">
-                  {summary.flights.map((fl, i) => {
-                    const isReturn = fl.notes?.includes('כלול במחיר הכרטיס') || fl.amountIls === 0
-                    const isConnection = fl.notes?.includes('קונקשיין')
-                    return (
-                      <div key={i}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${
-                          isConnection ? 'bg-orange-50' :
-                          isReturn ? 'bg-gray-50' : 'bg-blue-50'
-                        }`}>
-                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          isConnection ? 'bg-orange-100' :
-                          isReturn ? 'bg-gray-200' : 'bg-blue-100'
-                        }`}>
-                          <span className="text-sm">{isConnection ? '🔄' : '✈️'}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate">{fl.title}</p>
-                          <p className="text-[10px] text-gray-500">
-                            {formatDate(fl.date)}
-                            {isConnection && ' · קונקשיין'}
-                            {isReturn && !isConnection && ' · כלול בכרטיס'}
-                          </p>
-                        </div>
-                        {fl.amountIls > 0 && (
-                          <span className="text-xs font-bold text-blue-700 flex-shrink-0">
-                            {formatMoney(fl.amountIls)}
-                          </span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Hotels breakdown — timeline style ─────────────────────── */}
-            {summary.hotels.length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
-                    <Hotel className="w-4 h-4 text-teal-600" />
-                  </div>
-                  <h3 className="text-sm font-bold">לינות</h3>
-                </div>
-                <div className="space-y-2">
-                  {summary.hotels.map((h, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-emerald-50 rounded-xl px-3 py-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">🏨</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate">{h.title}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {formatDate(h.checkIn)} → {h.checkOut ? formatDate(h.checkOut) : '?'} · {h.nights} לילות
-                        </p>
-                      </div>
-                      {h.amountIls > 0 && (
-                        <span className="text-xs font-bold text-emerald-700 flex-shrink-0">
-                          {formatMoney(h.amountIls)}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Car rentals breakdown ─────────────────────────────────── */}
-            {summary.cars.length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <Car className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <h3 className="text-sm font-bold">השכרת רכב / הסעות</h3>
-                </div>
-                <div className="space-y-2">
-                  {summary.cars.map((c, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-amber-50 rounded-xl px-3 py-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">🚕</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate">{c.title}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {formatDate(c.pickup)}
-                          {c.dropoff ? ` → ${formatDate(c.dropoff)}` : ''}
-                        </p>
-                      </div>
-                      {c.amountIls > 0 && (
-                        <span className="text-xs font-bold text-amber-700 flex-shrink-0">
-                          {formatMoney(c.amountIls)}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Activities / Meetings ─────────────────────────────────── */}
-            {summary.activities.length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
-                    <Briefcase className="w-4 h-4 text-violet-600" />
-                  </div>
-                  <h3 className="text-sm font-bold">פעילויות ואירועים</h3>
-                  <span className="text-xs text-gray-400 mr-auto">{summary.activities.length}</span>
-                </div>
-                <div className="space-y-2">
-                  {summary.activities.map((a, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-purple-50 rounded-xl px-3 py-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">🎯</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate">{a.title}</p>
-                        <p className="text-[10px] text-gray-500">{formatDate(a.expense_date)}</p>
-                      </div>
-                      {(a.amount_ils || 0) > 0 && (
-                        <span className="text-xs font-bold text-purple-700 flex-shrink-0">
-                          {formatMoney(a.amount_ils)}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Trip schedule (all doc events chronologically) ────────── */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <h3 className="text-sm font-bold">לוח נסיעה מהיר</h3>
-              </div>
-              <div className="space-y-1">
-                {days
-                  .filter(d => d.docEvents.length > 0)
-                  .map(d => (
-                    <div key={d.date}>
-                      <p className="text-[10px] font-semibold text-gray-400 px-1 pt-2 pb-0.5">
-                        יום {d.dayNumber} · {formatDate(d.date)}
-                      </p>
-                      {d.docEvents.map((ev, i) => (
-                        <div key={i} className={`flex items-center gap-2 rounded-xl px-3 py-2 ${d.isToday ? 'bg-primary/5' : 'bg-gray-50'}`}>
-                          <span className="text-sm">{ev.icon}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{ev.title}</p>
-                            {ev.subtitle && <p className="text-[10px] text-gray-400">{ev.subtitle}</p>}
-                          </div>
-                          {ev.time && <span className="text-[10px] text-gray-400 flex-shrink-0 tabular-nums">{ev.time}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                {days.every(d => d.docEvents.length === 0) && (
-                  <p className="text-xs text-gray-400 text-center py-2">אין אירועים ממסמכים</p>
+                <span className="text-xs text-gray-400">
+                  {getWeekday(day.date, WEEKDAYS)}, {format(parseISO(day.date), 'dd.MM')}
+                </span>
+                {day.isToday && (
+                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">היום</span>
                 )}
               </div>
-            </div>
+            )
+          }
 
-            {/* ── Travelers ─────────────────────────────────────────────── */}
-            {currentTrip.travelers && (currentTrip.travelers as {id: string; name: string}[]).length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <Users className="w-4 h-4 text-indigo-500" />
-                  <h3 className="text-sm font-bold">נוסעים</h3>
+          // Day with events — full card
+          return (
+            <motion.div
+              key={day.date}
+              ref={day.isToday ? todayRef : undefined}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`bg-white rounded-2xl shadow-sm overflow-hidden ${
+                day.isToday ? 'ring-2 ring-primary ring-offset-1' : ''
+              }`}>
+
+              {/* Day header */}
+              <div className={cn(
+                'flex items-center gap-3 px-4 py-3 border-b border-gray-50 sticky top-0 z-10',
+                day.isToday ? 'bg-primary/[0.03]' : 'bg-white'
+              )}>
+                {/* Day-number pill */}
+                <div
+                  className={cn(
+                    'w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 text-center shadow-sm',
+                    !day.isToday && day.isPast ? 'bg-gray-700 text-white' :
+                    !day.isToday ? 'bg-gray-100 text-gray-500' : ''
+                  )}
+                  style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
+                  <span className="text-[9px] font-medium leading-none opacity-60 tracking-wide">{t('timeline_day')}</span>
+                  <span className="text-base font-black leading-tight">{day.dayNumber}</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {(currentTrip.travelers as {id: string; name: string}[]).map((t, i) => (
-                    <span key={i} className="bg-indigo-50 text-indigo-700 text-xs px-3 py-1.5 rounded-full font-medium">
-                      👤 {t.name}
+
+                {/* Date + weekday info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn(
+                      'text-sm font-bold',
+                      day.isToday ? 'text-primary' : day.isPast ? 'text-gray-700' : 'text-gray-800'
+                    )}>
+                      {t('timeline_day')} {getWeekday(day.date, WEEKDAYS)}
                     </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {summary.flights.length === 0 && summary.hotels.length === 0 && summary.activities.length === 0 && (
-              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-                <div className="text-4xl mb-3">✈️</div>
-                <p className="font-bold mb-1">אין נתונים עדיין</p>
-                <p className="text-sm text-gray-400">הוסף הוצאות ומסמכים כדי לראות את סיכום הנסיעה</p>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════
-            TIMELINE VIEW
-        ══════════════════════════════════════════════════════════════════ */}
-        {viewMode === 'timeline' && (
-          <motion.div key="timeline"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-4">
-
-            {/* Stats strip */}
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { icon: Wallet,     label: 'סה״כ',        value: convert(totalIls),       iconBg: 'bg-violet-100', iconColor: 'text-primary' },
-                { icon: TrendingUp, label: 'ממוצע / יום',  value: convert(avgPerDay),       iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600' },
-                { icon: Calendar,   label: 'נותרו',        value: `${daysRemaining} ימים`, iconBg: 'bg-orange-100', iconColor: 'text-orange-500' },
-              ].map((s, i) => (
-                <div key={i} className="bg-white rounded-2xl p-3.5 shadow-sm text-center">
-                  <div className={`w-7 h-7 rounded-xl ${s.iconBg} flex items-center justify-center mx-auto mb-2`}>
-                    <s.icon className={`w-3.5 h-3.5 ${s.iconColor}`} />
+                    <span className="text-xs text-gray-400 font-medium tabular-nums">
+                      {format(parseISO(day.date), 'dd.MM.yyyy')}
+                    </span>
+                    {day.isToday && (
+                      <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-bold tracking-wide">היום</span>
+                    )}
                   </div>
-                  <p className="text-lg font-black text-gray-900 leading-tight">{s.value}</p>
-                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">{s.label}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-0.5">
+                    {day.docEvents.map(ev => ev.icon).slice(0, 5).join(' ')}
+                  </p>
                 </div>
-              ))}
-            </div>
-
-            {/* Budget bar */}
-            {currentTrip.budget_ils && (
-              <div className="bg-white rounded-2xl px-4 py-3.5 shadow-sm space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500 font-medium">תקציב</span>
-                  <span className="font-semibold text-gray-700">
-                    סה&quot;כ {convert(totalIls)} מתוך {convert(currentTrip.budget_ils)}
-                  </span>
-                </div>
-                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min((totalIls / currentTrip.budget_ils) * 100, 100)}%` }}
-                    transition={{ duration: 0.6, ease: 'easeOut' }}
-                    className={`h-full rounded-full ${
-                      totalIls / currentTrip.budget_ils > 0.9 ? 'bg-red-400' :
-                      totalIls / currentTrip.budget_ils > 0.7 ? 'bg-amber-400' : 'bg-emerald-400'
-                    }`}
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400 text-left">
-                  {Math.round((totalIls / currentTrip.budget_ils) * 100)}% מהתקציב
-                </p>
               </div>
-            )}
 
-            {/* Category filter */}
-            {usedCategories.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                <button
-                  onClick={() => setFilterCat('all')}
-                  className={`flex-shrink-0 rounded-2xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    filterCat === 'all' ? 'text-white shadow-sm' : 'bg-white shadow-sm text-gray-500'
-                  }`}
-                  style={filterCat === 'all' ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : {}}>
-                  הכל
-                </button>
-                {usedCategories.map(cat => (
-                  <button key={cat}
-                    onClick={() => setFilterCat(filterCat === cat ? 'all' : cat)}
-                    className={`flex-shrink-0 rounded-2xl px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                      filterCat === cat ? 'text-white shadow-sm' : 'bg-white shadow-sm text-gray-500'
-                    }`}
-                    style={filterCat === cat ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)' } : {}}>
-                    <span>{CATEGORY_META[cat].icon}</span>
-                    {CATEGORY_META[cat].label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* ── Day cards ────────────────────────────────────────────── */}
-            <div className="space-y-3">
-              {filteredDays.map((day) => {
-                const hasDocEvents = day.docEvents.length > 0
-                const hasExpenses  = day.expenses.length > 0
-                const hasContent   = hasDocEvents || hasExpenses
-                const isExpExpanded = expandedExpDay === day.date
-
-                // Empty days — very compact
-                if (!hasContent) {
+              {/* Doc events */}
+              <div className="px-4 py-3 space-y-0">
+                {day.docEvents.map((ev, i) => {
+                  const isLast = i === day.docEvents.length - 1
                   return (
-                    <div
-                      key={day.date}
-                      ref={day.isToday ? todayRef : undefined}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl ${
-                        day.isToday
-                          ? 'bg-primary/5 ring-1 ring-primary/20'
-                          : day.isFuture ? 'opacity-30' : 'opacity-50'
-                      }`}>
-                      <div
-                        className={`w-8 h-8 rounded-xl flex flex-col items-center justify-center flex-shrink-0 text-center ${
-                          !day.isToday && day.isPast ? 'bg-gray-300 text-white' :
-                          !day.isToday ? 'bg-gray-100 text-gray-400' : ''
-                        }`}
-                        style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
-                        {day.dayNumber >= 1 ? (
-                          <>
-                            <span className="text-[9px] leading-none opacity-70">{t('timeline_day')}</span>
-                            <span className="text-xs font-bold">{day.dayNumber}</span>
-                          </>
-                        ) : (
-                          <span className="text-[9px] leading-none">—</span>
+                    <div key={`ev-${i}`} className="flex gap-3 items-start">
+                      <div className="flex flex-col items-center">
+                        <DocEventIconBadge type={ev.type} size={8} />
+                        {!isLast && <div className="w-0.5 h-3 bg-gray-100 mt-1" />}
+                      </div>
+                      <div className="flex-1 pb-3 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {ev.time && (
+                            <span className="text-[11px] font-bold tabular-nums" style={{ color: ev.color }}>
+                              {ev.time}
+                            </span>
+                          )}
+                          <p className="text-sm font-semibold text-gray-900">{ev.title}</p>
+                        </div>
+                        {ev.subtitle && (
+                          <p className="text-xs text-gray-400 mt-0.5">{ev.subtitle}</p>
                         )}
                       </div>
-                      <span className="text-xs text-gray-400">
-                        {getWeekday(day.date, WEEKDAYS)}, {format(parseISO(day.date), 'dd.MM')}
-                      </span>
-                      {day.isToday && (
-                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">היום</span>
-                      )}
+                      <button
+                        onClick={async () => {
+                          const { data } = await supabase
+                            .from('documents')
+                            .select('file_url, name, doc_type')
+                            .eq('id', ev.docId)
+                            .single()
+                          if (data?.file_url) setViewerDoc({ url: data.file_url, title: data.name, docType: data.doc_type })
+                        }}
+                        className="w-6 h-6 rounded-lg bg-surface-secondary flex items-center justify-center flex-shrink-0 mt-1 active:scale-90"
+                        title="צפה במסמך">
+                        <Paperclip className="w-3 h-3 text-gray-300" />
+                      </button>
                     </div>
                   )
-                }
-
-                // Day with content — full card
-                return (
-                  <motion.div
-                    key={day.date}
-                    ref={day.isToday ? todayRef : undefined}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={`bg-white rounded-2xl shadow-sm overflow-hidden ${
-                      day.isToday ? 'ring-2 ring-primary ring-offset-1' : ''
-                    }`}>
-
-                    {/* Day header — sticky with gradient pill */}
-                    <div className={cn(
-                      'flex items-center gap-3 px-4 py-3 border-b border-gray-50 sticky top-0 z-10',
-                      day.isToday ? 'bg-primary/[0.03]' : 'bg-white'
-                    )}>
-                      {/* Gradient day-number pill */}
-                      <div
-                        className={cn(
-                          'w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 text-center shadow-sm',
-                          !day.isToday && day.isPast ? 'bg-gray-700 text-white' :
-                          !day.isToday ? 'bg-gray-100 text-gray-500' : ''
-                        )}
-                        style={day.isToday ? { background: 'linear-gradient(135deg, #6C47FF 0%, #9B7BFF 100%)', color: 'white' } : {}}>
-                        {day.dayNumber >= 1 ? (
-                          <>
-                            <span className="text-[9px] font-medium leading-none opacity-60 tracking-wide">{t('timeline_day')}</span>
-                            <span className="text-base font-black leading-tight">{day.dayNumber}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[8px] leading-none">{t('timeline_before_trip')}</span>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Date + weekday info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={cn(
-                            'text-sm font-bold',
-                            day.isToday ? 'text-primary' : day.isPast ? 'text-gray-700' : 'text-gray-800'
-                          )}>
-                            {t('timeline_day')} {getWeekday(day.date, WEEKDAYS)}
-                          </span>
-                          <span className="text-xs text-gray-400 font-medium tabular-nums">
-                            {format(parseISO(day.date), 'dd.MM.yyyy')}
-                          </span>
-                          {day.isToday && (
-                            <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded-full font-bold tracking-wide">היום</span>
-                          )}
-                        </div>
-                        {hasDocEvents && (
-                          <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-0.5">
-                            {day.docEvents.map(ev => ev.icon).slice(0, 5).join(' ')}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Daily total — if has expenses */}
-                      {hasExpenses && (
-                        <div className="text-left flex-shrink-0">
-                          <p className={cn(
-                            'text-sm font-black',
-                            day.isToday ? 'text-primary' : 'text-gray-800'
-                          )}>
-                            {convert(day.totalIls)}
-                          </p>
-                          <p className="text-[10px] text-gray-400 text-left">{day.expenses.length} פריטים</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Doc events — always visible */}
-                    {hasDocEvents && (
-                      <div className="px-4 py-3 space-y-0">
-                        {day.docEvents.map((ev, i) => {
-                          const isLast = i === day.docEvents.length - 1 && !hasExpenses
-                          return (
-                            <div key={`ev-${i}`} className="flex gap-3 items-start">
-                              <div className="flex flex-col items-center">
-                                <DocEventIconBadge type={ev.type} size={8} />
-                                {!isLast && <div className="w-0.5 h-3 bg-gray-100 mt-1" />}
-                              </div>
-                              <div className="flex-1 pb-3 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {ev.time && (
-                                    <span className="text-[11px] font-bold tabular-nums" style={{ color: ev.color }}>
-                                      {ev.time}
-                                    </span>
-                                  )}
-                                  <p className="text-sm font-semibold text-gray-900">{ev.title}</p>
-                                </div>
-                                {ev.subtitle && (
-                                  <p className="text-xs text-gray-400 mt-0.5">{ev.subtitle}</p>
-                                )}
-                              </div>
-                              <button
-                                onClick={async () => {
-                                  const { data } = await supabase
-                                    .from('documents')
-                                    .select('file_url, name, doc_type')
-                                    .eq('id', ev.docId)
-                                    .single()
-                                  if (data?.file_url) setViewerDoc({ url: data.file_url, title: data.name, docType: data.doc_type })
-                                }}
-                                className="w-6 h-6 rounded-lg bg-surface-secondary flex items-center justify-center flex-shrink-0 mt-1 active:scale-90"
-                                title="צפה במסמך">
-                                <Paperclip className="w-3 h-3 text-gray-300" />
-                              </button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-
-                    {/* Expenses summary pill */}
-                    {hasExpenses && (
-                      <div className="px-4 pb-3">
-                        <button
-                          onClick={() => setExpandedExpDay(isExpExpanded ? null : day.date)}
-                          className="w-full flex items-center gap-2 bg-surface-secondary active:bg-gray-100 active:scale-[0.98] transition-all rounded-2xl px-4 py-2.5">
-                          <ChevronDown className={cn('w-4 h-4 text-gray-400 transition-transform flex-shrink-0', isExpExpanded && 'rotate-180')} />
-                          <span className="text-xs font-semibold text-gray-500 flex-1 text-right">
-                            {isExpExpanded ? 'סגור הוצאות' : `הצג ${day.expenses.length} הוצאות`}
-                          </span>
-                          <div className="flex items-center gap-0.5">
-                            {Array.from(new Set(day.expenses.map(e => e.category))).slice(0, 5).map(cat => (
-                              <span key={cat} className="text-sm">{CATEGORY_META[cat as Category]?.icon}</span>
-                            ))}
-                          </div>
-                        </button>
-
-                        {/* Expanded expense list */}
-                        <AnimatePresence>
-                          {isExpExpanded && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: 'auto' }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="overflow-hidden">
-                              <div className="pt-2 space-y-1.5">
-                                {day.expenses.map(exp => {
-                                  const meta      = CATEGORY_META[exp.category as Category]
-                                  const isEditing  = editingId === exp.id
-                                  const isDeleting = deletingId === exp.id
-
-                                  return (
-                                    <div key={exp.id}
-                                      className="flex items-center gap-3 bg-white rounded-2xl py-2.5 shadow-sm border border-gray-50 overflow-hidden"
-                                      style={{ borderRightWidth: 3, borderRightColor: meta.color, borderRightStyle: 'solid' }}>
-                                      <div className="pr-0 pl-3 flex items-center gap-3 flex-1 min-w-0">
-                                        <CategoryIconBadge category={exp.category as Category} size="sm" />
-
-                                        <div className="flex-1 min-w-0">
-                                          {isEditing ? (
-                                            <input
-                                              autoFocus
-                                              value={editTitle}
-                                              onChange={e => setEditTitle(e.target.value)}
-                                              onKeyDown={e => {
-                                                if (e.key === 'Enter') handleRename(exp)
-                                                if (e.key === 'Escape') setEditingId(null)
-                                              }}
-                                              className="w-full text-xs border-b border-primary outline-none bg-transparent pb-0.5"
-                                              dir="rtl"
-                                            />
-                                          ) : (
-                                            <p className="text-xs font-semibold text-gray-800 truncate">{exp.title}</p>
-                                          )}
-                                          <p className="text-[10px]" style={{ color: meta.color }}>{meta.label}</p>
-                                        </div>
-
-                                        <div className="text-left flex-shrink-0">
-                                          <p className="text-sm font-black text-gray-900">{convert(exp.amount_ils)}</p>
-                                          {exp.currency !== 'ILS' && (
-                                            <p className="text-[10px] text-gray-400">
-                                              {CURRENCY_SYMBOL[exp.currency]}{exp.amount}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {isEditing ? (
-                                        <div className="flex gap-1 flex-shrink-0 pl-3">
-                                          <button onClick={() => handleRename(exp)}
-                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 active:scale-90">
-                                            <Check className="w-3.5 h-3.5" />
-                                          </button>
-                                          <button onClick={() => setEditingId(null)}
-                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 active:scale-90">
-                                            <X className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      ) : (
-                                        <div className="flex gap-1 flex-shrink-0 pl-3">
-                                          {extractDocId(exp.notes) && (
-                                            <button
-                                              onClick={() => handleOpenDoc(exp)}
-                                              disabled={loadingDocId === exp.id}
-                                              className="w-6 h-6 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-400 active:scale-90 hover:bg-indigo-100 hover:text-indigo-600 transition-colors disabled:opacity-30"
-                                              title="צפה במסמך">
-                                              {loadingDocId === exp.id
-                                                ? <span className="text-[9px] animate-spin">⏳</span>
-                                                : <Paperclip className="w-3 h-3" />
-                                              }
-                                            </button>
-                                          )}
-                                          <button
-                                            onClick={() => { setEditingId(exp.id); setEditTitle(exp.title) }}
-                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-blue-50 hover:text-blue-500 transition-colors">
-                                            <Pencil className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            onClick={() => handleDelete(exp.id)}
-                                            disabled={isDeleting}
-                                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 active:scale-90 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-30">
-                                            {isDeleting
-                                              ? <span className="text-[9px] animate-spin">⏳</span>
-                                              : <Trash2 className="w-3 h-3" />
-                                            }
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
-                  </motion.div>
-                )
-              })}
-            </div>
-
-            {expenses.length === 0 && days.every(d => d.docEvents.length === 0) && (
-              <div className="bg-white rounded-3xl p-10 text-center shadow-sm">
-                <div className="w-20 h-20 rounded-3xl mx-auto mb-5 flex items-center justify-center shadow-lg"
-                  style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
-                  <Calendar className="w-10 h-10 text-white" />
-                </div>
-                <p className="text-lg font-black text-gray-800 mb-1.5">{t('timeline_empty')}</p>
-                <p className="text-sm text-gray-400 leading-relaxed">
-                  הוסף הוצאות ומסמכים<br />כדי לראות את לוח הנסיעה
-                </p>
+                })}
               </div>
-            )}
-          </motion.div>
+            </motion.div>
+          )
+        })}
+
+        {days.every(d => d.docEvents.length === 0) && (
+          <div className="bg-white rounded-3xl p-10 text-center shadow-sm">
+            <div className="w-20 h-20 rounded-3xl mx-auto mb-5 flex items-center justify-center shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #6C47FF, #9B7BFF)' }}>
+              <Calendar className="w-10 h-10 text-white" />
+            </div>
+            <p className="text-lg font-black text-gray-800 mb-1.5">{t('timeline_empty')}</p>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              הוסף מסמכים (טיסות, מלונות, רכב)<br />כדי לראות את לוח הנסיעה
+            </p>
+          </div>
         )}
-      </AnimatePresence>
+      </motion.div>
 
       {/* ── Document Viewer ──────────────────────────────────────────────── */}
       {viewerDoc && (

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import Button from './Button'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -21,13 +22,16 @@ export default function ConfirmDialog({
   open,
   title,
   description,
-  confirmLabel = 'אישור',
-  cancelLabel = 'ביטול',
+  confirmLabel,
+  cancelLabel,
   variant = 'danger',
   loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t, dir } = useLanguage()
+  const resolvedConfirm = confirmLabel ?? t('confirm')
+  const resolvedCancel  = cancelLabel  ?? t('cancel')
   const confirmRef = useRef<HTMLButtonElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
 
@@ -72,6 +76,7 @@ export default function ConfirmDialog({
           className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4"
           style={{ background: 'rgba(15,12,40,0.45)', backdropFilter: 'blur(2px)' }}
           onClick={(e) => { if (e.target === e.currentTarget && !loading) onCancel() }}
+          dir={dir}
         >
           <motion.div
             role="alertdialog"
@@ -117,7 +122,7 @@ export default function ConfirmDialog({
                 loading={loading}
                 onClick={onConfirm}
               >
-                {confirmLabel}
+                {resolvedConfirm}
               </Button>
               <Button
                 ref={cancelRef}
@@ -127,7 +132,7 @@ export default function ConfirmDialog({
                 disabled={loading}
                 onClick={onCancel}
               >
-                {cancelLabel}
+                {resolvedCancel}
               </Button>
             </div>
           </motion.div>

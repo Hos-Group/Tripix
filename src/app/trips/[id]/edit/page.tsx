@@ -6,6 +6,7 @@ import { ChevronLeft, Plus, Trash2, Save, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useTrip } from '@/contexts/TripContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import DateRangePicker from '@/components/DateRangePicker'
 import { searchDestinations, getDestinationCities } from '@/lib/destinations'
 import MembersPanel from '@/components/trip/MembersPanel'
@@ -17,6 +18,7 @@ export default function EditTripPage() {
   const params   = useParams()
   const tripId   = params.id as string
   const { refreshTrips } = useTrip()
+  const { t } = useLanguage()
 
   const [activeTab, setActiveTab] = useState<TabId>('details')
 
@@ -133,8 +135,13 @@ export default function EditTripPage() {
       <div className="px-4 space-y-5">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="active:scale-95 transition-transform p-1">
-            <ChevronLeft className="w-5 h-5 text-gray-500" />
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label={t('back')}
+            className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
           </button>
           <h1 className="text-xl font-bold">עריכת טיול</h1>
         </div>

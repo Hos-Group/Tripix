@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronDown, ChevronUp, Luggage, RotateCcw, Plus, T
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useTrip } from '@/contexts/TripContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { getDestinationConfig, getDestinationCity } from '@/lib/destinations'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -479,6 +480,7 @@ interface WeatherInfo {
 
 export default function PackingPage() {
   const { currentTrip } = useTrip()
+  const { t } = useLanguage()
   const [tripType, setTripType] = useState<TripType>('general')
   const [showWizard, setShowWizard] = useState(false)
   const [wizardStep, setWizardStep] = useState(0)   // 0=activities, 1=weather
@@ -732,7 +734,7 @@ export default function PackingPage() {
               <button
                 type="button"
                 onClick={() => setWizardStep(0)}
-                aria-label="חזרה לשלב הקודם"
+                aria-label={t('back_to_previous')}
                 className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
                 <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
@@ -740,7 +742,7 @@ export default function PackingPage() {
             ) : (
               <Link
                 href="/dashboard"
-                aria-label="חזרה לדשבורד"
+                aria-label={t('back_to_dashboard')}
                 className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
                 <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />
@@ -858,7 +860,7 @@ export default function PackingPage() {
       <div className="flex items-center gap-3">
         <Link
           href="/dashboard"
-          aria-label="חזרה לדשבורד"
+          aria-label={t('back_to_dashboard')}
           className="w-11 h-11 flex items-center justify-center rounded-2xl active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <ChevronLeft className="w-5 h-5 text-gray-600 rtl:rotate-180" aria-hidden="true" />

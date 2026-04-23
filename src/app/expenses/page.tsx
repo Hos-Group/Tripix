@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Search, Trash2, X, ChevronDown, Wallet, Split, Pencil } from 'lucide-react'
+import { Plus, Search, Trash2, X, ChevronDown, Wallet, Split, Pencil, FileText, Mail } from 'lucide-react'
+import DocumentViewer from '@/components/DocumentViewer'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
@@ -17,6 +18,11 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import EmptyState from '@/components/ui/EmptyState'
 import { ListSkeleton } from '@/components/ui/Skeleton'
 import { itemVariants, sheetVariants, spring, staggerContainer } from '@/lib/motion'
+import HotelStaysStrip from '@/components/hotel/HotelStaysStrip'
+import QuickChargeSheet from '@/components/hotel/QuickChargeSheet'
+import StayReport from '@/components/hotel/StayReport'
+import { buildHotelStays, type HotelStay, type HotelDocumentRow, type ExpenseRow as HotelExpenseRow } from '@/components/hotel/hotelTab'
+import { tFormat } from '@/lib/i18n'
 
 const CATEGORIES: Category[] = [
   'food', 'hotel', 'flight', 'taxi', 'activity', 'shopping',
@@ -28,7 +34,7 @@ const CATEGORIES: Category[] = [
 export default function ExpensesPage() {
   const { currentTrip } = useTrip()
   const { user } = useAuth()
-  const { t, dir } = useLanguage()
+  const { t, dir, lang } = useLanguage()
   const reduce = useReducedMotion()
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,6 +48,91 @@ export default function ExpensesPage() {
   const [deleting, setDeleting] = useState(false)
   const [duplicatePrompt, setDuplicatePrompt] = useState<{ title: string; date: string } | null>(null)
   const [duplicateResolver, setDuplicateResolver] = useState<((ok: boolean) => void) | null>(null)
+  const [hotelDocs, setHotelDocs]     = useState<HotelDocumentRow[]>([])
+  const [chargingStay, setChargingStay] = useState<HotelStay | null>(null)
+  const [reportStay, setReportStay]   = useState<HotelStay | null>(null)
+
+  // ── Doc viewer (opens the document or email linked to an expense) ──────
+  const [docViewerUrl,       setDocViewerUrl]       = useState<string | null>(null)
+  const [docViewerTitle,     setDocViewerTitle]     = useState<string>('')
+  const [docViewerSubtitle,  setDocViewerSubtitle]  = useState<string>('')
+  const [docViewerType,      setDocViewerType]      = useState<string | undefined>(undefined)
+  const [docViewerHtml,      setDocViewerHtml]      = useState<string | null>(null)
+  const [docViewerLoading,   setDocViewerLoading]   = useState(false)
+  const closeDocViewer = useCallback(() => {
+    setDocViewerUrl(null); setDocViewerHtml(null); setDocViewerTitle('')
+    setDocViewerSubtitle(''); setDocViewerType(undefined); setDocViewerLoading(false)
+  }, [])
+
+  // Open whatever the expense is attached to:
+  //   1. document_id → fetch the linked document; prefer file_url, else email HTML
+  //   2. receipt_url → open directly (manual receipt upload, no document row)
+  const openExpenseDoc = useCallback(async (exp: Expense) => {
+    const receiptUrl = (exp as unknown as { receipt_url?: string | null }).receipt_url || null
+    const docId      = (exp as unknown as { document_id?: string | null }).document_id || null
+
+    // 1. Linked document — look it up and route to file or email
+    if (docId) {
+      setDocViewerLoading(true)
+      const { data: doc } = await supabase
+        .from('documents')
+        .select('id, name, file_url, file_type, doc_type, gmail_message_id')
+        .eq('id', docId)
+        .maybeSingle()
+      if (doc?.file_url) {
+        setDocViewerTitle(doc.name || exp.title)
+        setDocViewerSubtitle(CATEGORY_META[exp.category]?.label || '')
+        setDocViewerType(doc.doc_type || undefined)
+        setDocViewerUrl(doc.file_url)
+        setDocViewerLoading(false)
+        return
+      }
+      if (doc?.gmail_message_id) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+          if (!token) { toast.error('לא מחובר'); setDocViewerLoading(false); return }
+          const res = await fetch('/api/gmail/fetch-message', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body:    JSON.stringify({ gmail_message_id: doc.gmail_message_id }),
+          })
+          const json = await res.json()
+          if (!res.ok) { toast.error(json.error || 'לא הצלחנו למשוך את המייל'); setDocViewerLoading(false); return }
+          setDocViewerTitle(doc.name || exp.title)
+          setDocViewerSubtitle(json.from || '')
+          setDocViewerType(doc.doc_type || undefined)
+          setDocViewerHtml(json.html || '<p style="padding:20px;color:#888">המייל ריק</p>')
+        } catch {
+          toast.error('שגיאת רשת')
+        } finally {
+          setDocViewerLoading(false)
+        }
+        return
+      }
+      setDocViewerLoading(false)
+      toast('למסמך אין תצוגה זמינה')
+      return
+    }
+
+    // 2. Raw receipt upload (scan → expense without document row)
+    if (receiptUrl) {
+      setDocViewerTitle(exp.title)
+      setDocViewerSubtitle(CATEGORY_META[exp.category]?.label || '')
+      setDocViewerType(undefined)
+      setDocViewerUrl(receiptUrl)
+      return
+    }
+
+    toast('אין מסמך מקושר להוצאה זו')
+  }, [])
+
+  // Lookup of expense → whether it has any viewable attachment.
+  const expenseHasDoc = (e: Expense): boolean => {
+    const r = (e as unknown as { receipt_url?: string | null }).receipt_url
+    const d = (e as unknown as { document_id?: string | null }).document_id
+    return Boolean(r || d)
+  }
 
   // Form state
   const [title, setTitle]           = useState('')
@@ -68,6 +159,27 @@ export default function ExpensesPage() {
   }, [currentTrip])
 
   useEffect(() => { fetchExpenses() }, [fetchExpenses])
+
+  // Load hotel documents for the current trip — drives the "Hotel Tab" strip.
+  const fetchHotels = useCallback(async () => {
+    if (!currentTrip) { setHotelDocs([]); return }
+    try {
+      const { data } = await supabase
+        .from('documents')
+        .select('id, trip_id, name, doc_type, extracted_data, valid_from, valid_until')
+        .eq('trip_id', currentTrip.id)
+        .eq('doc_type', 'hotel')
+      setHotelDocs((data as HotelDocumentRow[] | null) || [])
+    } catch (err) {
+      console.error('[expenses] fetchHotels failed:', err)
+    }
+  }, [currentTrip])
+  useEffect(() => { fetchHotels() }, [fetchHotels])
+
+  const hotelStays: HotelStay[] = buildHotelStays(
+    hotelDocs,
+    expenses as unknown as HotelExpenseRow[],
+  )
 
   const tripDays = getTripDays()
 
@@ -228,8 +340,8 @@ export default function ExpensesPage() {
     return (
       <div className="page-enter space-y-4 pt-2" dir={dir}>
         <div className="flex items-center justify-between pt-1">
-          <h1 className="text-2xl font-black tracking-tight gradient-text">הוצאות</h1>
-          <span className="sr-only">טוען הוצאות…</span>
+          <h1 className="text-2xl font-black tracking-tight gradient-text">{t('exp_title')}</h1>
+          <span className="sr-only">{t('exp_loading')}</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="h-[60px] rounded-2xl skeleton" />
@@ -246,11 +358,11 @@ export default function ExpensesPage() {
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between pt-1">
-        <h1 className="text-2xl font-black tracking-tight gradient-text">הוצאות</h1>
+        <h1 className="text-2xl font-black tracking-tight gradient-text">{t('exp_title')}</h1>
         <button
           type="button"
           onClick={() => { if (showForm) resetForm(); setShowForm(v => !v) }}
-          aria-label={showForm ? 'סגור טופס הוצאה' : 'הוסף הוצאה חדשה'}
+          aria-label={showForm ? t('exp_form_close') : t('exp_form_open')}
           aria-expanded={showForm}
           aria-controls="expense-form"
           className="w-11 h-11 rounded-2xl flex items-center justify-center active:scale-90 transition-all text-white focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
@@ -266,7 +378,7 @@ export default function ExpensesPage() {
             <Wallet className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <p className="text-[10px] text-gray-400 font-medium">סה״כ</p>
+            <p className="text-[10px] text-gray-400 font-medium">{t('exp_total_label')}</p>
             <p className="text-base font-black text-gray-900 leading-tight">{formatMoney(totalIls)}</p>
           </div>
         </div>
@@ -275,7 +387,7 @@ export default function ExpensesPage() {
             <span className="text-base">📅</span>
           </div>
           <div>
-            <p className="text-[10px] text-gray-400 font-medium">היום</p>
+            <p className="text-[10px] text-gray-400 font-medium">{t('exp_today_label')}</p>
             <p className="text-base font-black text-gray-900 leading-tight">{formatMoney(todayTotal)}</p>
           </div>
         </div>
@@ -294,13 +406,13 @@ export default function ExpensesPage() {
             className="bg-white rounded-3xl p-5 shadow-elev-3 border border-gray-50 space-y-3"
           >
             <h2 id="expense-form-heading" className="text-sm font-bold text-gray-800 mb-1">
-              {editingId ? 'עריכת הוצאה' : 'הוצאה חדשה'}
+              {editingId ? t('exp_form_title_edit') : t('exp_form_title_new')}
             </h2>
 
             {/* Title */}
             <div className="flex flex-col gap-1">
               <label htmlFor="exp-title" className="text-xs font-semibold text-gray-700">
-                שם ההוצאה <span aria-hidden="true" className="text-red-500">*</span>
+                {t('exp_name')} <span aria-hidden="true" className="text-red-500">*</span>
               </label>
               <input
                 id="exp-title"
@@ -315,7 +427,7 @@ export default function ExpensesPage() {
 
             {/* Category */}
             <div className="flex flex-col gap-1">
-              <label htmlFor="exp-category" className="text-xs font-semibold text-gray-700">קטגוריה</label>
+              <label htmlFor="exp-category" className="text-xs font-semibold text-gray-700">{t('exp_category')}</label>
               <div className="relative">
                 <select
                   id="exp-category"
@@ -334,7 +446,7 @@ export default function ExpensesPage() {
             {/* Date */}
             <div className="flex flex-col gap-1">
               <label htmlFor="exp-date" className="text-xs font-semibold text-gray-700">
-                תאריך <span aria-hidden="true" className="text-red-500">*</span>
+                {t('exp_date')} <span aria-hidden="true" className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <select
@@ -344,10 +456,10 @@ export default function ExpensesPage() {
                   onChange={e => setExpenseDate(e.target.value)}
                   className="w-full bg-surface-secondary rounded-2xl px-4 py-3 pl-10 text-sm font-medium outline-none appearance-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:bg-white min-h-[48px]"
                 >
-                  <option value="">בחר תאריך</option>
+                  <option value="">{t('exp_pick_date')}</option>
                   {tripDays.map(day => {
                     const val = format(day, 'yyyy-MM-dd')
-                    return <option key={val} value={val}>{formatDateShort(day)} — יום {tripDays.indexOf(day) + 1}</option>
+                    return <option key={val} value={val}>{formatDateShort(day)} — {t('dash_day')} {tripDays.indexOf(day) + 1}</option>
                   })}
                 </select>
                 <ChevronDown aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -358,7 +470,7 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div className="flex flex-col gap-1">
                 <label htmlFor="exp-amount" className="text-xs font-semibold text-gray-700">
-                  סכום <span aria-hidden="true" className="text-red-500">*</span>
+                  {t('exp_amount')} <span aria-hidden="true" className="text-red-500">*</span>
                 </label>
                 <input
                   id="exp-amount"
@@ -374,7 +486,7 @@ export default function ExpensesPage() {
                 />
               </div>
               <div className="flex flex-col gap-1 w-28">
-                <label htmlFor="exp-currency" className="text-xs font-semibold text-gray-700">מטבע</label>
+                <label htmlFor="exp-currency" className="text-xs font-semibold text-gray-700">{t('exp_currency')}</label>
                 <div className="relative">
                   <select
                     id="exp-currency"
@@ -394,7 +506,7 @@ export default function ExpensesPage() {
             {/* Notes */}
             <div className="flex flex-col gap-1">
               <label htmlFor="exp-notes" className="text-xs font-semibold text-gray-700">
-                הערות <span className="text-gray-400 font-normal">(אופציונלי)</span>
+                {t('exp_notes')} <span className="text-gray-400 font-normal">{t('exp_optional')}</span>
               </label>
               <input
                 id="exp-notes"
@@ -414,15 +526,22 @@ export default function ExpensesPage() {
               className="w-full text-white rounded-2xl py-4 min-h-[52px] font-bold text-sm active:scale-95 transition-all disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-400"
               style={{ background: saving ? '#9CA3AF' : 'linear-gradient(135deg,#10B981,#34D399)' }}
             >
-              {saving ? 'שומר…' : editingId ? '✓ עדכן הוצאה' : '✓ שמור הוצאה'}
+              {saving ? t('exp_saving') : editingId ? t('exp_update_btn') : t('exp_save_btn')}
             </button>
           </motion.form>
         )}
       </AnimatePresence>
 
+      {/* ── Hotel Tab — active/upcoming/ended stays (tap to charge or view report) ── */}
+      <HotelStaysStrip
+        stays={hotelStays}
+        onCharge={setChargingStay}
+        onViewReport={setReportStay}
+      />
+
       {/* ── Search ── */}
       <div className="relative">
-        <label htmlFor="exp-search" className="sr-only">חפש הוצאה</label>
+        <label htmlFor="exp-search" className="sr-only">{t('exp_search_label')}</label>
         <Search aria-hidden="true" className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           id="exp-search"
@@ -436,7 +555,7 @@ export default function ExpensesPage() {
           <button
             type="button"
             onClick={() => setSearch('')}
-            aria-label="נקה חיפוש"
+            aria-label={t('exp_search_clear')}
             className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full active:bg-gray-100 focus-visible:ring-2 focus-visible:ring-primary"
           >
             <X className="w-4 h-4 text-gray-400" aria-hidden="true" />
@@ -445,7 +564,7 @@ export default function ExpensesPage() {
       </div>
 
       {/* ── Category filter pills ── */}
-      <div role="group" aria-label="סינון לפי קטגוריה" className="flex gap-2 overflow-x-auto pb-1">
+      <div role="group" aria-label={t('exp_filter_by_cat')} className="flex gap-2 overflow-x-auto pb-1">
         <button
           type="button"
           onClick={() => setFilterCat(null)}
@@ -462,7 +581,7 @@ export default function ExpensesPage() {
             type="button"
             onClick={() => setFilterCat(filterCat === cat ? null : cat)}
             aria-pressed={filterCat === cat}
-            aria-label={`סנן לפי ${CATEGORY_META[cat].label}`}
+            aria-label={`${t('exp_filter_by')} ${CATEGORY_META[cat].label}`}
             className="flex-shrink-0 px-3.5 py-2 min-h-[36px] rounded-full text-xs font-bold active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             style={filterCat === cat
               ? { background: 'linear-gradient(135deg,#6C47FF,#9B7BFF)', color: 'white' }
@@ -478,23 +597,23 @@ export default function ExpensesPage() {
           {search || filterCat ? (
             <EmptyState
               icon={Search}
-              title="לא נמצאו תוצאות"
-              description="נסה לשנות את מילת החיפוש או להסיר את הסינון"
+              title={t('exp_no_results')}
+              description={t('exp_no_results_hint')}
               action={(
                 <button
                   type="button"
                   onClick={() => { setSearch(''); setFilterCat(null) }}
                   className="w-full py-3 min-h-[48px] rounded-2xl bg-primary/10 text-primary font-bold text-sm active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  נקה סינון
+                  {t('exp_clear_filter')}
                 </button>
               )}
             />
           ) : (
             <EmptyState
               icon={Wallet}
-              title="אין הוצאות עדיין"
-              description="התחל לעקוב אחר ההוצאות בנסיעה — הוסף באופן ידני או סרוק קבלה"
+              title={t('exp_no_expenses')}
+              description={t('exp_no_expenses_hint')}
               action={(
                 <button
                   type="button"
@@ -502,7 +621,7 @@ export default function ExpensesPage() {
                   className="w-full py-3.5 min-h-[52px] rounded-2xl text-white font-bold text-sm active:scale-95 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary"
                   style={{ background: 'linear-gradient(135deg,#6C47FF,#9B7BFF)' }}
                 >
-                  <span className="inline-flex items-center gap-2 justify-center"><Plus className="w-4 h-4" aria-hidden="true" /> הוסף הוצאה ראשונה</span>
+                  <span className="inline-flex items-center gap-2 justify-center"><Plus className="w-4 h-4" aria-hidden="true" /> {t('exp_add_first')}</span>
                 </button>
               )}
             />
@@ -548,56 +667,91 @@ export default function ExpensesPage() {
                           variants={itemVariants}
                           exit={{ opacity: 0, x: 24, transition: { duration: 0.18 } }}
                           transition={spring.ui}
-                          className={`flex items-center gap-3.5 px-4 py-3.5 active:bg-gray-50 transition-colors
-                            ${i < dayExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                          className={`grid items-center gap-2 px-3.5 py-3 transition-colors
+                            ${expenseHasDoc(exp) ? 'cursor-pointer hover:bg-primary/5 active:bg-primary/10' : 'active:bg-gray-50'}
+                            ${i < dayExpenses.length - 1 ? 'border-b border-gray-50' : ''}`}
+                          style={{ gridTemplateColumns: '36px minmax(0,1fr) auto' }}
+                          onClick={(e) => {
+                            // Don't trigger when the user hits one of the action icons
+                            if ((e.target as HTMLElement).closest('button')) return
+                            if (expenseHasDoc(exp)) openExpenseDoc(exp)
+                          }}
+                          role={expenseHasDoc(exp) ? 'button' : undefined}
+                          tabIndex={expenseHasDoc(exp) ? 0 : undefined}
+                          onKeyDown={(e) => {
+                            if (!expenseHasDoc(exp)) return
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault(); openExpenseDoc(exp)
+                            }
+                          }}
+                        >
                           {/* Icon */}
-                          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0"
                             style={{ backgroundColor: meta.color + '18' }}>
                             {meta.icon}
                           </div>
 
-                          {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{exp.title}</p>
-                            <p className="text-[11px] text-gray-400">{meta.label}</p>
+                          {/* Info — wraps to 2 lines if needed */}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2 break-words">{exp.title}</p>
+                              {expenseHasDoc(exp) && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-primary bg-primary/10 border border-primary/20 rounded-full px-1.5 py-0.5 flex-shrink-0">
+                                  <FileText className="w-2.5 h-2.5" strokeWidth={2.2} />
+                                  מסמך
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-0.5">{meta.label}</p>
                           </div>
 
-                          {/* Amount */}
-                          <div className="text-left flex-shrink-0">
-                            <p className="text-sm font-bold text-gray-900">-{formatMoney(exp.amount_ils)}</p>
-                            {exp.currency !== 'ILS' && (
-                              <p className="text-[10px] text-gray-400 text-left">
-                                {CURRENCY_SYMBOL[exp.currency as Currency]}{exp.amount}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-1" role="group" aria-label={`פעולות עבור ${exp.title}`}>
-                            <button
-                              type="button"
-                              onClick={() => startEdit(exp)}
-                              aria-label={`ערוך את ${exp.title}`}
-                              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-primary active:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
-                            >
-                              <Pencil className="w-4 h-4" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSplitExpense(exp)}
-                              aria-label={`פצל את ${exp.title} בין נוסעים`}
-                              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-primary active:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
-                            >
-                              <Split className="w-4 h-4" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => requestDelete(exp)}
-                              aria-label={`מחק את ${exp.title}`}
-                              className="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 active:text-red-500 active:bg-red-50 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-red-400"
-                            >
-                              <Trash2 className="w-4 h-4" aria-hidden="true" />
-                            </button>
+                          {/* Amount + actions stacked vertically to reclaim horizontal space */}
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                            <div className="text-end">
+                              <p className="text-sm font-bold text-gray-900 leading-tight whitespace-nowrap">-{formatMoney(exp.amount_ils)}</p>
+                              {exp.currency !== 'ILS' && (
+                                <p className="text-[10px] text-gray-400 whitespace-nowrap">
+                                  {CURRENCY_SYMBOL[exp.currency as Currency]}{exp.amount}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5" role="group" aria-label={`${t('exp_actions_for')} ${exp.title}`}>
+                              {expenseHasDoc(exp) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); openExpenseDoc(exp) }}
+                                  aria-label={`צפה במסמך של ${exp.title}`}
+                                  title="צפה במסמך המקושר"
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-primary/70 active:text-primary active:bg-primary/10 hover:text-primary hover:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
+                                >
+                                  <FileText className="w-3.5 h-3.5" aria-hidden="true" strokeWidth={2.2} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => startEdit(exp)}
+                                aria-label={`${t('exp_edit_action')} ${exp.title}`}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 active:text-primary active:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
+                              >
+                                <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSplitExpense(exp)}
+                                aria-label={`${t('exp_split_action')} — ${exp.title}`}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 active:text-primary active:bg-primary/10 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-primary"
+                              >
+                                <Split className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => requestDelete(exp)}
+                                aria-label={`${t('exp_delete_action')} ${exp.title}`}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 active:text-red-500 active:bg-red-50 transition-all active:scale-90 focus-visible:ring-2 focus-visible:ring-red-400"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            </div>
                           </div>
                         </motion.div>
                       )
@@ -612,14 +766,14 @@ export default function ExpensesPage() {
       {/* ── Delete confirmation ── */}
       <ConfirmDialog
         open={!!deletingExpense}
-        title="למחוק את ההוצאה?"
+        title={t('exp_confirm_delete_title')}
         description={
           deletingExpense
-            ? `"${deletingExpense.title}" בסך ${formatMoney(deletingExpense.amount_ils || 0)} יימחק לצמיתות. לא ניתן לשחזר.`
+            ? `"${deletingExpense.title}" — ${formatMoney(deletingExpense.amount_ils || 0)}. ${t('exp_confirm_delete_desc')}`
             : undefined
         }
-        confirmLabel="מחק לצמיתות"
-        cancelLabel="ביטול"
+        confirmLabel={t('exp_delete_permanent')}
+        cancelLabel={t('cancel')}
         variant="danger"
         loading={deleting}
         onConfirm={handleConfirmDelete}
@@ -629,14 +783,14 @@ export default function ExpensesPage() {
       {/* ── Duplicate expense confirmation ── */}
       <ConfirmDialog
         open={!!duplicatePrompt}
-        title="נמצאה הוצאה דומה"
+        title={t('exp_dup_title')}
         description={
           duplicatePrompt
-            ? `כבר קיימת הוצאה "${duplicatePrompt.title}" בתאריך ${duplicatePrompt.date}. להוסיף בכל זאת?`
+            ? tFormat('exp_dup_desc', lang, { title: `"${duplicatePrompt.title}"`, date: duplicatePrompt.date })
             : undefined
         }
-        confirmLabel="הוסף בכל זאת"
-        cancelLabel="ביטול"
+        confirmLabel={t('exp_dup_keep')}
+        cancelLabel={t('cancel')}
         variant="primary"
         onConfirm={() => duplicateResolver?.(true)}
         onCancel={() => duplicateResolver?.(false)}
@@ -675,6 +829,31 @@ export default function ExpensesPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Hotel Tab sheets ── */}
+      <QuickChargeSheet
+        stay={chargingStay}
+        userId={user?.id}
+        onClose={() => setChargingStay(null)}
+        onSaved={() => { setChargingStay(null); fetchExpenses() }}
+      />
+      <StayReport
+        stay={reportStay}
+        onClose={() => setReportStay(null)}
+      />
+
+      {/* In-app viewer for the document / receipt / email linked to an expense */}
+      {(docViewerUrl !== null || docViewerHtml !== null || docViewerLoading) && (
+        <DocumentViewer
+          url={docViewerUrl}
+          htmlContent={docViewerHtml}
+          htmlLoading={docViewerLoading}
+          title={docViewerTitle}
+          subtitle={docViewerSubtitle}
+          docType={docViewerType}
+          onClose={closeDocViewer}
+        />
+      )}
     </div>
   )
 }
